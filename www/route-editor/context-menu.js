@@ -120,6 +120,7 @@ const createPlayNode = {
 		elements: [
 			...[
 				commands.Ring,
+				commands.Playback,
 				commands.PlayMOH,
 				commands.PlayPreAnnounce,
 				commands.PlayEmerg,

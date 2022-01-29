@@ -1,3 +1,6 @@
+// TODO FIXME: need a Set Voice command
+// TODO FIXME: play a different prompt based on a schedule
+
 /*interface Field {
 	key: string;
 	name?: string;

@@ -22,7 +22,7 @@ When that route finishes, execution will resume here in this route`
 				let params = { headers: { 'Accept': 'application/json' }}
 				let json = await fetch( '/routes', params )
 					.then( rsp => rsp.json() )
-				console.log( JSON.stringify( json ) )
+				//console.log( JSON.stringify( json ) )
 				let options = []
 				for ( let row of json.rows )
 				{

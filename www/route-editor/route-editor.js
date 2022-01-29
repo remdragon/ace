@@ -35,7 +35,7 @@ function initTree( data ) {
 	
 	tree = createTree( 'div_tree', 'white', context_menu )
 	
-	console.log( 'route_id=', route_id, 'route_data=', route_data )
+	//console.log( 'route_id=', route_id, 'route_data=', route_data )
 	root = new Root( tree, route_id, route_data, NODE_TYPES )
 	
 	divHelp = document.getElementById( 'div_help' )

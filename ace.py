@@ -52,8 +52,8 @@ from tornado.wsgi import WSGIContainer # pip install tornado
 from tornado.ioloop import IOLoop
 from tornado.httpserver import HTTPServer
 from typing import(
-	Any, cast, Dict, List, Optional as Opt, Sequence as Seq, Tuple, Type,
-	TypeVar, TYPE_CHECKING, Union,
+	Any, cast, Dict, Iterator, List, Optional as Opt, Sequence as Seq, Tuple,
+	Type, TypeVar, TYPE_CHECKING, Union,
 )
 import tzlocal # pip install tzlocal
 from urllib.parse import urlencode, urlparse
@@ -861,7 +861,7 @@ def http_logout() -> Any:
 #region http - misc
 
 @app.route( '/<path:filepath>' )
-def http_send_from_directory( filepath: str ) -> Any:
+def http_send_from_directory( filepath: str ) -> Response:
 	mimetype = mimetypes.guess_type( filepath )[0]
 	if not mimetype:
 		mimetype = 'text/plain'
@@ -874,13 +874,37 @@ def http_send_from_directory( filepath: str ) -> Any:
 
 @app.route( '/' )
 @login_required # type: ignore
-def http_index() -> Any:
+def http_index() -> Response:
 	#log = logger.getChild( 'http_index' )
 	#return_type = accept_type()
 	return html_page(
 		'TODO FIXME',
 	)
 
+
+r_callie = re.compile( r'[/\\]callie[/\\]([^/\\]+)[/\\]8000[/\\](.*)$' )
+def _iter_sounds( sounds: Path ) -> Iterator[str]:
+	for path2 in sounds.iterdir():
+		if path2.stem == 'music':
+			continue
+		for folder, _, files in os.walk( str( path2 )):
+			path3 = Path( folder )
+			if path3.stem not in ( '16000', '32000' ):
+				for file in files:
+					path = str( Path( folder ) / file )
+					# callie sounds can be specifically simplified for freeswitch:
+					m = r_callie.search( path )
+					if m:
+						yield f'{m.group(1)}/{m.group(2)}' # <<< FS can handle forward slashes on windows
+					else:
+						yield path
+
+@app.route( '/sounds/' )
+@login_required # type: ignore
+def http_sounds() -> Response:
+	return_type = accept_type()
+	sounds = [ { 'sound': sound } for sound in _iter_sounds( Path( ITAS_FREESWITCH_SOUNDS )) ]
+	return rest_success( sounds )
 
 #endregion http - misc
 #region http - DID
@@ -1551,7 +1575,7 @@ deleteButton.addEventListener( 'click', function( event ) {
 
 
 #endregion http - ANI
-#region route - flags
+#region http - flags
 
 
 @app.route( '/flags', methods = [ 'GET', 'POST' ] )
@@ -1606,7 +1630,7 @@ def http_flags() -> Response:
 	)
 
 
-#endregion route - flags
+#endregion http - flags
 #region http - routes
 
 REPO_ROUTES = REPO_FACTORY( 'routes', '.route' )
