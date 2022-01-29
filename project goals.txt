@@ -1,0 +1,133 @@
+This is a web site / web server
+
+In icx-editor.html, there is some embedded json assigned
+to the variable icx_data that represents the data that will
+be manipulated via the web ui
+
+icx_data is a list of commands. Each command is a dictionary
+with the command and any extra parameters the command may
+require.
+
+For example, the following command doesn't require any
+extra parameters:
+
+	{
+		command: "preanswer"
+	}
+
+The following command however, has two editable parameters:
+
+	{
+		command: 'translate',
+		table: 'basic',
+		variable: 'destination_number',
+	}
+
+Some commands are conditionals and have child commands
+based on the result of the condition. The following
+command for example will hangup the call if there's
+too many calls for the current destination number:
+
+	{
+		command: "if",
+		condition: "num_calls_dnis() > 20",
+		true: [
+			{
+				command: "hangup",
+			},
+		],
+	}
+
+Note that the "if" command also has an optional false branch.
+
+
+A class object hierarchy needs to be built so that each command
+has it's own UI/UX implemented in a single place.
+
+
+Also, the javascript needs to be converted to typescript
+
+
+The server is built on python and provides static html/css/javascript.
+All server-side processing is done via rest api.
+
+rest api is distinguished by client sending header:
+
+	Accept: application/json
+
+For the treeview I am using Aimara, which is pretty lightweight,
+runs in vanilla javascript and was pretty easy to get working.
+
+The server supports multiple "trees", Each "tree" of commands is together referred to as a "pilot" and is
+given a uuid and a name.
+
+There will be a command that allows you to call a pilot from a different one. I plan to allow to pass
+parameters but I haven't decided the exact mechanics of how those parameters will get passed yet.
+
+When editing this "call" command, the user will get a list of all the pilots on the system that they
+can choose from.
+
+
+When editing commands ( "tree nodes" ), the user needs to be able to edit the optional parameters
+associated with each command. There is a help area on the right side of the browser page, and I had
+some thoughts that we could either use that area, or allow editing of the parameters directly in the
+tree. I'm on the fence and willing to be persuaded either way.
+
+
+Another special and important command is the "translate" command. This ties into another feature that
+will be required for the project. The project will support table-based lookups. When the user creates
+a translation table, they can specify the names of each column. The logic that executes this will
+attempt to locate a record in the table and then set all the parameters specified by the column
+names in the table. The translate command has "hit" and "miss" branches where you can execute
+different logic based on whether a match was found or not. The importance of this command
+is being able to partially delegate maintainance of the system to employees who maybe don't have the
+training to handle the tree-based editor and things that could get broken there.
+
+
+On the server side, this system needs to support running in FusionPBX and also vanilla FreeSWITCH.
+
+As such, user accounts will be stored in /etc/itas/icx/users on Linux, and C:\ProgramData\itas\icx\users
+on Windows. User accounts will be stored in individual json files with using of proper security precautions
+for credentials like PBKDF2 or something similiar.
+
+Each pilot can be stored in /etc/itas/icx/pilots or C:\ProgramData\itas\icx\pilots, but also in the flask.cfg
+file it should also be an option to store the pilots in a sqlite or postgres database. As such it will
+be necessary to create a database/filesystem storage abstraction layer. This same abstraction layer should
+probably also be used for the user management above, actually.
+
+The icx-server.py needs to support a command line option to reset/create new users.
+When pulling up the web interface, if no users exist in the system, it should give a message that the
+user needs to execute the command line option to create their first user account.
+
+
+Inside FreeSWITCH, the logic that executes pilots will be written in lua. I will probably need to write
+a bulk of this code myself or at least get some started on how to write it.
+
+The lua code needs to generate log data that can be easily review later for troubleshooting. We probably
+want to use the same storage abstraction layer and have a log navigator built into the web ui.
+
+The log would look something like this:
+
+2020-01-24 9:50AM CST DID 7135551212 ANI 8325551212 Executing pilot "Sample Route"
+2020-01-24 9:50AM CST [Sample Route] executing "pre_answer"
+2020-01-24 9:50AM CST [Sample Route] executing "translate" on table "basic" with "destination_number"="7135551212"
+2020-01-24 9:50AM CST [Sample Route] "translate" found match in table "basic", the following variables have been set:
+       "account"="1234"
+
+The webui will give the user to search for and view call logs based on start/end time, ANI or DID.
+
+The logs table in the database should have a schema something like:
+
+log_id: autoinc primary
+ani: varchar(20) indexed
+did: varchar(20) indexed
+start: timestamp indexed
+stop: timestamp indexed
+logs: memo
+
+When stored in the file system, the file should be stored with a filename something like (linux example)
+
+/var/log/itas/icx/logs/2020-01-24/20200124T095600Z_7135551212_8325551212.log
+
+The content of the file can be json that mimics the table schema above.
+
