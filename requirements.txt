@@ -7,7 +7,6 @@
 # sudo pip3 install service_identity --force --upgrade
 # sudo python3 icx-server.py install
 
-werkzeug==0.16.0
 accept-types
 flask
 Flask-Login

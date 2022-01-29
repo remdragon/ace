@@ -145,6 +145,8 @@ def os_execute( cmd: str ) -> None:
 	log.debug( cmd )
 	os.system( cmd )
 
+def json_dumps( data: Any ) -> str:
+	return json.dumps( data, indent = '\t', separators = ( ',', ': ' ))
 
 #endregion utilities
 #region html helpers
@@ -324,10 +326,11 @@ if not cfg_path.is_file():
 		f'SESSION_FILE_DIR = {"/var/cache/itas/ace/sessions"!r}',
 		f'PERMANENT_SESSION_LIFETIME = {datetime.timedelta(minutes=5)!r}',
 		f'ITAS_LISTEN_PORT = {443!r}',
+		f'ITAS_CERTIFICATE_PEM = {str(etc_path/"certificate.pem")!r}',
 		f'ITAS_AUDIT_DIR = {"/var/log/itas/ace/"!r}',
 		f'ITAS_AUDIT_FILE = {"%Y-%m-%d.log"!r}',
 		f'ITAS_AUDIT_TIME = {"%Y-%m-%d %H:%M:%S.%f %Z%z"!r}',
-		f'ITAS_CERTIFICATE_PEM = {str(etc_path/"certificate.pem")!r}',
+		f'ITAS_FREESWITCH_SOUNDS = {"/usr/share/freeswitch/sounds"!r}',
 		f'ITAS_REPOSITORY_TYPE = {"fs:/usr/share/itas/ace/"!r}',
 		f'ITAS_SQLITE_REPOSITORY_FILE = {"/usr/share/itas/ace/database.db"!r}',
 		f'ITAS_FLAGS_PATH = {str(default_data_path)!r}',
@@ -363,10 +366,11 @@ SESSION_TYPE: str = ''
 SESSION_FILE_DIR: str = ''
 PERMANENT_SESSION_LIFETIME: datetime.timedelta = datetime.timedelta( minutes = 5 )
 ITAS_LISTEN_PORT: int = 443
+ITAS_CERTIFICATE_PEM: str = ''
 ITAS_AUDIT_DIR: str = ''
 ITAS_AUDIT_FILE: str = ''
 ITAS_AUDIT_TIME: str = ''
-ITAS_CERTIFICATE_PEM: str = ''
+ITAS_FREESWITCH_SOUNDS: str = ''
 ITAS_REPOSITORY_TYPE: str = ''
 ITAS_SQLITE_REPOSITORY_FILE: str = ''
 ITAS_FLAGS_PATH: str = ''
@@ -659,13 +663,13 @@ class RepoFs( Repository ):
 		if path.is_file():
 			raise HttpFailure( 'resource already exists' )
 		with path.open( 'w' ) as fileContent:
-			fileContent.write( json.dumps( resource ) )
+			fileContent.write( json_dumps( resource ))
 	
 	def update( self, id: Union[int,str], resource: Dict[str,Any] = {} ) -> Dict[str,Any]:
 		print( f"updating {resource}" )
 		path = self._path_from_id( id )
 		with path.open( 'w' ) as fileContent:
-			fileContent.write( json.dumps( resource ) )
+			fileContent.write( json_dumps( resource ))
 		
 		return resource
 	
@@ -1079,7 +1083,7 @@ def try_post_did( did: int, data: Dict[str,str] ) -> int:
 			raise ValidationError( f'DID already exists: {did2}' )
 		audit( f'Created DID {did2}:{auditdata}' )
 	with path.open( 'w' ) as f:
-		print( json.dumps( data2 ), file = f )
+		print( json_dumps( data2 ), file = f )
 	
 	return did2
 
@@ -1399,7 +1403,7 @@ def try_post_ani( ani: int, data: Dict[str,str] ) -> int:
 			raise ValidationError( f'ANI already exists: {ani2}' )
 		audit( f'Created ANI {ani2}:{auditdata}' )
 	with path.open( 'w' ) as f:
-		print( json.dumps( data2 ), file = f )
+		print( json_dumps( data2 ), file = f )
 	
 	return ani2
 
@@ -1657,7 +1661,7 @@ def http_routes() -> Any:
 			500,
 		)
 	if return_type == 'application/json':
-		return rest_success( { id: route['name'] for id, route in routes } ) # type: ignore # TODO FIXME: rest api is supposed to be a list of dicts, not just a dict...
+		return rest_success( [ { 'route': id, 'name': route.get( 'name' ) } for id, route in routes ] )
 	
 	row_html = '\n'.join( [
 		'<tr>',
@@ -1686,7 +1690,7 @@ route_id_html = '''
 		<td class="tree"><div id="div_tree"></div></td>
 		<td class="help">
 			<div id="div_help">
-				This is the Automated Cell Experience (ACE) Route Editor.<br />
+				This is the Route Editor.<br />
 				<br />
 				Please click on a node to select it and see more details about
 				it.<br />
@@ -1706,7 +1710,7 @@ route_id_html = '''
 </font>
 
 <script src="/aimara/lib/Aimara.js"></script>
-<script type="module" src="/route-id.js"></script>
+<script type="module" src="/route-editor/route-editor.js"></script>
 '''
 
 @app.route( '/routes/<int:route>', methods = [ 'GET', 'PATCH', 'DELETE' ] )

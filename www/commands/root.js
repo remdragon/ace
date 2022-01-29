@@ -19,7 +19,7 @@ Right-click on it to start adding instructions to your route.<br/>
 	name//: string
 	
 	fields = [
-		{ key: 'name', type: 'string' }
+		{ key: 'name', type: 'string', label: 'Name: ' }
 	]
 	
 	constructor( tree, route, data, NODE_TYPES )
@@ -41,7 +41,7 @@ Right-click on it to start adding instructions to your route.<br/>
 		this.element.node = this
 		
 		data.nodes.forEach(nodeData => {
-			let NodeType = NODE_TYPES[nodeData.command]
+			let NodeType = NODE_TYPES[nodeData.type]
 			
 			if (NodeType) {
 				let node = new NodeType( this )

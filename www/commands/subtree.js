@@ -18,11 +18,11 @@ export default class Subtree extends UINode {
 	
 	createElement({ isSubtree, data = {nodes:[]}, NODE_TYPES, context }) {
 		super.createElement({ isSubtree, data, NODE_TYPES, context });
-
+		
 		if (data.nodes) {
 			data.nodes.forEach((nodeData /*: any*/) => {
-				console.log(nodeData);
-				let NodeType = NODE_TYPES[nodeData.command]
+				//console.log( nodeData )
+				let NodeType = NODE_TYPES[nodeData.type]
 				if (NodeType) {
 					let node = new NodeType(this);
 					node.createElement({ data: nodeData, NODE_TYPES });

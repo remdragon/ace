@@ -3,7 +3,7 @@ import Subtree from '/commands/subtree.js'
 
 import * as commands from '/commands/index.js'
 import NODE_TYPES from '/commands/index.js'
-import { treeDidChange } from './editor.js'
+import { treeDidChange } from './route-editor.js'
 
 const deleteNode = {
 	text: 'Delete Node',
@@ -24,21 +24,24 @@ const nodeActions = {
 			{
 				text: 'Get Json',
 				icon: '/aimara/images/tree.png',
-				action: function(element) {
-					let json = JSON.stringify(element.node.getJson(), null, 4)
-					console.log(json)
+				action: function(element)
+				{
+					let json = JSON.stringify( element.node.getJson(), null, 4 )
+					console.log( json )
 				}
 			},
 			{
 				text: 'Move node up',
 				icon: '/aimara/images/tree.png',
-				action: function(element) {
+				action: function( element )
+				{
 					let parentNode = element.node.parent
 					let parent = element.parent
-
-					if (parent && parentNode) {
-						moveNodeUp(parent, element)
-						parentNode.moveNodeUp(element.node)
+					
+					if ( parent && parentNode )
+					{
+						moveNodeUp( parent, element )
+						parentNode.moveNodeUp( element.node )
 						treeDidChange()
 					}
 				}
@@ -46,50 +49,68 @@ const nodeActions = {
 			{
 				text: 'Move node down',
 				icon: '/aimara/images/tree.png',
-				action: function(element) {
+				action: function( element )
+				{
 					let parentNode = element.node.parent
 					let parent = element.parent
-
-					if (parent && parentNode) {
-						moveNodeDown(parent, element)
-						parentNode.moveNodeDown(element.node)
+					
+					if ( parent && parentNode )
+					{
+						moveNodeDown( parent, element )
+						parentNode.moveNodeDown( element.node )
 						treeDidChange()
 					}
 				}
 			}
 		]
 	}
-};
+}
 
-const createNodes = {
-	text: 'New Node',
+const newTelephonyNode = {
+	text: 'New Telephony',
 	icon: '/aimara/images/add1.png',
 	action: function(element) {},
 	submenu: {
 		elements: [
 			...[
-				commands.Hangup,
 				commands.AcdCallAdd,
 				commands.AcdCallGate,
 				commands.AcdCallUnGate,
 				commands.Answer,
-				commands.IfNode,
-				commands.Preanswer,
-				commands.Repeat,
-				commands.SetNode,
-				commands.Setmoh,
-				commands.Translate,
-				//commands.Menu,
+				commands.Hangup,
 				commands.IVR,
-				commands.Select
+				commands.PreAnswer,
+				commands.SetMOH,
 			].map(NodeType => ({
-				text: NodeType.context_menu_name, //`${NodeType.command.replace(/^\w/, c => c.toUpperCase())}`,
+				text: NodeType.context_menu_name,
 				icon: NodeType.icon,
-				action: createNodeFromNodeType(NodeType)
+				action: createNodeFromNodeType( NodeType )
 			}))
 		]
 	}
-};
+}
+
+const newLogicNode = {
+	text: 'New Logic',
+	icon: '/aimara/images/add1.png',
+	action: function(element) {},
+	submenu: {
+		elements: [
+			...[
+				commands.IfNode,
+				commands.Repeat,
+				commands.Route,
+				commands.Select,
+				commands.SetNode,
+				commands.Translate,
+			].map(NodeType => ({
+				text: NodeType.context_menu_name,
+				icon: NodeType.icon,
+				action: createNodeFromNodeType( NodeType )
+			}))
+		]
+	}
+}
 
 const createPlayNode = {
 	text: 'New Play Node',
@@ -105,14 +126,14 @@ const createPlayNode = {
 				commands.PlayEstHold,
 			].map(
 				NodeType => ({
-					text: NodeType.context_menu_name, //`${NodeType.command.replace(/^\w/, c => c.toUpperCase())}`,
+					text: NodeType.context_menu_name,
 					icon: NodeType.icon,
-					action: createNodeFromNodeType(NodeType)
+					action: createNodeFromNodeType( NodeType )
 				})
 			)
 		]
 	}
-};
+}
 
 const ivrNodeActions = {
 	text: 'IVR node',
@@ -241,16 +262,19 @@ const selectNodeActions = {
 const context_menu = {
 	contextLeaf: { elements: [deleteNode, nodeActions] },
 	contextSubtree: {
-		elements: [nodeActions, createNodes, createPlayNode]
+		elements: [nodeActions, newTelephonyNode, newLogicNode, createPlayNode]
 	},
 	contextOptionalSubtree: {
-		elements: [deleteNode, nodeActions, createNodes, createPlayNode]
+		elements: [deleteNode, nodeActions, newTelephonyNode, newLogicNode, createPlayNode]
 	},
 	contextIVR: {
 		elements: [deleteNode, nodeActions, ivrNodeActions]
 	},
-	contextIVRSubtree: {
-		elements: [deleteNode, createNodes, createPlayNode]
+	contextIVRBranch: {
+		elements: [deleteNode, newTelephonyNode, newLogicNode, createPlayNode]
+	},
+	contextIVRInvalid: {
+		elements: [newTelephonyNode, newLogicNode, createPlayNode]
 	},
 	contextSelect: {
 		elements: [deleteNode, nodeActions, selectNodeActions]

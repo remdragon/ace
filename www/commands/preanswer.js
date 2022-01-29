@@ -1,6 +1,6 @@
 import UINode from './UINode.js'
 
-export default class Preanswer extends UINode {
+export default class PreAnswer extends UINode {
 	static icon = '/media/streamline/robot-1.png'
 	static context_menu_name = 'Pre-Answer'
 	static command = 'preanswer'

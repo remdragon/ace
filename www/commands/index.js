@@ -8,11 +8,12 @@ import PlayEmerg from './playemerg.js'; export { PlayEmerg }
 import PlayEstHold from './playesthold.js'; export { PlayEstHold }
 import PlayMOH from './playmoh.js'; export { PlayMOH }
 import PlayPreAnnounce from './playpreannounce.js'; export { PlayPreAnnounce }
+import PreAnswer from './preanswer.js'; export { PreAnswer }
 import Ring from './ring.js'; export { Ring }
-import Preanswer from './preanswer.js'; export { Preanswer }
 import Repeat from './repeat.js'; export { Repeat }
+import Route from './route.js'; export { Route }
 import SetNode from './set.js'; export { SetNode }
-import Setmoh from './setmoh.js'; export { Setmoh }
+import SetMOH from './setmoh.js'; export { SetMOH }
 import Translate from './translate.js'; export { Translate }
 import IVR from './ivr.js'; export { IVR }
 import Select from './select.js'; export { Select }
@@ -28,11 +29,12 @@ const NODE_TYPES = {
 	playesthold: PlayEstHold,
 	playmoh: PlayMOH,
 	playpreannounce: PlayPreAnnounce,
-	preanswer: Preanswer,
+	preanswer: PreAnswer,
 	repeat: Repeat,
 	ring: Ring,
+	route: Route,
 	setNode: SetNode,
-	setmoh: Setmoh,
+	setmoh: SetMOH,
 	translate: Translate,
 	ivr: IVR,
 	select: Select

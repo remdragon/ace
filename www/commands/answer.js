@@ -5,8 +5,10 @@ export default class Answer extends UINode {
 	static context_menu_name = 'Answer'
 	static command = 'answer'
 	
-	help = `Transitions the call to an ANSWERED state which sends back answer supervision and begins billing with your carrier.
-
+	help = `Transitions the call to an ANSWERED state.<br/>
+<br/>
+This sends back answer supervision and begins billing with the carrier.<br/>
+<br/>
 This command does nothing if the call is already in an answered state.
 `
 	label = 'Answer'

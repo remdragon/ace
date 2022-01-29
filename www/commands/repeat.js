@@ -22,7 +22,7 @@ export default class Repeat extends UINode {
 		super.createElement({ isSubtree, data, NODE_TYPES, context })
 
 		data.nodes.forEach(nodeData => {
-			let NodeType = NODE_TYPES[nodeData.command]
+			let NodeType = NODE_TYPES[nodeData.type]
 
 			if (NodeType) {
 				let node = new NodeType(this)
