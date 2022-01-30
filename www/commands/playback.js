@@ -25,7 +25,7 @@ Does not collect digits, does not proceed with route instructions until audio is
 		{
 			key: 'sound',
 			type: 'string',
-			input: 'select',
+			input: 'select2',
 			async options() {
 				let params = { headers: { 'Accept': 'application/json' }}
 				let json = await fetch( '/sounds', params )

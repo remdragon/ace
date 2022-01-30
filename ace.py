@@ -1751,10 +1751,10 @@ def http_route( route: int ) -> Any:
 					route_id_html,
 					stylesheets = [
 						'/aimara/css/Aimara.css',
-						'/route-id.css',
+						'/route-editor/route-editor.css',
+						'/nice-select2/nice-select2.css',
 					],
 				)
-				#return render_template( 'route-id.html' )
 			else:
 				return _http_failure(
 					return_type,

@@ -1,0 +1,25 @@
+body {
+	font-family: 'Helvetica Neue', Helvetica, 'Segoe UI', Arial, freesans;
+}
+
+table {
+	width: 100%;
+}
+
+table td.tree {
+	text-align: left;
+	padding: 4px;
+	vertical-align: top
+}
+
+table td.help {
+	flex: 1;
+	vertical-align: top;
+	display: inline-block;
+}
+
+#div_tree {
+	font: 10px Verdana, sans-serif;
+	display: inline-block;
+	/*width: 300px;*/
+}

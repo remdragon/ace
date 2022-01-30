@@ -49,11 +49,12 @@ function initTree( data ) {
 	}
 }
 
-function onNodeSelected(aimaraNode)
+function onNodeSelected( aimaraNode )
 {
 	let node = aimaraNode.node
 	
-	if (node) {
+	if( node )
+	{
 		divHelp.innerHTML = node.help
 		node.onSelected( divHelp )
 	}

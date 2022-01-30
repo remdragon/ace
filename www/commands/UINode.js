@@ -1,6 +1,8 @@
 // TODO FIXME: need a Set Voice command
 // TODO FIXME: play a different prompt based on a schedule
 
+import '/nice-select2/nice-select2.js'
+
 /*interface Field {
 	key: string;
 	name?: string;
@@ -68,21 +70,28 @@ export default class UINode {
 		this.element.node = this
 	}
 	
-	onSelected()/*: void*/ {
-		let divHelp = document.getElementById( 'div_help' )
-		
-		this.fields.forEach(async ( field ) => {
-			const onChange = evt => {
+	onSelected( divHelp )/*: void*/
+	{
+		var has_select2 = false
+		this.fields.forEach( async( field ) =>
+		{
+			var self = this
+			const _onChange = function( newValue )
+			{
 				if( field.type === 'float' )
-					this[field.key] = parseFloat( evt.target.value )
+					self[field.key] = parseFloat( newValue )
 				else if( field.type === 'int' )
-					this[field.key] = parseInt( evt.target.value )
+					self[field.key] = parseInt( newValue )
 				else
-					this[field.key] = evt.target.value
+					self[field.key] = newValue
 				
 				UINode.onChange()
 				
-				this.element.elementSpan.children[1].innerText = this.label
+				self.element.elementSpan.children[1].innerText = self.label
+			}
+			const onChangeEvent = evt =>
+			{
+				_onChange( evt.target.value )
 			}
 			
 			let inputGroup = document.createElement( 'div' )
@@ -90,25 +99,41 @@ export default class UINode {
 			
 			let label = document.createElement( 'label' )
 			let tooltipped, input, tooltip
+			let changeevent = 'input'
 			
-			if( field.input === 'select' )
+			if( field.input === 'select' || field.input === 'select2' )
 			{
 				input = document.createElement( 'select' )
-				input.setAttribute( 'type', 'select' )
+				if( field.input === 'select2' )
+				{
+					has_select2 = true
+					input.setAttribute( 'class', 'ace_select2' )
+					console.log( 'flagged select2 on:', input )
+					input.style.display = 'none'
+					changeevent = 'change'
+					
+					setTimeout( function()
+					{
+						let options = { searchable: true }
+						let x = NiceSelect.bind( input, options )
+					}, 100 )
+				}
 				
+				let selectedValue = this[field.key] || ''
 				let options = await field.options()
 				options.forEach( option => {
 					let optionEl = document.createElement('option')
 					optionEl.setAttribute( 'value', option.value )
 					optionEl.innerText = option.label || option.value
-					
+					if ( selectedValue == ( option.value || option.label ))
+						optionEl.setAttribute( 'selected', 'selected' )
 					input.appendChild( optionEl )
 				})
 			}
 			else
 			{
 				input = document.createElement( 'input' )
-				input.setAttribute( 'type', 'text' )
+				input.setAttribute( 'type', field.input || 'text' )
 				
 				let pattern = PATTERNS[field.type]
 				if ( pattern )
@@ -121,10 +146,10 @@ export default class UINode {
 						return reg.test( text + evt.key )
 					}
 				}
+				input.value = this[field.key] || ''
 			}
 			
-			input.addEventListener( 'input', onChange )
-			input.value = this[field.key] || ''
+			input.addEventListener( changeevent, onChangeEvent )
 			
 			label.innerText = field.label || field.key
 			
@@ -152,6 +177,8 @@ export default class UINode {
 			
 			divHelp.appendChild( inputGroup )
 		})
+		
+		console.log( 'done loading right-side controls' )
 	}
 	
 	getJson() {
@@ -166,40 +193,42 @@ export default class UINode {
 		}
 	}
 
-	moveNodeUp(node/*: UINode*/) {
+	moveNodeUp( node/*: UINode*/ )
+	{
 		let i = this.children.findIndex(
-			n => JSON.stringify(n.getJson()) === JSON.stringify(node.getJson())
+			n => JSON.stringify( n.getJson() ) === JSON.stringify( node.getJson() )
 		)
-			
+		
 		// if < 0 does not exist
 		// if 0 already at top of array
-		if (i < 1) {
+		if ( i < 1 )
 			return
-		}
 		
 		let aux = this.children[i - 1]
 		this.children[i - 1] = this.children[i]
 		this.children[i] = aux
 	}
 	
-	moveNodeDown(node/*: UINode*/) {
+	moveNodeDown( node/*: UINode*/ )
+	{
 		let i = this.children.findIndex(
-			n => JSON.stringify(n.getJson()) === JSON.stringify(node.getJson())
+			n => JSON.stringify( n.getJson() ) === JSON.stringify( node.getJson() )
 		)
 		
 		// if < 0 does not exist
 		// if === length already at bottom of array
-		if (i < 0 || i === this.children.length - 1) {
+		if ( i < 0 || i === this.children.length - 1 )
 			return
-		}
 		
 		let aux = this.children[i + 1]
 		this.children[i + 1] = this.children[i]
 		this.children[i] = aux
 	}
 	
-	remove(node/*: UINode*/) {
-		this.children = this.children.filter(n => {
+	remove( node/*: UINode*/ )
+	{
+		this.children = this.children.filter(n =>
+		{
 			return n.element.id !== node.element.id
 		})
 	}
