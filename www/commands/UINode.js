@@ -110,7 +110,6 @@ export default class UINode {
 				{
 					has_select2 = true
 					input.setAttribute( 'class', 'ace_select2' )
-					console.log( 'flagged select2 on:', input )
 					input.style.display = 'none'
 					changeevent = 'change'
 					
@@ -138,7 +137,11 @@ export default class UINode {
 				input.setAttribute( 'type', field.input || 'text' )
 				
 				let pattern = PATTERNS[field.type]
-				if ( pattern )
+				if( field.hasOwnProperty( 'maxlength' ))
+					input.setAttribute( 'maxlength', field.maxlength )
+				if( field.hasOwnProperty( 'size' ))
+					input.setAttribute( 'size', field.size )
+				if( pattern )
 				{
 					let reg = new RegExp( `^${pattern}$` )
 					input.setAttribute( 'pattern', pattern )
