@@ -904,7 +904,10 @@ def _iter_sounds( sounds: Path ) -> Iterator[str]:
 def http_sounds() -> Response:
 	return_type = accept_type()
 	sounds = [ { 'sound': sound } for sound in _iter_sounds( Path( ITAS_FREESWITCH_SOUNDS )) ]
-	return rest_success( sounds )
+	rsp = rest_success( sounds )
+	rsp.cache_control.public = True
+	rsp.cache_control.max_age = 30
+	return rsp
 
 #endregion http - misc
 #region http - DID

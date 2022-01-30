@@ -49,14 +49,14 @@ function initTree( data ) {
 	}
 }
 
-function onNodeSelected( aimaraNode )
+async function onNodeSelected( aimaraNode )
 {
 	let node = aimaraNode.node
 	
 	if( node )
 	{
 		divHelp.innerHTML = node.help
-		node.onSelected( divHelp )
+		await node.onSelected( divHelp )
 	}
 }
 

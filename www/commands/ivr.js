@@ -1,5 +1,6 @@
 import UINode from './UINode.js'
 import Subtree from './subtree.js'
+import sounds_options from '/util/sounds_options.js'
 
 /*
 TODO FIXME: ability to "name" branch nodes themselves for documentation purposes
@@ -57,11 +58,23 @@ Add branches to the node by right-clicking on it.<br/>
 		{ key: 'terminators', type: 'string', label: 'Terminators: ',
 			tooltip: 'allows you define a dtmf such as # that the caller can use to terminate digit input',
 		},
-		{ key: 'greeting', type: 'string', label: 'Greeting Prompt: ',
+		{
+			key: 'greeting',
+			input: 'select2',
+			label: 'Greeting Prompt: ',
 			tooltip: 'the recording to play instructing the caller what digits are expected',
+			async options() {
+				return await sounds_options()
+			}
 		},
-		{ key: 'error', type: 'string', label: 'Error Prompt: ',
+		{
+			key: 'error',
+			input: 'select2',
+			label: 'Error Prompt: ',
 			tooltip: "the recording to play if caller's input is not valid",
+			async options() {
+				return await sounds_options()
+			}
 		},
 		{ key: 'digit_regex', type: 'string', label: 'Digit Regex: ',
 			tooltip: 'an advanced feature that defines what a valid input is, in addition to min_digits and max_digits. Note that the system will generate one for you based on the branches you add to this node.',

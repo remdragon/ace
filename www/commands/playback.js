@@ -1,4 +1,5 @@
 import UINode from './UINode.js'
+import sounds_options from '/util/sounds_options.js'
 
 export default class Playback extends UINode {
 	static icon = '/media/streamline/music-note-2.png'
@@ -27,16 +28,7 @@ Does not collect digits, does not proceed with route instructions until audio is
 			type: 'string',
 			input: 'select2',
 			async options() {
-				let params = { headers: { 'Accept': 'application/json' }}
-				let json = await fetch( '/sounds', params )
-					.then( rsp => rsp.json() )
-				//console.log( JSON.stringify( json ) )
-				let options = []
-				for ( let row of json.rows )
-				{
-					options.push({ label: row.sound, value: row.sound })
-				}
-				return options
+				return await sounds_options()
 			}
 		},
 		{

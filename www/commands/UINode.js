@@ -70,11 +70,13 @@ export default class UINode {
 		this.element.node = this
 	}
 	
-	onSelected( divHelp )/*: void*/
+	async onSelected( divHelp )/*: void*/
 	{
 		var has_select2 = false
-		this.fields.forEach( async( field ) =>
+		for( let field of this.fields )
 		{
+			//console.log( `processing ${field.key}` )
+			divHelp.appendChild( document.createElement( 'br' ))
 			var self = this
 			const _onChange = function( newValue )
 			{
@@ -172,11 +174,14 @@ export default class UINode {
 				label.appendChild( input )
 			
 			inputGroup.appendChild( label )
-			inputGroup.appendChild( document.createElement( 'br' ))
-			inputGroup.appendChild( document.createElement( 'br' ))
+			if( field.input == 'select2' ) // grr select2
+			{
+				inputGroup.appendChild( document.createElement( 'br' ))
+				inputGroup.appendChild( document.createElement( 'br' ))
+			}
 			
 			divHelp.appendChild( inputGroup )
-		})
+		}
 		
 		console.log( 'done loading right-side controls' )
 	}
