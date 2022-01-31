@@ -43,6 +43,7 @@ import mimetypes
 import os
 from pathlib import Path
 #import platform
+import random
 import re
 import socket
 import sqlite3
@@ -176,6 +177,7 @@ def html_page( *lines: str, stylesheets: Opt[List[str]] = None, status_code: Opt
 			f'	<li><a href="{url_for("http_anis")}">ANIs</a></li>',
 			f'	<li><a href="{url_for("http_flags")}">Flags</a></li>',
 			f'	<li><a href="{url_for("http_routes")}">Routes</a></li>',
+			f'	<li><a href="{url_for("http_voicemail")}">Voicemail</a></li>',
 			f'	<li><a href="{url_for("http_audit_list")}">Audit</a></li>',
 			f'	<li><a href="{url_for("http_logout")}">Log Out</a></li>',
 			'</ul>',
@@ -349,6 +351,8 @@ if not cfg_path.is_file():
 			'8005551213 6999 1999-12-31 # send calls with this ANI and DID 8005551213 to route 6999 until Dec 31, 1999 12:00:00 AM',
 			'8005551214 6999 1999-12-31 08:00:00 # send calls with this ANI and DID 8005551214 to route 6999 until Dec 31, 1999 8:00 AM (local time)',
 		] ),
+		f'ITAS_VOICEMAIL_META_PATH = {"/usr/share/itas/ace/voicemail/meta/"!r}',
+		f'ITAS_VOICEMAIL_MSGS_PATH = {"/usr/share/itas/ace/voicemail/msgs/"!r}',
 		'ITAS_MOTD = {!r}'.format( "Don't Panic!" ),
 	] )
 	with cfg_path.open( 'w' ) as f:
@@ -380,6 +384,8 @@ ITAS_DID_CATEGORIES: List[str] = []
 ITAS_DID_FIELDS: List[Field] = []
 ITAS_DID_VARIABLES_EXAMPLES: List[str] = []
 ITAS_ANI_OVERRIDES_EXAMPLES: List[str] = []
+ITAS_VOICEMAIL_META_PATH: str
+ITAS_VOICEMAIL_MSGS_PATH: str
 ITAS_MOTD: str = ''
 exec( cfg_raw + '\n' ) # begin flask.cfg variables created by this exec:
 # end of flask.cfg variables
@@ -439,6 +445,22 @@ chown( str( anis_path ), 'www-data', 'www-data' )
 os.chmod( str( anis_path ), 0o775 )
 def ani_file_path( ani: int ) -> Path:
 	return anis_path / f'{ani}.json'
+
+voicemail_meta_path = Path( ITAS_VOICEMAIL_META_PATH )
+voicemail_meta_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
+chown( str( voicemail_meta_path ), 'www-data', 'www-data' )
+os.chmod( str( anis_path ), 0o775 )
+def voicemail_settings_path( box: Union[int,str] ) -> Path:
+	return voicemail_meta_path / f'{box}.box'
+def voicemail_greeting_path( box: int, greeting: int ) -> Path:
+	return voicemail_meta_path / f'{box}' / f'greeting{greeting}.wav'
+
+voicemail_msgs_path = Path( ITAS_VOICEMAIL_MSGS_PATH )
+voicemail_msgs_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
+chown( str( voicemail_msgs_path ), 'www-data', 'www-data' )
+os.chmod( str( anis_path ), 0o775 )
+def voicemail_box_msgs_path( box: int ) -> Path:
+	return voicemail_msgs_path / str( box )
 
 
 #endregion paths and auditing
@@ -1640,7 +1662,7 @@ REPO_ROUTES = REPO_FACTORY( 'routes', '.route' )
 
 @app.route( '/routes', methods = [ 'GET', 'POST' ] )
 @login_required # type: ignore
-def http_routes() -> Any:
+def http_routes() -> Response:
 	log = logger.getChild( 'http_routes' )
 	return_type = accept_type()
 	
@@ -1690,6 +1712,8 @@ def http_routes() -> Any:
 	if return_type == 'application/json':
 		return rest_success( [ { 'route': id, 'name': route.get( 'name' ) } for id, route in routes ] )
 	
+	# TODO FIXME: pagination anyone?
+	
 	row_html = '\n'.join( [
 		'<tr>',
 			'<td><a href="{url}">{route}</a></td>',
@@ -1717,19 +1741,19 @@ route_id_html = '''
 		<td class="tree"><div id="div_tree"></div></td>
 		<td class="help">
 			<div id="div_help">
-				This is the Route Editor.<br />
-				<br />
+				This is the Route Editor.<br/>
+				<br/>
 				Please click on a node to select it and see more details about
-				it.<br />
-				<br />
+				it.<br/>
+				<br/>
 				Or try right-clicking on a node for more options.
 			</div>
 		</td>
 	</tr>
 </table>
 
-<br />
-<br />
+<br/>
+<br/>
 <font size="-2">
 	<a href="https://www.streamlineicons.com/"
 		>Free Icons from Streamline Icons Pack</a
@@ -1789,6 +1813,97 @@ def http_route( route: int ) -> Any:
 
 
 #endregion http - routes
+#region http - voicemail
+
+
+@app.route( '/voicemails', methods = [ 'GET', 'POST' ] )
+@login_required # type: ignore
+def http_voicemails() -> Response:
+	log = logger.getChild( 'http_voicemails' )
+	return_type = accept_type()
+	
+	if request.method == 'POST':
+		# BEGIN voicemail box creation
+		inp = inputs()
+		try:
+			box = int( inp.get( 'box', '' ).strip() )
+		except ValueError as e:
+			return _http_failure(
+				return_type,
+				f'invalid box number: {e!r}',
+				400,
+			)
+		
+		path = voicemail_settings_path( box )
+		if path.is_file():
+			return _http_failure(
+				return_type,
+				f'voicemail box number {box!r} already exists',
+				400,
+			)
+		
+		digits = list( '1234567890' )
+		random.shuffle( digits )
+		settings = {
+			'pin': digits[:8],
+			'max_greeting_seconds': 120, # TODO FIXME: system default?
+			'max_message_seconds': 120, # TODO FIXME: system default?
+			'allow_guest_urgent': True,
+			'post_save': [],
+		}
+		with path.open( 'w' ) as f:
+			f.write( json_dumps( settings ))
+		
+		if return_type == 'application/json':
+			return rest_success( [ { 'box': box } ] )
+		
+		url = url_for( 'http_voicemail', box = box )
+		low.warning( 'url=%r', url )
+		return redirect( url )
+		# END voicemail box creation
+	
+	# BEGIN voicemail boxes list
+	try:
+		path = voicemail_settings_path( '*' )
+		boxes = list( sorted(
+			int( box.stem )
+			for box in path.parent.glob( path.name )
+			if box.stem.isnumeric()
+		))
+	except Exception as e:
+		return _http_failure(
+			return_type,
+			f'Error querying voicemail boxes list: {e!r}',
+			500,
+		)
+	if return_type == 'application/json':
+		return rest_success( [ { 'box': box } for box in boxes ] )
+	
+	# TODO FIXME: pagination anyone?
+	
+	row_html = '\n'.join( [
+		'<tr>',
+			'<td><a href="{url}">{box}</a></td>',
+			'<td><a class="box_delete">Delete {box}</a></td>',
+		'</tr>',
+	] )
+	body = '\n'.join( [
+		row_html.format(
+			box = box,
+			url = url_for( 'http_voicemail', box = box ),
+		) for box in boxes
+	] )
+	return html_page(
+		'<center><a id="box_new" href="#">(New Voicemail Box)</a></center>',
+		'<table border=1>',
+		'<tr><th>Box</th><th>Delete</th></tr>',
+		body,
+		'</table>',
+		'<script type="module" src="voicemails.js"></script>',
+	)
+	# END voicemail boxes list
+
+#endregion http - voicemail
 #region http - audits
 
 

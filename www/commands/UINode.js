@@ -4,16 +4,16 @@
 import '/nice-select2/nice-select2.js'
 
 /*interface Field {
-	key: string;
-	name?: string;
-	type?: string;
-	options?: { label: string; value: string }[];
+	key: string
+	name?: string
+	type?: string
+	options?: { label: string; value: string }[]
 }*/
 
 const PATTERNS = {
 	int: "[0-9]*",
 	float: "[0-9]*(.[0-9]*)?"
-};
+}
 
 export default class UINode {
 	static icon//: string
@@ -24,7 +24,7 @@ export default class UINode {
 	help//: string
 	fields = []//: Field[];
 	
-	parent//: UINode | null;
+	parent//: UINode | null
 	element//: any
 	children = []//: UINode[]
 	
@@ -46,16 +46,18 @@ export default class UINode {
 		NODE_TYPES,
 		context
 	}/*: {
-		isSubtree: boolean;
-		data: any;
-		NODE_TYPES: object;
-		context: string;
+		isSubtree: boolean
+		data: any
+		NODE_TYPES: object
+		context: string
 	}*/) {
-		if (data) {
-			this.fields.forEach(field => {
+		if( data )
+		{
+			this.fields.forEach(field =>
+			{
 				if( data.hasOwnProperty( field.key ))
 					this[field.key] = data[field.key]
-			});
+			})
 		}
 		
 		this.element = this.parent.element.createChildNode(
@@ -65,7 +67,6 @@ export default class UINode {
 			null,
 			context ? context : isSubtree ? 'contextSubtree' : 'contextLeaf'
 		)
-		
 		
 		this.element.node = this
 	}
@@ -185,8 +186,6 @@ export default class UINode {
 			
 			divHelp.appendChild( inputGroup )
 		}
-		
-		console.log( 'done loading right-side controls' )
 	}
 	
 	getJson() {

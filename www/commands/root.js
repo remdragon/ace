@@ -1,9 +1,9 @@
-import UINode from "./UINode.js";
+import UINode from './UINode.js'
 
 export default class Root extends UINode {
-	static icon = "/media/streamline/kindle.png";
+	static icon = '/media/streamline/kindle.png'
 	static context_menu_name = 'N/A'
-	static command = "";
+	static command = ''
 	
 	help = `This is the root node for your route<br/>
 <br/>
@@ -12,7 +12,7 @@ Right-click on it to start adding instructions to your route.<br/>
 	
 	get label()
 	{
-		return `${this.route} ${this.name || '(Unnamed)'}`
+		return `Route ${this.route} ${this.name || '(Unnamed)'}`
 	}
 	
 	route//: integer
@@ -35,7 +35,7 @@ Right-click on it to start adding instructions to your route.<br/>
 			Root.icon,
 			null,
 			null,
-			"contextSubtree"
+			'contextSubtree'
 		)
 		
 		this.element.node = this
