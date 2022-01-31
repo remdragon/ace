@@ -5,10 +5,10 @@ export default class CaseSubtree extends Subtree {
 	get label() {
 		return `Case "${this.value || ""}":`;
 	}
-
-	set label(value){}
-
+	
+	//set label(value){}
+	
 	value /*: string*/ = "";
-
+	
 	fields = [{ key: "value" }];
 }

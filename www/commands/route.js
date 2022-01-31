@@ -7,7 +7,7 @@ export default class Route extends UINode {
 	
 	help = `Choose another route to execute from here.<br/>
 <br/>
-When that route finishes, execution will resume here in this route`
+When that route finishes, execution will resume here in this route<br/>`
 	
 	label = 'Route'
 	
@@ -18,6 +18,7 @@ When that route finishes, execution will resume here in this route`
 			key: 'route',
 			type: 'int',
 			input: 'select',
+			label: 'Route: ',
 			async options() {
 				let params = { headers: { 'Accept': 'application/json' }}
 				let json = await fetch( '/routes', params )

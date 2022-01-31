@@ -1,5 +1,6 @@
 import UINode from './UINode.js'
 import Subtree from './subtree.js'
+import NamedSubtree from './named_subtree.js'
 import sounds_options from '/util/sounds_options.js'
 
 /*
@@ -16,7 +17,7 @@ export default class Ivr extends UINode {
 Add branches to the node by right-clicking on it.<br/>
 <br/>
 `
-	subtree_help = 'If the caller enters the digits indicated here, the commands under this node will be executed'
+	subtree_help = 'If the caller enters the digits indicated here, the commands under this node will be executed<br/>'
 	invalid_subtree_help = 'If the caller fails to enter valid input, the commands under this node will be executed'
 	
 	get label()
@@ -142,14 +143,12 @@ Add branches to the node by right-clicking on it.<br/>
 		{
 			let all_digits = []
 			for( const digits in data.branches )
-			{
-				if ( data.branches[digits] )
-					all_digits.push( digits )
-			}
+				all_digits.push( digits )
 			all_digits.sort()
 			for ( const digits of all_digits )
 			{
-				this.branches[digits] = new Subtree(
+				//console.log( `ivr.createElement: digits=${digits}` )
+				this.branches[digits] = new NamedSubtree(
 					this, digits, this.subtree_help
 				)
 				this.branches[digits].createElement({
@@ -215,8 +214,7 @@ Add branches to the node by right-clicking on it.<br/>
 		for( const digits in this.branches )
 		{
 			let branch = this.branches[digits]
-			if ( branch )
-				branchesData[digits] = branch.getJson()
+			branchesData[digits] = branch ? branch.getJson() : {}
 		}
 		
 		let invalid = null
