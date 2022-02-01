@@ -2,6 +2,7 @@
 // TODO FIXME: play a different prompt based on a schedule
 
 import '/nice-select2/nice-select2.js'
+import{ parseBoolean } from '/tree-editor/util.js'
 
 /*interface Field {
 	key: string
@@ -30,7 +31,7 @@ export default class UINode {
 	
 	constructor( parent /*: UINode*/ )
 	{
-		if (!parent)
+		if ( !parent )
 			return
 		this.parent = parent
 		parent.children.push( this )
@@ -50,14 +51,15 @@ export default class UINode {
 		data: any
 		NODE_TYPES: object
 		context: string
-	}*/) {
+	}*/)
+	{
 		if( data )
 		{
-			this.fields.forEach(field =>
+			for( let field of this.fields )
 			{
 				if( data.hasOwnProperty( field.key ))
 					this[field.key] = data[field.key]
-			})
+			}
 		}
 		
 		this.element = this.parent.element.createChildNode(
@@ -85,14 +87,20 @@ export default class UINode {
 					self[field.key] = parseFloat( newValue )
 				else if( field.type === 'int' )
 					self[field.key] = parseInt( newValue )
+				else if( field.type === 'boolean' )
+					self[field.key] = parseBoolean( newValue )
 				else
+				{
+					console.assert( ( field.type || 'string' ) === 'string' )
 					self[field.key] = newValue
+				}
 				
 				UINode.onChange()
 				
 				self.element.elementSpan.children[1].innerText = self.label
 			}
-			const onChangeEvent = evt =>
+			
+			let onChangeEvent = function( evt )
 			{
 				_onChange( evt.target.value )
 			}
@@ -123,14 +131,27 @@ export default class UINode {
 				
 				let selectedValue = this[field.key] || ''
 				let options = await field.options()
-				options.forEach( option => {
+				for( let option of options )
+				{
 					let optionEl = document.createElement('option')
 					optionEl.setAttribute( 'value', option.value )
 					optionEl.innerText = option.label || option.value
 					if ( selectedValue == ( option.value || option.label ))
 						optionEl.setAttribute( 'selected', 'selected' )
 					input.appendChild( optionEl )
-				})
+				}
+			}
+			else if( field.input == 'checkbox' )
+			{
+				input = document.createElement( 'input' )
+				input.setAttribute( 'type', field.input )
+				let checked = parseBoolean( this[field.key] )
+				if( checked )
+					input.setAttribute( 'checked', 'checked' )
+				onChangeEvent = function( evt )
+				{
+					_onChange( evt.target.checked )
+				}
 			}
 			else
 			{
@@ -154,9 +175,13 @@ export default class UINode {
 				}
 				input.value = this[field.key] || ''
 			}
+			let id = `tree_node_field_${field.key}`
+			input.setAttribute( 'id', id )
+			label.setAttribute( 'for', id )
 			
 			input.addEventListener( changeevent, onChangeEvent )
 			
+			//if( field.input != 'checkbox' )
 			label.innerText = field.label || field.key
 			
 			label.appendChild( document.createElement( 'br' ))
@@ -174,6 +199,8 @@ export default class UINode {
 				
 				label.appendChild( tooltipped )
 			}
+			else if ( field.input == 'checkbox' )
+				inputGroup.appendChild( input )
 			else
 				label.appendChild( input )
 			
@@ -190,9 +217,10 @@ export default class UINode {
 	
 	getJson() {
 		let fields = {}
-		this.fields.forEach(field => {
-			fields[field.key] = this[field.key] || ''
-		})
+		for( let field of this.fields )
+		{
+			fields[field.key] = this[field.key]
+		}
 		
 		return {
 			type: ( this.constructor /*as any*/ ).command,

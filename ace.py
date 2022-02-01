@@ -177,7 +177,7 @@ def html_page( *lines: str, stylesheets: Opt[List[str]] = None, status_code: Opt
 			f'	<li><a href="{url_for("http_anis")}">ANIs</a></li>',
 			f'	<li><a href="{url_for("http_flags")}">Flags</a></li>',
 			f'	<li><a href="{url_for("http_routes")}">Routes</a></li>',
-			f'	<li><a href="{url_for("http_voicemail")}">Voicemail</a></li>',
+			f'	<li><a href="{url_for("http_voicemails")}">Voicemail</a></li>',
 			f'	<li><a href="{url_for("http_audit_list")}">Audit</a></li>',
 			f'	<li><a href="{url_for("http_logout")}">Log Out</a></li>',
 			'</ul>',
@@ -1761,24 +1761,22 @@ route_id_html = '''
 </font>
 
 <script src="/aimara/lib/Aimara.js"></script>
-<script type="module" src="/route-editor/route-editor.js"></script>
+<script type="module" src="/tree-editor/route-editor.js"></script>
 '''
 
 @app.route( '/routes/<int:route>', methods = [ 'GET', 'PATCH', 'DELETE' ] )
 @login_required # type: ignore
-def http_route( route: int ) -> Any:
+def http_route( route: int ) -> Response:
 	log = logger.getChild( 'http_route' )
 	return_type = accept_type()
 	try:
-		log.warning( f'type={return_type!r}' )
-		
 		if return_type != 'application/json':
 			if request.method == 'GET':
 				return html_page(
 					route_id_html,
 					stylesheets = [
 						'/aimara/css/Aimara.css',
-						'/route-editor/route-editor.css',
+						'/tree-editor/tree-editor.css',
 						'/nice-select2/nice-select2.css',
 					],
 				)
@@ -1794,14 +1792,15 @@ def http_route( route: int ) -> Any:
 		
 		if request.method == 'GET':
 			data = REPO_ROUTES.get_by_id( id_ )
-			return jsonify( data )
+			return rest_success( data )
 		elif request.method == 'PATCH':
 			data = inputs()
 			log.debug( data )
 			REPO_ROUTES.update( route, data )
-			return jsonify( data )
+			return rest_success( data )
 		elif request.method == 'DELETE':
 			REPO_ROUTES.delete( route )
+			return rest_success( [] )
 		else:
 			return rest_failure( f'request method {request.method} not implemented yet' ), 405
 	except HttpFailure as e:
@@ -1902,6 +1901,87 @@ def http_voicemails() -> Response:
 		'<script type="module" src="voicemails.js"></script>',
 	)
 	# END voicemail boxes list
+
+voicemail_id_html = '''
+<table border="0">
+	<tr>
+		<td class="tree"><div id="div_tree"></div></td>
+		<td class="help">
+			<div id="div_help">
+				This is the Voicemail Box Editor.<br/>
+				<br/>
+				Please click on a node to select it and see more details about
+				it.<br/>
+				<br/>
+				Or try right-clicking on a node for more options.
+			</div>
+		</td>
+	</tr>
+</table>
+
+<br/>
+<br/>
+<font size="-2">
+	<a href="https://www.streamlineicons.com/"
+		>Free Icons from Streamline Icons Pack</a
+	>
+</font>
+
+<script src="/aimara/lib/Aimara.js"></script>
+<script type="module" src="/tree-editor/voicemail-editor.js"></script>
+'''
+
+@app.route( '/voicemails/<int:box>', methods = [ 'GET', 'PATCH', 'DELETE' ] )
+@login_required
+def http_voicemail( box: int ) -> Response:
+	log = logger.getChild( 'http_voicemail' )
+	return_type = accept_type()
+	try:
+		if return_type != 'application/json':
+			if request.method == 'GET':
+				return html_page(
+					voicemail_id_html,
+					stylesheets = [
+						'/aimara/css/Aimara.css',
+						'/tree-editor/tree-editor.css',
+						'/nice-select2/nice-select2.css',
+					],
+				)
+			else:
+				return _http_failure(
+					return_type,
+					'Invalid Request Method'
+					'( did you forget to set header Accept=application/json? )',
+					405,
+				)
+		
+		path = voicemail_settings_path( box )
+		if not path.is_file():
+			raise HttpFailure( 'Voicemail box not found', 404 )
+		if request.method == 'GET':
+			with path.open( 'r' ) as f:
+				settings = json.loads( f.read() )
+			return rest_success( [ settings ] )
+		elif request.method == 'PATCH':
+			data = inputs()
+			log.debug( data )
+			with path.open( 'r' ) as f:
+				settings = json.loads( f.read() )
+			for k, v in data.items():
+				settings[k] = v
+			with path.open( 'w' ) as f:
+				f.write( json_dumps( settings ))
+			return rest_success( [ settings ] )
+		elif request.method == 'DELETE':
+			path.unlink()
+			return rest_success( [] )
+	except HttpFailure as e:
+		return _http_failure(
+			return_type,
+			e.error,
+			e.status_code,
+		)
+
 
 #endregion http - voicemail
 #region http - audits

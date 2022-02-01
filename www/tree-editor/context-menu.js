@@ -3,7 +3,7 @@ import Subtree from '/commands/subtree.js'
 
 import * as commands from '/commands/index.js'
 import NODE_TYPES from '/commands/index.js'
-import { treeDidChange } from './route-editor.js'
+import { treeDidChange } from './tree-editor.js'
 
 const deleteNode = {
 	text: 'Delete Node',
@@ -226,7 +226,7 @@ const ivrNodeActions = {
 			}
 		]
 	}
-};
+}
 
 const selectNodeActions = {
 	text: 'Select node',
@@ -238,16 +238,16 @@ const selectNodeActions = {
 				text: 'New case branch',
 				icon: CaseSubtree.icon,
 				action: element => {
-					let i = 0;
+					let i = 0
 					while(element.node.branches[`branch${i}`]) {
-						i++;
+						i++
 					}
-					let branchName = `branch${i}`;
+					let branchName = `branch${i}`
 					if (!element.node.branches[branchName]) {
 						element.node.branches[branchName] = new CaseSubtree(
 							element.node,
 							branchName
-						);
+						)
 						element.node.branches[branchName].createElement(
 							{ NODE_TYPES, context: 'contextOptionalSubtree' }
 						)
@@ -279,15 +279,18 @@ const context_menu = {
 	},
 	contextSelect: {
 		elements: [deleteNode, nodeActions, selectNodeActions]
-	}
+	},
+	contextVoiceMailRoot: {
+		elements: []
+	},
 };
 
 function createNodeFromNodeType(NodeType) {
 	return element => {
 		let node = new NodeType(element.node);
 		node.createElement({ NODE_TYPES });
-		treeDidChange();
-	};
+		treeDidChange()
+	}
 }
 
 function moveNodeUp(parent, node) {
@@ -296,36 +299,36 @@ function moveNodeUp(parent, node) {
 	// if < 0 does not exist
 	// if 0 already at top of array
 	if (i < 1) {
-		return;
+		return
 	}
 
-	let aux = parent.childNodes[i - 1];
-	parent.childNodes[i - 1] = parent.childNodes[i];
-	parent.childNodes[i] = aux;
+	let aux = parent.childNodes[i - 1]
+	parent.childNodes[i - 1] = parent.childNodes[i]
+	parent.childNodes[i] = aux
 
 	node.elementLi.parentNode.insertBefore(
 		parent.childNodes[i - 1].elementLi,
 		parent.childNodes[i].elementLi
-	);
+	)
 }
 
 function moveNodeDown(parent, node) {
-	let i = parent.childNodes.findIndex(n => n.id === node.id);
+	let i = parent.childNodes.findIndex(n => n.id === node.id)
 
 	// if < 0 does not exist
 	// if === length already at bottom of array
 	if (i < 0 || i === parent.childNodes.length - 1) {
-		return;
+		return
 	}
 
-	let aux = parent.childNodes[i + 1];
-	parent.childNodes[i + 1] = parent.childNodes[i];
-	parent.childNodes[i] = aux;
+	let aux = parent.childNodes[i + 1]
+	parent.childNodes[i + 1] = parent.childNodes[i]
+	parent.childNodes[i] = aux
 
 	node.elementLi.parentNode.insertBefore(
 		parent.childNodes[i].elementLi,
 		parent.childNodes[i + 1].elementLi
-	);
+	)
 }
 
-export default context_menu;
+export default context_menu

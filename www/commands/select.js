@@ -32,22 +32,23 @@ export default class Select extends UINode {
 		
 		if( data.branches )
 		{
-			Object.keys( data.branches )
-				//.filter( br => br !== 'invalid' )
-				.forEach((k, i) =>
+			//Object.keys( data.branches )
+			//.filter( br => br !== 'invalid' )
+			//.forEach((k, i) =>
+			for( let k in data.branches )
+			{
+				//if ( !data.branches[k] )
+				//	return
+				
+				this.branches[k] = new CaseSubtree( this, k )
+				this.branches[k].createElement(
 				{
-					if ( !data.branches[k] )
-						return
-					
-					this.branches[k] = new CaseSubtree( this, k )
-					this.branches[k].createElement(
-					{
-						isSubtree: true,
-						data: data.branches[k],
-						NODE_TYPES,
-						context: 'contextOptionalSubtree'
-					})
+					isSubtree: true,
+					data: data.branches[k],
+					NODE_TYPES,
+					context: 'contextOptionalSubtree'
 				})
+			}
 		}
 
 		this.invalid = new Subtree( this, 'Invalid' )
@@ -64,15 +65,13 @@ export default class Select extends UINode {
 		const sup = super.getJson()
 		
 		const branchesData = {}
-		Object.keys( this.branches ).forEach(( k, i ) =>
+		for( let k in this.branches )
 		{
-			if ( !this.branches[k] )
-			{
-				return
-			}
-			
-			branchesData[k] = this.branches[k].getJson()
-		})
+			if ( this.branches[k] )
+				branchesData[k] = this.branches[k].getJson()
+			else
+				branchesData[k] = []
+		}
 		
 		let invalidData = this.invalid.getJson()
 		

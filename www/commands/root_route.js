@@ -1,6 +1,6 @@
 import UINode from './UINode.js'
 
-export default class Root extends UINode {
+export default class RootRoute extends UINode {
 	static icon = '/media/streamline/kindle.png'
 	static context_menu_name = 'N/A'
 	static command = ''
@@ -32,7 +32,7 @@ Right-click on it to start adding instructions to your route.<br/>
 		this.element = tree.createNode(
 			this.label,
 			true,
-			Root.icon,
+			RootRoute.icon,
 			null,
 			null,
 			'contextSubtree'
@@ -40,14 +40,16 @@ Right-click on it to start adding instructions to your route.<br/>
 		
 		this.element.node = this
 		
-		data.nodes.forEach(nodeData => {
+		for( let nodeData of data.nodes )
+		{
 			let NodeType = NODE_TYPES[nodeData.type]
 			
-			if (NodeType) {
+			if( NodeType )
+			{
 				let node = new NodeType( this )
 				node.createElement( { data: nodeData, NODE_TYPES } )
 			}
-		})
+		}
 	}
 	
 	getJson() {

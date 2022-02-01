@@ -218,7 +218,7 @@ Add branches to the node by right-clicking on it.<br/>
 		}
 		
 		let invalid = null
-		if ( this.invalid )
+		if( this.invalid )
 			invalid = this.invalid.getJson().nodes
 		
 		return {
@@ -236,7 +236,7 @@ Add branches to the node by right-clicking on it.<br/>
 		{
 			const branch = this.branches[key]
 			
-			if (branch.element.id === node.element.id)
+			if( branch.element.id === node.element.id )
 			{
 				delete this.branches[key]
 				return true

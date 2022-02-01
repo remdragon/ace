@@ -1,9 +1,9 @@
-// main editor module
 import context_menu from './context-menu.js'
 import ajax from '../ajax.js'
 
 import UINode from '../commands/UINode.js'
-import Root from '../commands/root.js'
+import RootRoute from '../commands/root_route.js'
+import RootVoiceMail from '../commands/root_voicemail.js'
 import NODE_TYPES from '../commands/index.js'
 
 import { debounce } from './util.js'
@@ -15,21 +15,47 @@ let root
 
 let divHelp
 
-ajax(
-	'get',
-	location.href,
-	{
-		accept: 'application/json',
-		'cache-control': 'no-cache'
-	},
-	null,
-	(data) => {
-		console.assert( !tree )
-		initTree( data )
-	}
-)
+export function routeEditorMain()
+{
+	ajax(
+		'get',
+		location.href,
+		{
+			accept: 'application/json',
+			'cache-control': 'no-cache'
+		},
+		null,
+		(data) => {
+			console.assert( !tree )
+			if ( data.success )
+				initTree( data.rows, RootRoute )
+			else
+				alert( data.error )
+		}
+	)
+}
 
-function initTree( data ) {
+export function voiceMailEditorMain()
+{
+	ajax(
+		'get',
+		location.href,
+		{
+			accept: 'application/json',
+			'cache-control': 'no-cache'
+		},
+		null,
+		(data) => {
+			console.assert( !tree )
+			if ( data.success )
+				initTree( data.rows[0], RootVoiceMail )
+			else
+				alert( data.error )
+		}
+	)
+}
+
+function initTree( data, Root ) {
 	route_data = data
 	document.title = route_data.name
 	

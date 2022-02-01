@@ -8,34 +8,44 @@ export default class Subtree extends UINode {
 	//help = 'This is a subtree node'
 	label = ''
 	
-	constructor(parent /*: UINode*/, label /*: string*/, help)
+	constructor( parent /*: UINode*/, label /*: string*/, help )
 	{
-		super(parent)
+		super( parent )
 		
 		this.label = label
 		this.help = help || 'This is a subtree node, click on the parent node for more information'
 	}
 	
-	createElement({ isSubtree, data = {nodes:[]}, NODE_TYPES, context }) {
-		super.createElement({ isSubtree, data, NODE_TYPES, context });
+	createElement({
+		isSubtree,
+		data = {nodes:[]},
+		NODE_TYPES,
+		context,
+	})
+	{
+		super.createElement({ isSubtree, data, NODE_TYPES, context })
 		
-		if (data.nodes) {
-			data.nodes.forEach((nodeData /*: any*/) => {
-				//console.log( nodeData )
+		if( data.nodes )
+		{
+			for( let nodeData of data.nodes )
+			{
 				let NodeType = NODE_TYPES[nodeData.type]
-				if (NodeType) {
-					let node = new NodeType(this);
+				if( NodeType )
+				{
+					let node = new NodeType( this )
 					node.createElement({ data: nodeData, NODE_TYPES });
 				}
-			});
+			}
 		}
 	}
-
-	getJson()/*: object*/ {
+	
+	getJson()//: object
+	{
 		const sup = super.getJson()
+		//delete sup['type']
 		return {
 			...sup,
-			nodes: this.children.map(node => node.getJson())
+			nodes: this.children.map( node => node.getJson() )
 		}
 	}
 }

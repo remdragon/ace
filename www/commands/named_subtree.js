@@ -34,7 +34,7 @@ export default class NamedSubtree extends UINode {
 		
 		if( data.nodes)
 		{
-			data.nodes.forEach(( nodeData /*: any*/ ) =>
+			for( let nodeData of data.nodes )
 			{
 				//console.log( nodeData )
 				let NodeType = NODE_TYPES[nodeData.type]
@@ -43,7 +43,7 @@ export default class NamedSubtree extends UINode {
 					let node = new NodeType( this )
 					node.createElement({ data: nodeData, NODE_TYPES })
 				}
-			});
+			}
 		}
 	}
 

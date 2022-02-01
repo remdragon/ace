@@ -18,32 +18,35 @@ export default class Repeat extends UINode {
 		},
 		NODE_TYPES,
 		context = 'contextOptionalSubtree'
-	}) {
+	})
+	{
 		super.createElement({ isSubtree, data, NODE_TYPES, context })
-
-		data.nodes.forEach(nodeData => {
+		
+		for( let nodeData of data.nodes )
+		{
 			let NodeType = NODE_TYPES[nodeData.type]
-
-			if (NodeType) {
+			
+			if( NodeType )
+			{
 				let node = new NodeType(this)
 				node.createElement({ data: nodeData, NODE_TYPES })
 			}
-		})
+		}
 	}
-
+	
 	fields = [
 		{
-			key: "count",
-			type: "number"
+			key: 'count',
+			type: 'number'
 		}
 	]
-
+	
 	getJson() {
 		let sup = super.getJson()
 		
 		return {
 			...sup,
-			nodes: this.children.map(node => node.getJson())
+			nodes: this.children.map( node => node.getJson() )
 		};
 	}
 }
