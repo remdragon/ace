@@ -195,7 +195,7 @@ def accept_type(
 	#log = logger.getChild( 'accept_type' )
 	accept_header = request.headers.get( 'Accept' )
 	return_type: str = accept_types.get_best_match( accept_header, accepted_types )
-	assert isinstance( return_type, str ), f'invalid {return_type=}'
+	assert isinstance( return_type, str ), f'invalid return_type={return_type!r}'
 	#log.debug( 'accept_header=%r, accepted_types=%r, return_type=%r', accept_header, accepted_types, return_type )
 	return return_type
 
@@ -1792,17 +1792,17 @@ def http_route( route: int ) -> Response:
 		
 		if request.method == 'GET':
 			data = REPO_ROUTES.get_by_id( id_ )
-			return rest_success( data )
+			return rest_success( [ data ] )
 		elif request.method == 'PATCH':
 			data = inputs()
 			log.debug( data )
 			REPO_ROUTES.update( route, data )
-			return rest_success( data )
+			return rest_success( [ data ] )
 		elif request.method == 'DELETE':
 			REPO_ROUTES.delete( route )
 			return rest_success( [] )
 		else:
-			return rest_failure( f'request method {request.method} not implemented yet' ), 405
+			return rest_failure( f'request method {request.method} not implemented yet', 405 )
 	except HttpFailure as e:
 		return _http_failure(
 			return_type,
@@ -1857,14 +1857,14 @@ def http_voicemails() -> Response:
 			return rest_success( [ { 'box': box } ] )
 		
 		url = url_for( 'http_voicemail', box = box )
-		low.warning( 'url=%r', url )
+		log.warning( 'url=%r', url )
 		return redirect( url )
 		# END voicemail box creation
 	
 	# BEGIN voicemail boxes list
 	try:
 		path = voicemail_settings_path( '*' )
-		boxes: list[Dict[str,Any]] = []
+		boxes: List[Dict[str,Any]] = []
 		for box_path in path.parent.glob( path.name ):
 			with box_path.open( 'r' ) as f:
 				settings = json.loads( f.read() )
@@ -1937,7 +1937,7 @@ voicemail_id_html = '''
 '''
 
 @app.route( '/voicemails/<int:box>', methods = [ 'GET', 'PATCH', 'DELETE' ] )
-@login_required
+@login_required # type: ignore
 def http_voicemail( box: int ) -> Response:
 	log = logger.getChild( 'http_voicemail' )
 	return_type = accept_type()
@@ -1980,6 +1980,8 @@ def http_voicemail( box: int ) -> Response:
 		elif request.method == 'DELETE':
 			path.unlink()
 			return rest_success( [] )
+		else:
+			return rest_failure( f'invalid request method={request.method!r}' )
 	except HttpFailure as e:
 		return _http_failure(
 			return_type,
