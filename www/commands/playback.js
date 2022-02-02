@@ -27,7 +27,7 @@ Does not collect digits, does not proceed with route instructions until audio is
 			key: 'sound',
 			type: 'string',
 			input: 'select2',
-			async options() {
+			async options( self ) {
 				return await sounds_options()
 			}
 		},

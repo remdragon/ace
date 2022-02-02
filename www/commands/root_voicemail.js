@@ -81,8 +81,18 @@ Configuration settings here or right-click on the delivery node to configuration
 		
 		return {
 			...sup,
+			type: 'root_voicemail',
 			name: this.name,
 			delivery: this.delivery.getJson().nodes
+		}
+	}
+	
+	walkChildren( callback )
+	{
+		super.walkChildren( callback )
+		for( let node of this.children )
+		{
+			node.walkChildren( callback )
 		}
 	}
 }

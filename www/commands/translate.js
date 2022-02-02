@@ -38,14 +38,21 @@ export default class Translate extends UINode {
 			NODE_TYPES
 		});
 	}
-
+	
 	getJson() {
 		let sup = super.getJson();
-
+		
 		return {
 			...sup,
 			hit: this.hitBranch.getJson(),
 			miss: this.missBranch.getJson()
 		};
+	}
+	
+	walkChildren( callback )
+	{
+		super.walkChildren( callback )
+		this.hitBranch.walkChildren( callback )
+		this.missBranch.walkChildren( callback )
 	}
 }

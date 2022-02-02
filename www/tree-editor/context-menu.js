@@ -69,7 +69,7 @@ const nodeActions = {
 const newTelephonyNode = {
 	text: 'New Telephony',
 	icon: '/aimara/images/add1.png',
-	action: function(element) {},
+	action: function( element ) {},
 	submenu: {
 		elements: [
 			...[
@@ -80,7 +80,8 @@ const newTelephonyNode = {
 				commands.Hangup,
 				commands.IVR,
 				commands.PreAnswer,
-				commands.SetMOH,
+				//commands.SetMOH,
+				commands.Voicemail,
 			].map(NodeType => ({
 				text: NodeType.context_menu_name,
 				icon: NodeType.icon,
@@ -97,13 +98,15 @@ const newLogicNode = {
 	submenu: {
 		elements: [
 			...[
-				commands.IfNode,
+				commands.GoTo,
+				//commands.IfNode,
+				commands.Label,
 				commands.Repeat,
 				commands.Route,
-				commands.Select,
-				commands.SetNode,
-				commands.Translate,
-			].map(NodeType => ({
+				//commands.Select,
+				//commands.SetNode,
+				//commands.Translate,
+			].map( NodeType => ({
 				text: NodeType.context_menu_name,
 				icon: NodeType.icon,
 				action: createNodeFromNodeType( NodeType )
@@ -123,8 +126,8 @@ const createPlayNode = {
 				commands.Playback,
 				commands.PlayMOH,
 				commands.PlayPreAnnounce,
-				commands.PlayEmerg,
-				commands.PlayEstHold,
+				//commands.PlayEmerg,
+				//commands.PlayEstHold,
 			].map(
 				NodeType => ({
 					text: NodeType.context_menu_name,

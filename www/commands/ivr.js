@@ -92,7 +92,7 @@ Add branches to the node by right-clicking on it.<br/>
 			input: 'select2',
 			label: 'Greeting Prompt: ',
 			tooltip: 'the recording to play instructing the caller what digits are expected',
-			async options() {
+			async options( self ) {
 				return await sounds_options()
 			}
 		},
@@ -101,7 +101,7 @@ Add branches to the node by right-clicking on it.<br/>
 			input: 'select2',
 			label: 'Error Prompt: ',
 			tooltip: "the recording to play if caller's input is not valid",
-			async options() {
+			async options( self ) {
 				return await sounds_options()
 			}
 		},
@@ -132,6 +132,8 @@ Add branches to the node by right-clicking on it.<br/>
 		data = { branches: {} },
 		NODE_TYPES,
 	}) {
+		this.uuid = data.uuid || crypto.randomUUID()
+		
 		super.createElement({
 			isSubtree,
 			data,
@@ -205,7 +207,7 @@ Add branches to the node by right-clicking on it.<br/>
 		
 		// TODO: fix dotted lines after reordering
 	}
-
+	
 	getJson()
 	{
 		const sup = super.getJson()
@@ -223,9 +225,24 @@ Add branches to the node by right-clicking on it.<br/>
 		
 		return {
 			...sup,
+			uuid: this.uuid,
 			branches: branchesData,
 			invalid: invalid,
 		}
+	}
+	
+	walkChildren( callback )
+	{
+		super.walkChildren( callback )
+		console.log( this.branches )
+		for( let digits in this.branches )
+		{
+			let node = this.branches[digits]
+			if ( node !== null )
+				node.walkChildren( callback )
+		}
+		if( this.invalid )
+			this.invalid.walkChildren( callback )
 	}
 	
 	remove( node/*: UINode*/ )

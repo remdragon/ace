@@ -54,8 +54,18 @@ Right-click on it to start adding instructions to your route.<br/>
 	
 	getJson() {
 		return {
+			type: 'root_route',
 			name: this.name,
 			nodes: this.children.map( node => node.getJson() )
+		}
+	}
+	
+	walkChildren( callback )
+	{
+		super.walkChildren( callback )
+		for( let node of this.children )
+		{
+			node.walkChildren( callback )
 		}
 	}
 }

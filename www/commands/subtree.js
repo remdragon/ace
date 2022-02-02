@@ -48,4 +48,11 @@ export default class Subtree extends UINode {
 			nodes: this.children.map( node => node.getJson() )
 		}
 	}
+	walkChildren( callback )
+	{
+		super.walkChildren( callback )
+		
+		for( let node of this.children )
+			node.walkChildren( callback )
+	}
 }

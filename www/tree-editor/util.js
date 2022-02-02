@@ -19,7 +19,6 @@ export function debounce(func, timer = 1000) {
 
 export function parseBoolean( value, nullOnFailure = false )
 {
-	console.log( `parseBoolean value=${value}` )
 	let value2 = parseFloat( value )
 	if( !isNaN( value2 ))
 		return !!value2

@@ -1,34 +1,36 @@
 import UINode from './UINode.js'
 
-export default class Route extends UINode {
+export default class Voicemail extends UINode {
 	static icon = '/media/streamline/folder-code.png'
-	static context_menu_name = 'Route'
-	static command = 'route'
+	static context_menu_name = 'Voicemail'
+	static command = 'voicemail'
 	
 	help = `Choose another route to execute from here.<br/>
 <br/>
 When that route finishes, execution will resume here in this route<br/>`
 	
-	label = 'Route'
+	get label()
+	{
+		return 'Voicemail ' + this.box
+	}
 	
-	route = ''//: string
+	box = ''//: string
 	
 	fields = [
 		{
-			key: 'route',
+			key: 'box',
 			type: 'int',
 			input: 'select',
-			label: 'Route: ',
-			async options( self )
-			{
+			label: 'Voicemail: ',
+			async options( self ) {
 				let params = { headers: { 'Accept': 'application/json' }}
-				let json = await fetch( '/routes', params )
+				let json = await fetch( '/voicemails', params )
 					.then( rsp => rsp.json() )
 				//console.log( JSON.stringify( json ) )
-				let options = []
+				let options = [ { label: '(Choose One)', value: '' } ]
 				for ( let row of json.rows )
 				{
-					options.push({ label: `${row.route} ${row.name || "(Unnamed)"}`, value: row.route })
+					options.push({ label: `${row.box} ${row.name || "(Unnamed)"}`, value: row.box })
 				}
 				return options
 			}

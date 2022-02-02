@@ -50,7 +50,7 @@ export default class Select extends UINode {
 				})
 			}
 		}
-
+		
 		this.invalid = new Subtree( this, 'Invalid' )
 		this.invalid.createElement(
 		{
@@ -59,7 +59,7 @@ export default class Select extends UINode {
 			NODE_TYPES
 		})
 	}
-
+	
 	getJson()
 	{
 		const sup = super.getJson()
@@ -80,6 +80,15 @@ export default class Select extends UINode {
 			branches: branchesData,
 			invalid: invalidData,
 		}
+	}
+	
+	walkChildren( callback )
+	{
+		super.walkChildren( callback )
+		
+		for( let subtree of branches )
+			subtree.walkChildren( callback )
+		this.invalid.walkChildren( callback )
 	}
 	
 	remove(node/*: UINode*/)

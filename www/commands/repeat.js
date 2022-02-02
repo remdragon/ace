@@ -7,7 +7,10 @@ export default class Repeat extends UINode {
 	
 	help =
 		'This node runs all its commands in a loop until the repeat count is met or forever if count is 0'
-	label = 'Repeat'
+	get label()
+	{
+		return 'Repeat ' + this.count
+	}
 	
 	count = 1//: number = 1
 	
@@ -47,6 +50,13 @@ export default class Repeat extends UINode {
 		return {
 			...sup,
 			nodes: this.children.map( node => node.getJson() )
-		};
+		}
+	}
+	walkChildren( callback )
+	{
+		super.walkChildren( callback )
+		
+		for( let node of this.children )
+			node.walkChildren( callback )
 	}
 }

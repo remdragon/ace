@@ -37,7 +37,8 @@ export default class UINode {
 		parent.children.push( this )
 	}
 	
-	get label() {
+	get label()
+	{
 		return `oops, command ${this.constructor.name} is missing a label!`
 	}
 	
@@ -130,7 +131,7 @@ export default class UINode {
 				}
 				
 				let selectedValue = this[field.key] || ''
-				let options = await field.options()
+				let options = await field.options( this )
 				for( let option of options )
 				{
 					let optionEl = document.createElement('option')
@@ -215,7 +216,8 @@ export default class UINode {
 		}
 	}
 	
-	getJson() {
+	getJson()
+	{
 		let fields = {}
 		for( let field of this.fields )
 		{
@@ -227,7 +229,20 @@ export default class UINode {
 			...fields
 		}
 	}
-
+	
+	walkTree( callback )
+	{
+		if( this.parent )
+			this.parent.walkTree( callback )
+		else
+			this.walkChildren( callback )
+	}
+	
+	walkChildren( callback )
+	{
+		callback( this )
+	}
+	
 	moveNodeUp( node/*: UINode*/ )
 	{
 		let i = this.children.findIndex(
@@ -262,7 +277,7 @@ export default class UINode {
 	
 	remove( node/*: UINode*/ )
 	{
-		this.children = this.children.filter(n =>
+		this.children = this.children.filter( n =>
 		{
 			return n.element.id !== node.element.id
 		})

@@ -1864,11 +1864,11 @@ def http_voicemails() -> Response:
 	# BEGIN voicemail boxes list
 	try:
 		path = voicemail_settings_path( '*' )
-		boxes = list( sorted(
-			int( box.stem )
-			for box in path.parent.glob( path.name )
-			if box.stem.isnumeric()
-		))
+		boxes: list[Dict[str,Any]] = []
+		for box_path in path.parent.glob( path.name ):
+			with box_path.open( 'r' ) as f:
+				settings = json.loads( f.read() )
+			boxes.append( { 'box': int( box_path.stem ), **settings } )
 	except Exception as e:
 		return _http_failure(
 			return_type,
@@ -1876,26 +1876,31 @@ def http_voicemails() -> Response:
 			500,
 		)
 	if return_type == 'application/json':
-		return rest_success( [ { 'box': box } for box in boxes ] )
+		return rest_success( boxes )
 	
 	# TODO FIXME: pagination anyone?
 	
 	row_html = '\n'.join( [
 		'<tr>',
 			'<td><a href="{url}">{box}</a></td>',
+			'<td><a href="{url}">{name}</a></td>',
 			'<td><a class="box_delete">Delete {box}</a></td>',
 		'</tr>',
 	] )
 	body = '\n'.join( [
 		row_html.format(
-			box = box,
-			url = url_for( 'http_voicemail', box = box ),
+			url = url_for( 'http_voicemail', box = box['box'] ),
+			**box
 		) for box in boxes
 	] )
 	return html_page(
 		'<center><a id="box_new" href="#">(New Voicemail Box)</a></center>',
 		'<table border=1>',
-		'<tr><th>Box</th><th>Delete</th></tr>',
+		'<tr>',
+			'<th>Box</th>',
+			'<th>Name</th>',
+			'<th>Delete</th>',
+		'</tr>',
 		body,
 		'</table>',
 		'<script type="module" src="voicemails.js"></script>',

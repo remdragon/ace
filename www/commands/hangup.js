@@ -84,7 +84,7 @@ export default class Hangup extends UINode {
 			key: 'cause',
 			input: 'select',
 			label: 'Cause:',
-			async options() { return [
+			async options( self ) { return [
 				{ label: 'normal', value: 'NORMAL_CLEARING' },
 				{ label: 'user busy', value: 'USER_BUSY' },
 				{ label: 'unallocated number', value: 'UNALLOCATED_NUMBER' },
