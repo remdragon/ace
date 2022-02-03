@@ -30,7 +30,7 @@ export default class TOD extends UINode {
 		rows: 10,
 		tooltip: `Enter specifics for DOW/TOD that should be considered.<br/>
 One range per line, for example:
-Mon,Wed,Fri 08:00-17:00
+Mon,Wed-Fri 08:00-17:00
 Sat 08:00-12:00
 1/5/2022 08:00-1/7 13:00
 `
