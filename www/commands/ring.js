@@ -1,7 +1,7 @@
 import UINode from "./UINode.js"
 
 export default class Ring extends UINode {
-	static icon = '/media/streamline/music-note-2.png' // TODO FIXME: need a better icon
+	static icon = '/media/streamline/phone-actions-ring.png'
 	static context_menu_name = 'Play RingTone'
 	static command = 'ring'
 	

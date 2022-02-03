@@ -39,7 +39,8 @@ export default class Translate extends UINode {
 		});
 	}
 	
-	getJson() {
+	getJson()
+	{
 		let sup = super.getJson();
 		
 		return {

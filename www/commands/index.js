@@ -19,6 +19,7 @@ import Route from './route.js'; export{ Route }
 import Select from './select.js'; export{ Select }
 import SetMOH from './setmoh.js'; export{ SetMOH }
 import SetNode from './set.js'; export{ SetNode }
+import TOD from './tod.js'; export{ TOD }
 import Translate from './translate.js'; export{ Translate }
 import Voicemail from './voicemail.js'; export{ Voicemail }
 
@@ -44,6 +45,7 @@ const NODE_TYPES = {
 	select: Select,
 	setNode: SetNode,
 	setmoh: SetMOH,
+	tod: TOD,
 	translate: Translate,
 	voicemail: Voicemail,
 }

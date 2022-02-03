@@ -75,7 +75,8 @@ Configuration settings here or right-click on the delivery node to configuration
 		})
 	}
 	
-	getJson() {
+	getJson()
+	{
 		const sup = super.getJson()
 		delete sup['type']
 		

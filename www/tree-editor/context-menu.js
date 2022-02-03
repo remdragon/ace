@@ -105,6 +105,7 @@ const newLogicNode = {
 				commands.Route,
 				//commands.Select,
 				//commands.SetNode,
+				commands.TOD,
 				//commands.Translate,
 			].map( NodeType => ({
 				text: NodeType.context_menu_name,

@@ -154,6 +154,15 @@ export default class UINode {
 					_onChange( evt.target.checked )
 				}
 			}
+			else if( field.input == 'textarea' )
+			{
+				input = document.createElement( 'textarea' )
+				if( field.rows )
+					input.setAttribute( 'rows', field.rows )
+				if( field.cols )
+					input.setAttribute( 'cols', field.cols )
+				input.innerText = this[field.key] || ''
+			}
 			else
 			{
 				input = document.createElement( 'input' )
@@ -182,7 +191,6 @@ export default class UINode {
 			
 			input.addEventListener( changeevent, onChangeEvent )
 			
-			//if( field.input != 'checkbox' )
 			label.innerText = field.label || field.key
 			
 			label.appendChild( document.createElement( 'br' ))

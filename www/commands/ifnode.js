@@ -41,7 +41,8 @@ export default class IfNode extends UINode {
 		})
 	}
 	
-	getJson() {
+	getJson()
+	{
 		let sup = super.getJson()
 		
 		return {
