@@ -22,39 +22,37 @@ If the condition is true, execute the "true" branch, otherwise the "false" branc
 	trueBranch//: Subtree
 	falseBranch//: Subtree
 	
-	fields = [
-		{
-			key: 'lhs',
-			label: 'Left Operand:',
-			tooltip: 'You can type a literal string here or reference a channel variable like ${destination_number} or a global variable like $${hold_music}',
-		},{
-			key: 'op',
-			label: 'Comparison:',
-			input: 'select',
-			async options(){
-				return [
-					{ label: '(choose one)', value: '' },
-					{ label: '<=', value: '<=' },
-					{ label: '<', value: '<' },
-					{ label: '=', value: '=' },
-					{ label: '!=', value: '!=' },
-					{ label: '>', value: '>' },
-					{ label: '>=', value: '>=' },
-					{ label: 'begins-with', value: 'begins-with' },
-					{ label: 'contains', value: 'contains' },
-					{ label: 'ends-with', value: 'ends-with' },
-				]
-			}
-		},{
-			key: 'rhs',
-			label: 'Right Operand:',
-			tooltip: 'You can type a literal string here or reference a channel variable like ${destination_number} or a global variable like $${hold_music}',
-		},{
-			key: 'case',
-			label: 'Case Sensitive',
-			input: 'checkbox',
+	fields = [{
+		key: 'lhs',
+		label: 'Left Operand:',
+		tooltip: 'You can type a literal string here or reference a channel variable like ${destination_number} or a global variable like $${hold_music}',
+	},{
+		key: 'op',
+		label: 'Comparison:',
+		input: 'select',
+		async options(){
+			return [
+				{ label: '(choose one)', value: '' },
+				{ label: '<=', value: '<=' },
+				{ label: '<', value: '<' },
+				{ label: '=', value: '=' },
+				{ label: '!=', value: '!=' },
+				{ label: '>', value: '>' },
+				{ label: '>=', value: '>=' },
+				{ label: 'begins-with', value: 'begins-with' },
+				{ label: 'contains', value: 'contains' },
+				{ label: 'ends-with', value: 'ends-with' },
+			]
 		}
-	]
+	},{
+		key: 'rhs',
+		label: 'Right Operand:',
+		tooltip: 'You can type a literal string here or reference a channel variable like ${destination_number} or a global variable like $${hold_music}',
+	},{
+		key: 'case',
+		label: 'Case Sensitive',
+		input: 'checkbox',
+	}]
 	
 	createElement({
 		isSubtree = false,

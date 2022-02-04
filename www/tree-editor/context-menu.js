@@ -106,7 +106,7 @@ const newLogicNode = {
 				commands.Repeat,
 				commands.Route,
 				//commands.Select,
-				//commands.SetNode,
+				commands.SetNode,
 				commands.TOD,
 				//commands.Translate,
 			].map( NodeType => ({
