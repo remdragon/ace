@@ -18,6 +18,10 @@ Configuration settings here or right-click on the delivery node to configuration
 	
 	box//: integer
 	name//: string
+	greeting//: integer
+	allow_guest_urgent//: boolean
+	max_greeting_seconds//: integer
+	max_message_seconds//: integer
 	
 	fields = [
 		{

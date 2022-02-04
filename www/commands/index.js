@@ -4,10 +4,12 @@ import AcdCallUnGate from './acd_call_ungate.js'; export{ AcdCallUnGate }
 import Answer from './answer.js'; export{ Answer }
 import GoTo from './goto.js'; export{ GoTo }
 import Hangup from './hangup.js'; export{ Hangup }
-import IfNode from './ifnode.js'; export{ IfNode }
+import IfNum from './ifnode.js'; export{ IfNum }
+import IfStr from './ifnode.js'; export{ IfStr }
 import IVR from './ivr.js'; export{ IVR }
 import Label from './label.js'; export{ Label }
 import Playback from './playback.js'; export{ Playback }
+import PlayDTMF from './play_dtmf.js'; export{ PlayDTMF }
 import PlayEmerg from './playemerg.js'; export{ PlayEmerg }
 import PlayEstHold from './playesthold.js'; export{ PlayEstHold }
 import PlayMOH from './playmoh.js'; export{ PlayMOH }
@@ -20,6 +22,7 @@ import Select from './select.js'; export{ Select }
 import SetMOH from './setmoh.js'; export{ SetMOH }
 import SetNode from './set.js'; export{ SetNode }
 import TOD from './tod.js'; export{ TOD }
+import Transfer from './transfer.js'; export{ Transfer }
 import Translate from './translate.js'; export{ Translate }
 import Voicemail from './voicemail.js'; export{ Voicemail }
 
@@ -30,10 +33,12 @@ const NODE_TYPES = {
 	answer: Answer,
 	goto: GoTo,
 	hangup: Hangup,
-	if: IfNode,
+	ifnum: IfNum,
+	ifstr: IfStr,
 	ivr: IVR,
 	label: Label,
 	playback: Playback,
+	play_dtmf: PlayDTMF,
 	playemerg: PlayEmerg,
 	playesthold: PlayEstHold,
 	playmoh: PlayMOH,
@@ -46,6 +51,7 @@ const NODE_TYPES = {
 	setNode: SetNode,
 	setmoh: SetMOH,
 	tod: TOD,
+	transfer: Transfer,
 	translate: Translate,
 	voicemail: Voicemail,
 }

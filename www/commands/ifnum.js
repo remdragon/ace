@@ -1,23 +1,49 @@
 import UINode from './UINode.js'
 import Subtree from './subtree.js'
 
-export default class IfNode extends UINode {
+export default class IfNum extends UINode {
 	static icon = '/media/streamline/road-sign-look-both-ways-1.png'
-	static context_menu_name = 'If'
-	static command = 'if'
+	static context_menu_name = 'IfNum'
+	static command = 'ifnum'
 	
 	help =
-		'Test the condition. If the condition is true, executable all nodes in the "true" branch, otherwise the "false" branch'
+		'Converts both operands to numeric values and tests the condition. If the condition is true, execute the "true" branch, otherwise the "false" branch'
 	get label()
 	{
-		return 'If ' + this.condition
+		return 'IfNum ' + this.lhs + ' ' + this.op + ' ' + this.rhs
 	}
 	
-	condition//: string
+	lhs//: string
+	op//: string
+	rhs//: string
 	trueBranch//: Subtree
 	falseBranch//: Subtree
 	
-	fields = [{ key: 'condition' }]
+	fields = [
+		{
+			key: 'lhs',
+			label: 'Left Operand:',
+			tooltip: 'You can type a literal string here or reference a channel variable like ${destination_number} or a global variable like $${hold_music}',
+		},{
+			key: 'op',
+			label: 'Comparison:',
+			input: 'select',
+			async options(){
+				return [
+					'<=',
+					'<',
+					'=',
+					'!=',
+					'>',
+					'>=',
+				]
+			}
+		},{
+			key: 'rhs',
+			label: 'Right Operand:',
+			tooltip: 'You can type a literal string here or reference a channel variable like ${destination_number} or a global variable like $${hold_music}',
+		}
+	]
 	
 	createElement({
 		isSubtree = false,

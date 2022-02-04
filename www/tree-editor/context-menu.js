@@ -81,6 +81,7 @@ const newTelephonyNode = {
 				commands.IVR,
 				commands.PreAnswer,
 				//commands.SetMOH,
+				commands.Transfer,
 				commands.Voicemail,
 			].map(NodeType => ({
 				text: NodeType.context_menu_name,
@@ -99,7 +100,8 @@ const newLogicNode = {
 		elements: [
 			...[
 				commands.GoTo,
-				//commands.IfNode,
+				commands.IfNum,
+				commands.IfStr,
 				commands.Label,
 				commands.Repeat,
 				commands.Route,
@@ -125,6 +127,7 @@ const createPlayNode = {
 			...[
 				commands.Ring,
 				commands.Playback,
+				commands.PlayDTMF,
 				commands.PlayMOH,
 				commands.PlayPreAnnounce,
 				//commands.PlayEmerg,
