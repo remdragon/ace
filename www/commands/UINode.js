@@ -16,6 +16,18 @@ const PATTERNS = {
 	float: "[0-9]*(.[0-9]*)?"
 }
 
+function newChild( parent, tag, atts )
+{
+	let child = document.createElement( tag )
+	if( atts )
+	{
+		for( let k in atts )
+			child.setAttribute( k, atts[k] )
+	}
+	parent.appendChild( child )
+	return child
+}
+
 export default class UINode {
 	static icon//: string
 	static context_menu_name//: string
@@ -76,11 +88,9 @@ export default class UINode {
 	
 	async onSelected( divHelp )/*: void*/
 	{
-		var has_select2 = false
 		for( let field of this.fields )
 		{
-			//console.log( `processing ${field.key}` )
-			divHelp.appendChild( document.createElement( 'br' ))
+			newChild( divHelp, 'br' )
 			var self = this
 			const _onChange = function( newValue )
 			{
@@ -106,45 +116,61 @@ export default class UINode {
 				_onChange( evt.target.value )
 			}
 			
-			let inputGroup = document.createElement( 'div' )
+			let inputGroup = newChild( divHelp, 'div' )
 			inputGroup.classList.add( 'input-group' )
 			
-			let label = document.createElement( 'label' )
+			let label = newChild( inputGroup, 'label' )
+			let id = `tree_node_field_${field.key}`
+			label.setAttribute( 'for', id )
+			label.innerText = field.label || field.key
+			newChild( label, 'br' )
+			
 			let tooltipped, input, tooltip
 			let changeevent = 'input'
 			
+			let inputParent = label
+			if( field.tooltip )
+			{
+				tooltipped = newChild( label, 'span' )
+				tooltipped.setAttribute( 'class', 'tooltipped' )
+				inputParent = tooltipped
+				
+				tooltip = newChild( tooltipped, 'span' )
+				tooltip.setAttribute( 'class', 'tooltip' )
+				tooltip.innerText = field.tooltip
+				
+			}
+			else if ( field.input == 'checkbox' )
+				inputParent = inputGroup
+			
 			if( field.input === 'select' || field.input === 'select2' )
 			{
-				input = document.createElement( 'select' )
-				if( field.input === 'select2' )
-				{
-					has_select2 = true
-					input.setAttribute( 'class', 'ace_select2' )
-					input.style.display = 'none'
-					changeevent = 'change'
-					
-					setTimeout( function()
-					{
-						let options = { searchable: true }
-						let x = NiceSelect.bind( input, options )
-					}, 100 )
-				}
+				input = newChild( inputParent, 'select', { id: id } )
 				
 				let selectedValue = this[field.key] || ''
 				let options = await field.options( this )
 				for( let option of options )
 				{
-					let optionEl = document.createElement('option')
+					let optionEl = newChild( input, 'option')
 					optionEl.setAttribute( 'value', option.value )
 					optionEl.innerText = option.label || option.value
 					if ( selectedValue == ( option.value || option.label ))
 						optionEl.setAttribute( 'selected', 'selected' )
-					input.appendChild( optionEl )
+				}
+				
+				if( field.input === 'select2' )
+				{
+					input.setAttribute( 'class', 'ace_select2' )
+					input.style.display = 'none'
+					changeevent = 'change'
+					
+					let options = { searchable: true }
+					let x = NiceSelect.bind( input, options )
 				}
 			}
 			else if( field.input == 'checkbox' )
 			{
-				input = document.createElement( 'input' )
+				input = newChild( inputParent, 'input', { id: id } )
 				input.setAttribute( 'type', field.input )
 				let checked = parseBoolean( this[field.key] )
 				if( checked )
@@ -156,7 +182,7 @@ export default class UINode {
 			}
 			else if( field.input == 'textarea' )
 			{
-				input = document.createElement( 'textarea' )
+				input = newChild( inputParent, 'textarea', { id: id } )
 				if( field.rows )
 					input.setAttribute( 'rows', field.rows )
 				if( field.cols )
@@ -165,8 +191,7 @@ export default class UINode {
 			}
 			else
 			{
-				input = document.createElement( 'input' )
-				input.setAttribute( 'type', field.input || 'text' )
+				input = newChild( inputParent, 'input', { id: id, type: field.input || 'text' } )
 				
 				let pattern = PATTERNS[field.type]
 				if( field.hasOwnProperty( 'maxlength' ))
@@ -185,42 +210,13 @@ export default class UINode {
 				}
 				input.value = this[field.key] || ''
 			}
-			let id = `tree_node_field_${field.key}`
-			input.setAttribute( 'id', id )
-			label.setAttribute( 'for', id )
-			
 			input.addEventListener( changeevent, onChangeEvent )
 			
-			label.innerText = field.label || field.key
-			
-			label.appendChild( document.createElement( 'br' ))
-			
-			if( field.tooltip )
-			{
-				tooltipped = document.createElement( 'span' )
-				tooltipped.setAttribute( 'class', 'tooltipped' )
-				tooltipped.appendChild( input )
-				
-				tooltip = document.createElement( 'span' )
-				tooltip.setAttribute( 'class', 'tooltip' )
-				tooltip.innerText = field.tooltip
-				tooltipped.appendChild( tooltip )
-				
-				label.appendChild( tooltipped )
-			}
-			else if ( field.input == 'checkbox' )
-				inputGroup.appendChild( input )
-			else
-				label.appendChild( input )
-			
-			inputGroup.appendChild( label )
 			if( field.input == 'select2' ) // grr select2
 			{
-				inputGroup.appendChild( document.createElement( 'br' ))
-				inputGroup.appendChild( document.createElement( 'br' ))
+				newChild( inputGroup, 'br' )
+				newChild( inputGroup, 'br' )
 			}
-			
-			divHelp.appendChild( inputGroup )
 		}
 	}
 	

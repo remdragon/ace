@@ -22,19 +22,17 @@ Does not collect digits, does not proceed with route instructions until audio is
 	sound = ''//: string
 	name = ''
 	
-	fields = [
-		{
-			key: 'sound',
-			type: 'string',
-			input: 'select2',
-			async options( self ) {
-				return await sounds_options()
-			}
-		},
-		{
-			key: 'name',
-			type: 'string',
-			label: 'Name: ',
+	fields = [{
+		key: 'name',
+		label: 'Name: ',
+		type: 'string',
+	},{
+		key: 'sound',
+		label: 'Sound:',
+		type: 'string',
+		input: 'select2',
+		async options( self ) {
+			return await sounds_options()
 		}
-	]
+	}]
 }
