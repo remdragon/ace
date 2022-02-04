@@ -7,10 +7,12 @@ export default class IfNum extends UINode {
 	static command = 'ifnum'
 	
 	help =
-		'Converts both operands to numeric values and tests the condition. If the condition is true, execute the "true" branch, otherwise the "false" branch'
+		`Converts both operands to numeric values and tests the condition.<br/>
+<br/>
+If the condition is true, execute the "true" branch, otherwise the "false" branch<br/>`
 	get label()
 	{
-		return 'IfNum ' + this.lhs + ' ' + this.op + ' ' + this.rhs
+		return 'IfNum ' + ( this.lhs || '?' ) + ' ' + ( this.op || '?' ) + ' ' + ( this.rhs || '?' )
 	}
 	
 	lhs//: string
@@ -30,12 +32,13 @@ export default class IfNum extends UINode {
 			input: 'select',
 			async options(){
 				return [
-					'<=',
-					'<',
-					'=',
-					'!=',
-					'>',
-					'>=',
+					{ label: '(choose one)', value: '' },
+					{ label: '<=', value: '<=' },
+					{ label: '<', value: '<' },
+					{ label: '=', value: '=' },
+					{ label: '!=', value: '!=' },
+					{ label: '>', value: '>' },
+					{ label: '>=', value: '>=' },
 				]
 			}
 		},{

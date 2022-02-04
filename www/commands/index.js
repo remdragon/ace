@@ -4,8 +4,8 @@ import AcdCallUnGate from './acd_call_ungate.js'; export{ AcdCallUnGate }
 import Answer from './answer.js'; export{ Answer }
 import GoTo from './goto.js'; export{ GoTo }
 import Hangup from './hangup.js'; export{ Hangup }
-import IfNum from './ifnode.js'; export{ IfNum }
-import IfStr from './ifnode.js'; export{ IfStr }
+import IfNum from './ifnum.js'; export{ IfNum }
+import IfStr from './ifstr.js'; export{ IfStr }
 import IVR from './ivr.js'; export{ IVR }
 import Label from './label.js'; export{ Label }
 import Playback from './playback.js'; export{ Playback }

@@ -7,10 +7,12 @@ export default class IfStr extends UINode {
 	static command = 'ifstr'
 	
 	help =
-		'Test the condition. If the condition is true, execute the "true" branch, otherwise the "false" branch'
+		`Test the condition.<br/>
+<br/>
+If the condition is true, execute the "true" branch, otherwise the "false" branch<br/>`
 	get label()
 	{
-		return 'IfStr ' + this.lhs + ' ' + this.op + ' ' + this.rhs
+		return 'IfStr ' + ( this.lhs || '?' ) + ' ' + ( this.op || '?' ) + ' ' + ( this.rhs || '?' )
 	}
 	
 	lhs//: string
@@ -31,15 +33,16 @@ export default class IfStr extends UINode {
 			input: 'select',
 			async options(){
 				return [
-					'<=',
-					'<',
-					'=',
-					'!=',
-					'>',
-					'>=',
-					'begins-with',
-					'contains',
-					'ends-with',
+					{ label: '(choose one)', value: '' },
+					{ label: '<=', value: '<=' },
+					{ label: '<', value: '<' },
+					{ label: '=', value: '=' },
+					{ label: '!=', value: '!=' },
+					{ label: '>', value: '>' },
+					{ label: '>=', value: '>=' },
+					{ label: 'begins-with', value: 'begins-with' },
+					{ label: 'contains', value: 'contains' },
+					{ label: 'ends-with', value: 'ends-with' },
 				]
 			}
 		},{
@@ -49,6 +52,7 @@ export default class IfStr extends UINode {
 		},{
 			key: 'case',
 			label: 'Case Sensitive',
+			input: 'checkbox',
 		}
 	]
 	

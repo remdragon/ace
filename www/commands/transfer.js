@@ -10,13 +10,13 @@ export default class Transfer extends UINode {
 Route exection stops here<br/>`
 	get label()
 	{
-		return 'Transfer ' + this.dest
+		return 'Transfer ' + ( this.dest || '' )
 	}
 	
 	leg//: string
 	dest//: string
 	dialplan = 'default' //: dialplan
-	context//: context
+	context = 'xml'//: context
 	
 	fields = [
 		{
@@ -30,7 +30,7 @@ Route exection stops here<br/>`
 					{ label: 'Both Legs', value: '-both' },
 				]
 			},
-			tooltip: 'In the context of the ACE system, the "A Leg" option is probably the only relevant choice',
+			tooltip: 'In the confines of the ACE system, the "A Leg" option may be the only relevant choice',
 		},{
 			key: 'dest',
 			label: 'Destination:',
@@ -41,14 +41,16 @@ Route exection stops here<br/>`
 			input: 'select',
 			async options( self ) {
 				return [
+					{ label: '(choose one)', value: '' },
 					{ label: 'default', value: 'default' },
 					{ label: 'public', value: 'public' },
 				]
 			},
+			tooltip: 'default is for internal and outbound dialing, public would be to simulate an inbound call'
 		},{
 			key: 'context',
 			label: 'Context:',
-			tooltip: 'This should probably always be XML',
+			tooltip: 'This is an advanced feature and will probably always be left as xml',
 		}
 	]
 }
