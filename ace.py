@@ -845,7 +845,7 @@ def http_login() -> Response:
 		'<p>',
 		'	<form method="POST">',
 		'		User Name:<br/>',
-		'		<input type="text" name="usernm"/><br/>',
+		'		<input type="text" name="usernm" autofocus/><br/>',
 		'		<br/>',
 		'		Secret:<br/>',
 		'		<input type="password" name="secret"/><br/>',
