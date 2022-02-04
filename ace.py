@@ -912,7 +912,7 @@ def _iter_sounds( sounds: Path ) -> Iterator[str]:
 			continue
 		for folder, _, files in os.walk( str( path2 )):
 			path3 = Path( folder )
-			if path3.stem not in ( '16000', '32000' ):
+			if path3.stem not in ( '16000', '32000', '48000' ):
 				for file in files:
 					path = str( Path( folder ) / file )
 					# callie sounds can be specifically simplified for freeswitch:
