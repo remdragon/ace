@@ -932,6 +932,7 @@ def http_sounds() -> Response:
 			{ 'sound': sound }
 			for sound in _iter_sounds( path )
 		] )
+	sounds.sort( key = lambda d: d['sound'] )
 	rsp = rest_success( sounds )
 	rsp.cache_control.public = True
 	rsp.cache_control.max_age = 30
@@ -1715,6 +1716,7 @@ def http_routes() -> Response:
 			f'Error querying routes list: {e!r}',
 			500,
 		)
+	routes.sort( key = lambda kv: kv[0] )
 	if return_type == 'application/json':
 		return rest_success( [ { 'route': id, 'name': route.get( 'name' ) } for id, route in routes ] )
 	
