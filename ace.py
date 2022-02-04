@@ -333,7 +333,7 @@ if not cfg_path.is_file():
 		f'ITAS_AUDIT_DIR = {"/var/log/itas/ace/"!r}',
 		f'ITAS_AUDIT_FILE = {"%Y-%m-%d.log"!r}',
 		f'ITAS_AUDIT_TIME = {"%Y-%m-%d %H:%M:%S.%f %Z%z"!r}',
-		f'ITAS_FREESWITCH_SOUNDS = {"/usr/share/freeswitch/sounds"!r}',
+		f'ITAS_FREESWITCH_SOUNDS = {["/usr/share/freeswitch/sounds/en/us/callie"]!r}',
 		f'ITAS_REPOSITORY_TYPE = {"fs:/usr/share/itas/ace/"!r}',
 		f'ITAS_SQLITE_REPOSITORY_FILE = {"/usr/share/itas/ace/database.db"!r}',
 		f'ITAS_FLAGS_PATH = {str(default_data_path)!r}',
@@ -375,7 +375,7 @@ ITAS_CERTIFICATE_PEM: str = ''
 ITAS_AUDIT_DIR: str = ''
 ITAS_AUDIT_FILE: str = ''
 ITAS_AUDIT_TIME: str = ''
-ITAS_FREESWITCH_SOUNDS: str = ''
+ITAS_FREESWITCH_SOUNDS: List[str] = []
 ITAS_REPOSITORY_TYPE: str = ''
 ITAS_SQLITE_REPOSITORY_FILE: str = ''
 ITAS_FLAGS_PATH: str = ''
@@ -926,7 +926,12 @@ def _iter_sounds( sounds: Path ) -> Iterator[str]:
 @login_required # type: ignore
 def http_sounds() -> Response:
 	return_type = accept_type()
-	sounds = [ { 'sound': sound } for sound in _iter_sounds( Path( ITAS_FREESWITCH_SOUNDS )) ]
+	sounds: List[Dict[str,str]] = []
+	for path in map( Path, ITAS_FREESWITCH_SOUNDS ):
+		sounds.extend( [
+			{ 'sound': sound }
+			for sound in _iter_sounds( path )
+		] )
 	rsp = rest_success( sounds )
 	rsp.cache_control.public = True
 	rsp.cache_control.max_age = 30
