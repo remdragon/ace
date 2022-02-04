@@ -13,6 +13,7 @@ sudo apt update
 sudo apt upgrade
 sudo apt install -y python3-pip curl build-essential gcc make libsystemd-dev libssl-dev libffi6 libffi-dev
 sudo curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+sudo pip3 install --upgrade cython
 sudo pip3 install flask types-flask pyopenssl python-pam Flask-Login Flask-Session tornado systemd accept-types tzlocal
 sudo pip3 install service_identity --force --upgrade
 sudo python3 route_manager.py install
@@ -844,7 +845,7 @@ def http_login() -> Response:
 		'<p>',
 		'	<form method="POST">',
 		'		User Name:<br/>',
-		'		<input type="text" name="usernm"/><br/>',
+		'		<input type="text" name="usernm" autofocus/><br/>',
 		'		<br/>',
 		'		Secret:<br/>',
 		'		<input type="password" name="secret"/><br/>',

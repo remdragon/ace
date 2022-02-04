@@ -75,7 +75,10 @@ export default class Hangup extends UINode {
 	
 	help = `Hangs up the call with the specified cause/reason.<br/>
 <br/>`
-	label = 'Hangup'
+	get label()
+	{
+		return 'Hangup ' + this.cause
+	}
 	
 	cause/*: string*/ = 'NORMAL_CLEARING'
 	

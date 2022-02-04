@@ -8,7 +8,7 @@ import NODE_TYPES from '../commands/index.js'
 
 import { debounce } from './util.js'
 
-const route_id = parseInt( location.pathname.split( /\// ).pop() )
+const id = parseInt( location.pathname.split( /\// ).pop() )
 let route_data // route data
 let tree
 let root
@@ -28,7 +28,7 @@ export function routeEditorMain()
 		(data) => {
 			console.assert( !tree )
 			if ( data.success )
-				initTree( data.rows, RootRoute )
+				initTree( data.rows[0], RootRoute )
 			else
 				alert( data.error )
 		}
@@ -55,14 +55,15 @@ export function voiceMailEditorMain()
 	)
 }
 
-function initTree( data, Root ) {
+function initTree( data, Root )
+{
 	route_data = data
 	document.title = route_data.name
 	
 	tree = createTree( 'div_tree', 'white', context_menu )
 	
-	//console.log( 'route_id=', route_id, 'route_data=', route_data )
-	root = new Root( tree, route_id, route_data, NODE_TYPES )
+	//console.log( 'id=', id, 'route_data=', route_data )
+	root = new Root( tree, id, route_data, NODE_TYPES )
 	
 	divHelp = document.getElementById( 'div_help' )
 	

@@ -40,92 +40,90 @@ Add branches to the node by right-clicking on it.<br/>
 	branches = {}
 	invalid//: invalid path...
 	
-	fields = [
-		{
-			key: 'name',
-			type: 'string',
-			label: 'Name: ',
-			tooltip: "What's in a name? This is for documentation purposes only",
-		},
-		{
-			key: 'min_digits',
-			type: 'int',
-			maxlength: 2,
-			size: 3,
-			label: 'Min Digits: ',
-			tooltip: 'minimum # of digits a caller must enter for the input to be valid',
-		},
-		{
-			key: 'max_digits',
-			type: 'int',
-			maxlength: 2,
-			size: 3,
-			label: 'Max Digits: ',
-			tooltip: 'maximum # of digits a caller must enter for the input to be valid',
-		},
-		{
-			key: 'max_attempts',
-			type: 'int',
-			maxlength: 2,
-			size: 3,
-			label: 'Max Attempts: ',
-			tooltip: 'the number of times the greeting will play while attempting to get a valid response',
-		},
-		{
-			key: 'timeout',
-			type: 'number',
-			maxlength: 2,
-			size: 3,
-			label: 'Timeout (seconds): ',
-			tooltip: 'the number of seconds it will wait for a valid response after finishing a greeting before starting next attempt (see max_attempts)',
-		},
-		{
-			key: 'terminators',
-			type: 'string',
-			maxlength: 12,
-			size: 13,
-			label: 'Terminators: ',
-			tooltip: 'allows you define a dtmf such as # that the caller can use to terminate digit input',
-		},
-		{
-			key: 'greeting',
-			input: 'select2',
-			label: 'Greeting Prompt: ',
-			tooltip: 'the recording to play instructing the caller what digits are expected',
-			async options( self ) {
-				return await sounds_options()
-			}
-		},
-		{
-			key: 'error',
-			input: 'select2',
-			label: 'Error Prompt: ',
-			tooltip: "the recording to play if caller's input is not valid",
-			async options( self ) {
-				return await sounds_options()
-			}
-		},
-		{
-			key: 'digit_regex',
-			type: 'string',
-			label: 'Digit Regex: ',
-			tooltip: 'an advanced feature that defines what a valid input is, in addition to min_digits and max_digits. Note that the system will generate one for you based on the branches you add to this node.',
-		},
-		{
-			key: 'variable_name',
-			type: 'string',
-			label: 'Variable Name: ',
-			tooltip: 'an optional channel variable name where the collected digits can be stored',
-		},
-		{
-			key: 'digit_timeout',
-			type: 'number',
-			maxlength: 2,
-			size: 3,
-			label: 'Digit Timeout (seconds): ',
-			tooltip: 'the number of seconds to wait in between each digit before considering the caller finished.',
-		},
-	]
+	fields = [{
+		key: 'name',
+		type: 'string',
+		label: 'Name: ',
+		tooltip: "What's in a name? This is for documentation purposes only",
+	},
+	{
+		key: 'min_digits',
+		type: 'int',
+		maxlength: 2,
+		size: 3,
+		label: 'Min Digits: ',
+		tooltip: 'minimum # of digits a caller must enter for the input to be valid',
+	},
+	{
+		key: 'max_digits',
+		type: 'int',
+		maxlength: 2,
+		size: 3,
+		label: 'Max Digits: ',
+		tooltip: 'maximum # of digits a caller must enter for the input to be valid',
+	},
+	{
+		key: 'max_attempts',
+		type: 'int',
+		maxlength: 2,
+		size: 3,
+		label: 'Max Attempts: ',
+		tooltip: 'the number of times the greeting will play while attempting to get a valid response',
+	},
+	{
+		key: 'timeout',
+		type: 'number',
+		maxlength: 2,
+		size: 3,
+		label: 'Timeout (seconds): ',
+		tooltip: 'the number of seconds it will wait for a valid response after finishing a greeting before starting next attempt (see max_attempts)',
+	},
+	{
+		key: 'terminators',
+		type: 'string',
+		maxlength: 12,
+		size: 13,
+		label: 'Terminators: ',
+		tooltip: 'allows you define a dtmf such as # that the caller can use to terminate digit input',
+	},
+	{
+		key: 'greeting',
+		input: 'select2',
+		label: 'Greeting Prompt: ',
+		tooltip: 'the recording to play instructing the caller what digits are expected',
+		async options( self ) {
+			return await sounds_options()
+		}
+	},
+	{
+		key: 'error',
+		input: 'select2',
+		label: 'Error Prompt: ',
+		tooltip: "the recording to play if caller's input is not valid",
+		async options( self ) {
+			return await sounds_options()
+		}
+	},
+	{
+		key: 'digit_regex',
+		type: 'string',
+		label: 'Digit Regex: ',
+		tooltip: 'an advanced feature that defines what a valid input is, in addition to min_digits and max_digits. Note that the system will generate one for you based on the branches you add to this node.',
+	},
+	{
+		key: 'variable_name',
+		type: 'string',
+		label: 'Variable Name: ',
+		tooltip: 'an optional channel variable name where the collected digits can be stored',
+	},
+	{
+		key: 'digit_timeout',
+		type: 'number',
+		maxlength: 2,
+		size: 3,
+		label: 'Digit Timeout (seconds): ',
+		tooltip: 'the number of seconds to wait in between each digit before considering the caller finished.',
+	}]
 	
 	createElement({
 		isSubtree = false,

@@ -6,7 +6,13 @@ export default class Set extends UINode {
 	static command = 'set'
 	
 	help = 'Saves information in a channel variable<br/>'
-	label = 'Set'
+	get label()
+	{
+		if( this.name )
+			return 'Set ${' + this.name + '} = ' + ( this.value || '' )
+		else
+			return 'Set'
+	}
 	
 	name//: string
 	value//: string

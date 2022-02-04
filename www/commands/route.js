@@ -9,7 +9,10 @@ export default class Route extends UINode {
 <br/>
 When that route finishes, execution will resume here in this route<br/>`
 	
-	label = 'Route'
+	get label()
+	{
+		return 'Route ' + ( this.route || '(Undefined)' )
+	}
 	
 	route = ''//: string
 	
@@ -25,7 +28,7 @@ When that route finishes, execution will resume here in this route<br/>`
 				let json = await fetch( '/routes', params )
 					.then( rsp => rsp.json() )
 				//console.log( JSON.stringify( json ) )
-				let options = []
+				let options = [{ label: '(Undefined)', value: '' }]
 				for ( let row of json.rows )
 				{
 					options.push({ label: `${row.route} ${row.name || "(Unnamed)"}`, value: row.route })

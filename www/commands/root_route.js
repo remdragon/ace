@@ -52,7 +52,8 @@ Right-click on it to start adding instructions to your route.<br/>
 		}
 	}
 	
-	getJson() {
+	getJson()
+	{
 		return {
 			type: 'root_route',
 			name: this.name,
