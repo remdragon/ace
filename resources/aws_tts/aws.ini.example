@@ -1,0 +1,7 @@
+[aws]
+aws_access_key = GET_THIS_FROM_AWS
+aws_secret_key = GET_THIS_FROM_AWS
+aws_region_name = us-east-1
+tts_location = /var/lib/freeswitch/tts
+tts_default_voice = Joanna
+

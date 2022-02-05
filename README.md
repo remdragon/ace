@@ -1,7 +1,7 @@
 # ace
 Automated Call Experience
 
-This requires a minimum of Debian 10
+This requires a minimum of Debian 10, Debian 11 is preferred
 
 NOTE: the following instructions assume http[s] access to *.debian.org, *.pythonhosted.org, *.pypi.org
 
@@ -23,9 +23,13 @@ cd ace
 chmod +x ace.py
 ./ace.py install
 ./ace.py start
-
+```
 
 to enable TTS (text to speech) do the following additional setup steps:
 
-(TODO - Josh will document this)
 ```
+cp -r resources/aws_tts/* /usr/local/lib/python3.9/dist-packages
+cp resources/aws_tts/aws.ini.example /etc/itas/ace/aws.ini
+```
+
+Modify **/etc/itas/ace/aws.ini** and modify the `aws_access_key` and `aws_secret_key` parameters with credentials from your AWS instance
