@@ -187,6 +187,8 @@ export default class UINode {
 					input.setAttribute( 'rows', field.rows )
 				if( field.cols )
 					input.setAttribute( 'cols', field.cols )
+				if( field.placeholder )
+					input.setAttribute( 'placeholder', field.placeholder )
 				input.innerText = this[field.key] || ''
 			}
 			else
@@ -194,10 +196,12 @@ export default class UINode {
 				input = newChild( inputParent, 'input', { id: id, type: field.input || 'text' } )
 				
 				let pattern = PATTERNS[field.type]
-				if( field.hasOwnProperty( 'maxlength' ))
+				if( field.maxlength )
 					input.setAttribute( 'maxlength', field.maxlength )
-				if( field.hasOwnProperty( 'size' ))
+				if( field.size )
 					input.setAttribute( 'size', field.size )
+				if( field.placeholder )
+					input.setAttribute( 'placeholder', field.placeholder )
 				if( pattern )
 				{
 					let reg = new RegExp( `^${pattern}$` )

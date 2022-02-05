@@ -30,14 +30,13 @@ export default class TOD extends UINode {
 		input: 'textarea',
 		cols: 40,
 		rows: 10,
-		tooltip: `Enter specifics for DOW/TOD that should be considered.
-One range per line, for example:
-
+		placeholder: `Examples:
 Mon,Wed-Fri 08:00-17:00
 Sat 08:00-12:00
 1/5/2022 08:00-1/7 13:00
 `,
-		// TODO FIXME: move examples to an examples key (requires adding support for examples to textarea impl)
+		tooltip: `Enter specifics for DOW/TOD that should be considered.
+One range per line.`,
 	}]
 	
 	constructor( parent )
