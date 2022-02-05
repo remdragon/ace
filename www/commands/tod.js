@@ -23,6 +23,8 @@ export default class TOD extends UINode {
 	
 	fields = [{
 		key: 'name',
+		label: 'Name:',
+		tooltip: 'For documentation purposes only',
 	},{
 		key: 'times',
 		input: 'textarea',
