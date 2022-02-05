@@ -30,7 +30,7 @@ Does not collect digits, does not proceed with route instructions until audio is
 		key: 'sound',
 		label: 'Sound:',
 		type: 'string',
-		input: 'select2', // 'select2_or_text'
+		input: 'select2',
 		or_text: true,
 		async options( self ) {
 			return await sounds_options()

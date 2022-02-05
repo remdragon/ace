@@ -131,12 +131,10 @@ export default class UINode {
 			let inputParent = label
 			if( field.tooltip )
 			{
-				tooltipped = newChild( label, 'span' )
-				tooltipped.setAttribute( 'class', 'tooltipped' )
+				tooltipped = newChild( label, 'span', { class: 'tooltipped' })
 				inputParent = tooltipped
 				
-				tooltip = newChild( tooltipped, 'span' )
-				tooltip.setAttribute( 'class', 'tooltip' )
+				tooltip = newChild( tooltipped, 'span', { class: 'tooltip' })
 				tooltip.innerText = field.tooltip
 				
 			}
@@ -156,8 +154,11 @@ export default class UINode {
 						text.setAttribute( 'size', field.size )
 					if( field.placeholder )
 						text.setAttribute( 'placeholder', field.placeholder )
-					toggle = newChild( inputParent, 'button' )
+					let ttd = newChild( inputParent, 'span', { class: 'tooltipped' })
+					toggle = newChild( ttd, 'button' )
 					toggle.innerText = '...'
+					let tt = newChild( ttd, 'span', { class: 'tooltip' })
+					tt.innerText = 'Toggles between the select box and a text box'
 					
 					inputParent = textable_span
 				}
@@ -205,22 +206,37 @@ export default class UINode {
 						let opts = input.getElementsByTagName( 'option' )
 						if( text.style.display == 'none' )
 						{
-							for( let i = 0; i < opts.length; i++ )
+							// switching from select -> text
+							if( nice_select == null )
 							{
-								let option = opts[i]
-								if( option.getAttribute( 'selected' ))
+								// select (not select2) -> text
+								for( let i = 0; i < opts.length; i++ )
 								{
-									text.value = option.value
+									let option = opts[i]
+									if( option.getAttribute( 'selected' ))
+									{
+										text.value = option.value
+										break
+									}
 								}
+							}
+							else
+							{
+								// select2 -> text
+								// this may be fragile as it relies on the inner workings of select2
+								let current = nice_select.dropdown.getElementsByClassName( 'current' )[0]
+								text.value = current.innerText
 							}
 							textable_span.style.display = 'none'
 							text.style.display = ''
 						}
 						else
 						{
+							// switching from text -> select
 							let found = false
 							if( nice_select == null )
 							{
+								// text -> select (not select2)
 								for( let i = 0; i < opts.length; i++ )
 								{
 									let option = opts[i]
@@ -243,7 +259,8 @@ export default class UINode {
 							}
 							else
 							{
-								// this is a gross hack of the internals of select2, but I don't know any another way
+								// text -> select2
+								// this may be fragile as it relies *extensively* on the inner workings of select2
 								let current = nice_select.dropdown.getElementsByClassName( 'current' )[0]
 								current.innerText = text.value
 								
@@ -251,7 +268,6 @@ export default class UINode {
 								for( let i = 0; i < opts.length; i++ )
 								{
 									let opt = opts[i]
-									//console.log( 'opt.class=', opt.className, ', opt.innerText=', opt.innerText )
 									if( opt.innerText == text.value )
 									{
 										opt.className = 'option selected null'

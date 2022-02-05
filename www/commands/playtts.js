@@ -30,7 +30,8 @@ Does not collect digits, does not proceed with route instructions until audio is
 	},{
 		key: 'voice',
 		label: 'Speech Voice',
-		input: 'select2', // 'select2_or_text'
+		input: 'select2',
+		or_text: true,
 		async options( self ) { return [
 			{ label: 'en-US Joanna', value: 'Joanna' },
 			{ label: 'en-US Ivy', value: 'Ivy' },
