@@ -1,26 +1,12 @@
 #!/usr/bin/env python3
-#region copyright/instructions
+#region copyright
 
 
 # This file is Copyright (C) 2022 ITAS Solutions LP, All Rights Reserved
 # Contact ITAS Solutions LP at royce3@itas-solutions.com for licensing inquiries
 
-"""
-NOTE: please install this file at /usr/src/itas/ace/ace.py
-the following instructions assume http[s] access to *.debian.org, *.pythonhosted.org, *.pypi.org
-sudo ufw allow 443
-sudo apt update
-sudo apt upgrade
-sudo apt install -y python3-pip curl build-essential gcc make libsystemd-dev libssl-dev libffi6 libffi-dev
-sudo curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-sudo pip3 install --upgrade cython
-sudo pip3 install flask types-flask pyopenssl python-pam Flask-Login Flask-Session tornado systemd accept-types tzlocal
-sudo pip3 install service_identity --force --upgrade
-sudo python3 route_manager.py install
-"""
 
-
-#endregion copyright/instructions
+#endregion copyright
 #region imports
 
 
