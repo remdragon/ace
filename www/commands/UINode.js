@@ -145,17 +145,47 @@ export default class UINode {
 			
 			if( field.input === 'select' || field.input === 'select2' )
 			{
+				let textable_span = null, toggle = null, text = null
+				if( field.or_text )
+				{
+					textable_span = newChild( inputParent, 'span' )
+					text = newChild( inputParent, 'input', { type: 'text', style: 'display:none' })
+					if( field.maxlength )
+						text.setAttribute( 'maxlength', field.maxlength )
+					if( field.size )
+						text.setAttribute( 'size', field.size )
+					if( field.placeholder )
+						text.setAttribute( 'placeholder', field.placeholder )
+					toggle = newChild( inputParent, 'button' )
+					toggle.innerText = '...'
+					
+					inputParent = textable_span
+				}
+				
 				input = newChild( inputParent, 'select', { id: id } )
 				
 				let selectedValue = this[field.key] || ''
 				let options = await field.options( this )
+				let nice_select = null
+				let found = false
 				for( let option of options )
 				{
 					let optionEl = newChild( input, 'option')
 					optionEl.setAttribute( 'value', option.value )
 					optionEl.innerText = option.label || option.value
 					if ( selectedValue == ( option.value || option.label ))
+					{
 						optionEl.setAttribute( 'selected', 'selected' )
+						found = true
+					}
+				}
+				if( !found )
+				{
+					let optionEl = document.createElement( 'option' )
+					optionEl.setAttribute( 'value', selectedValue )
+					optionEl.setAttribute( 'selected', 'selected' )
+					optionEl.innerText = selectedValue
+					input.insertBefore( optionEl, input.firstChild )
 				}
 				
 				if( field.input === 'select2' )
@@ -164,8 +194,86 @@ export default class UINode {
 					input.style.display = 'none'
 					changeevent = 'change'
 					
-					let options = { searchable: true }
-					let x = NiceSelect.bind( input, options )
+					nice_select = NiceSelect.bind( input, { searchable: true } )
+					console.log( 'nice_select=', nice_select )
+				}
+				
+				if( field.or_text )
+				{
+					toggle.onclick = function( evt )
+					{
+						let opts = input.getElementsByTagName( 'option' )
+						if( text.style.display == 'none' )
+						{
+							for( let i = 0; i < opts.length; i++ )
+							{
+								let option = opts[i]
+								if( option.getAttribute( 'selected' ))
+								{
+									text.value = option.value
+								}
+							}
+							textable_span.style.display = 'none'
+							text.style.display = ''
+						}
+						else
+						{
+							let found = false
+							if( nice_select == null )
+							{
+								for( let i = 0; i < opts.length; i++ )
+								{
+									let option = opts[i]
+									if( text.value == option.value )
+									{
+										option.setAttribute( 'selected', 'selected' )
+										found = true
+									}
+									else
+										option.removeAttribute( 'select' )
+								}
+								if( !found )
+								{
+									let optionEl = document.createElement( 'option' )
+									optionEl.setAttribute( 'value', text.value )
+									optionEl.setAttribute( 'selected', 'selected' )
+									optionEl.innerText = text.value
+									input.insertBefore( optionEl, input.firstChild )
+								}
+							}
+							else
+							{
+								// this is a gross hack of the internals of select2, but I don't know any another way
+								let current = nice_select.dropdown.getElementsByClassName( 'current' )[0]
+								current.innerText = text.value
+								
+								let opts = nice_select.dropdown.getElementsByTagName( 'li' )
+								for( let i = 0; i < opts.length; i++ )
+								{
+									let opt = opts[i]
+									//console.log( 'opt.class=', opt.className, ', opt.innerText=', opt.innerText )
+									if( opt.innerText == text.value )
+									{
+										opt.className = 'option selected null'
+									}
+									else
+										opt.className = 'option null'
+								}
+								if( !found )
+								{
+									let ul = nice_select.dropdown.getElementsByClassName( 'list' )[0]
+									let li = document.createElement( 'li' )
+									li.setAttribute( 'data-value', text.value )
+									li.setAttribute( 'class', 'option selected null' )
+									li.innerText = text.value
+									ul.insertBefore( li, ul.firstChild )
+								}
+							}
+							text.style.display = 'none'
+							textable_span.style.display = ''
+						}
+					}
+					text.addEventListener( 'input', onChangeEvent )
 				}
 			}
 			else if( field.input == 'checkbox' )

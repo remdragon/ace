@@ -86,6 +86,7 @@ export default class Hangup extends UINode {
 		{
 			key: 'cause',
 			input: 'select',
+			or_text: true,
 			label: 'Cause:',
 			async options( self ) { return [
 				{ label: 'normal', value: 'NORMAL_CLEARING' },
