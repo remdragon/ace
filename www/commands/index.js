@@ -2,6 +2,7 @@ import AcdCallAdd from './acd_call_add.js'; export{ AcdCallAdd }
 import AcdCallGate from './acd_call_gate.js'; export{ AcdCallGate }
 import AcdCallUnGate from './acd_call_ungate.js'; export{ AcdCallUnGate }
 import Answer from './answer.js'; export{ Answer }
+import Bridge from './bridge.js'; export{ Bridge }
 import GoTo from './goto.js'; export{ GoTo }
 import Hangup from './hangup.js'; export{ Hangup }
 import IfNum from './ifnum.js'; export{ IfNum }
@@ -31,6 +32,7 @@ const NODE_TYPES = {
 	acd_call_gate: AcdCallGate,
 	acd_call_ungate: AcdCallUnGate,
 	answer: Answer,
+	bridge: Bridge,
 	goto: GoTo,
 	hangup: Hangup,
 	ifnum: IfNum,

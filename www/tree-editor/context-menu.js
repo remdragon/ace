@@ -77,6 +77,7 @@ const newTelephonyNode = {
 				commands.AcdCallGate,
 				commands.AcdCallUnGate,
 				commands.Answer,
+				commands.Bridge,
 				commands.Hangup,
 				commands.IVR,
 				commands.PreAnswer,
