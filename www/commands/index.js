@@ -15,6 +15,7 @@ import PlayEmerg from './playemerg.js'; export{ PlayEmerg }
 import PlayEstHold from './playesthold.js'; export{ PlayEstHold }
 import PlayMOH from './playmoh.js'; export{ PlayMOH }
 import PlayPreAnnounce from './playpreannounce.js'; export{ PlayPreAnnounce }
+import PlayTTS from './playtts.js'; export{ PlayTTS }
 import PreAnswer from './preanswer.js'; export{ PreAnswer }
 import Repeat from './repeat.js'; export{ Repeat }
 import Ring from './ring.js'; export{ Ring }
@@ -45,6 +46,7 @@ const NODE_TYPES = {
 	playesthold: PlayEstHold,
 	playmoh: PlayMOH,
 	playpreannounce: PlayPreAnnounce,
+	playtts: PlayTTS,
 	preanswer: PreAnswer,
 	repeat: Repeat,
 	ring: Ring,
