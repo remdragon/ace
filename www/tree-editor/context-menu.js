@@ -131,6 +131,7 @@ const createPlayNode = {
 				commands.PlayDTMF,
 				commands.PlayMOH,
 				commands.PlayPreAnnounce,
+				commands.PlayTTS
 				//commands.PlayEmerg,
 				//commands.PlayEstHold,
 			].map(
