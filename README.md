@@ -1,7 +1,7 @@
 # ace
 Automated Call Experience
 
-This requires a minimum of Debian 10, Debian 11 is preferred
+This requires a minimum of Debian 10, Debian 11 is strongly recommended
 
 NOTE: the following instructions assume http[s] access to *.debian.org, *.pythonhosted.org, *.pypi.org
 
@@ -14,7 +14,6 @@ sudo curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 sudo pip3 install --upgrade cython
 sudo pip3 install flask types-flask pyopenssl python-pam Flask-Login Flask-Session tornado systemd accept-types tzlocal
 sudo pip3 install service_identity --force --upgrade
-sudo python3 route_manager.py install
 
 mkdir /usr/src/itas
 cd /usr/src/itas
@@ -27,8 +26,10 @@ chmod +x ace.py
 
 to enable TTS (text to speech) do the following additional setup steps:
 
+*TODO FIXME* document how to generate aws access key and secret key
+
 ```
-cp -r resources/aws_tts/* /usr/local/lib/python3.9/dist-packages
+cp -r resources/aws_tts/* `python3 -c 'import site; print(site.getsitepackages()[0])'`
 cp resources/aws_tts/aws.ini.example /etc/itas/ace/aws.ini
 ```
 
