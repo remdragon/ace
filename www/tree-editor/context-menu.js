@@ -15,6 +15,16 @@ const deleteNode = {
 	}
 }
 
+const rootActions = {
+	text: 'Get Json',
+	icon: '/aimara/images/tree.png',
+	action: function(element)
+	{
+		let json = JSON.stringify( element.node.getJson(), null, 4 )
+		console.log( json )
+	}
+}
+
 const nodeActions = {
 	text: 'Node Actions',
 	icon: '/aimara/images/star.png',
@@ -272,6 +282,9 @@ const selectNodeActions = {
 };
 
 const context_menu = {
+	contextRouteRoot: {
+		elements: [rootActions, newTelephonyNode, newLogicNode, createPlayNode]
+	},
 	contextLeaf: { elements: [deleteNode, nodeActions] },
 	contextSubtree: {
 		elements: [nodeActions, newTelephonyNode, newLogicNode, createPlayNode]

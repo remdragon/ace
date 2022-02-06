@@ -35,7 +35,7 @@ Right-click on it to start adding instructions to your route.
 			RootRoute.icon,
 			null,
 			null,
-			'contextSubtree'
+			'contextRouteRoot'
 		)
 		
 		this.element.node = this
