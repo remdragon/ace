@@ -5,9 +5,11 @@ export default class Voicemail extends UINode {
 	static context_menu_name = 'Voicemail'
 	static command = 'voicemail'
 	
-	help = `Choose another route to execute from here.<br/>
+	help = `Invoke the voicemail subsystem<br/>
 <br/>
-When that route finishes, execution will resume here in this route
+If box is blank or 0, invokes the voicemail checkin<br/>
+<br/>
+When that finishes, execution will resume here
 `
 	
 	get label()
@@ -24,7 +26,8 @@ When that route finishes, execution will resume here in this route
 			input: 'select2',
 			or_text: true,
 			label: 'Voicemail: ',
-			async options( self ) {
+			async options( self )
+			{
 				let params = { headers: { 'Accept': 'application/json' }}
 				let json = await fetch( '/voicemails', params )
 					.then( rsp => rsp.json() )
