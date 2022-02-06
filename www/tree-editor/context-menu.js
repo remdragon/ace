@@ -6,7 +6,7 @@ import NODE_TYPES from '/commands/index.js'
 import { treeDidChange } from './tree-editor.js'
 
 const copyNode = {
-	text: 'Copy Node',
+	text: 'Copy',
 	icon: '/media/streamline/edit-copy.png',
 	action: function( element )
 	{
@@ -16,7 +16,7 @@ const copyNode = {
 }
 
 const cutNode = {
-	text: 'Cut Node',
+	text: 'Cut',
 	icon: '/media/streamline/edit-scissors.png',
 	action: function(element)
 	{
@@ -30,7 +30,7 @@ const cutNode = {
 
 const pasteNode = {
 	text: 'Paste',
-	icon: '/media/streamline/edit-copy.png',
+	icon: '/media/streamline/edit-glue.png',
 	action: async function( element )
 	{
 		let json = await navigator.clipboard.readText()

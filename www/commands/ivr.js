@@ -8,7 +8,7 @@ TODO FIXME: ability to "name" branch nodes themselves for documentation purposes
 */
 
 export default class Ivr extends UINode {
-	static icon = '/media/streamline/kindle.png'
+	static icon = '/media/streamline/login-dial-pad-finger-password.png'
 	static context_menu_name = 'IVR'
 	static command = 'ivr'
 	

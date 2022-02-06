@@ -20,8 +20,9 @@ When that route finishes, execution will resume here in this route
 	fields = [
 		{
 			key: 'box',
-			type: 'int',
-			input: 'select',
+			type: 'string',
+			input: 'select2',
+			or_text: true,
 			label: 'Voicemail: ',
 			async options( self ) {
 				let params = { headers: { 'Accept': 'application/json' }}

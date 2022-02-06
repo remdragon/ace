@@ -3,7 +3,7 @@ import Subtree from './subtree.js'
 import CaseSubtree from './caseSubtree.js'
 
 export default class Select extends UINode {
-	static icon = '/media/streamline/kindle.png'
+	static icon = '/media/streamline/hierarchy.png'
 	static context_menu_name = 'Select'
 	static command = 'select'
 	
