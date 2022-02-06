@@ -110,6 +110,7 @@ const newLogicNode = {
 				commands.SetNode,
 				commands.TOD,
 				//commands.Translate,
+				commands.Wait,
 			].map( NodeType => ({
 				text: NodeType.context_menu_name,
 				icon: NodeType.icon,
@@ -131,6 +132,7 @@ const createPlayNode = {
 				commands.PlayDTMF,
 				commands.PlayMOH,
 				commands.PlayPreAnnounce,
+				commands.Tone,
 				commands.PlayTTS
 				//commands.PlayEmerg,
 				//commands.PlayEstHold,

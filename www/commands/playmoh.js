@@ -5,7 +5,11 @@ export default class PlayMOH extends UINode {
 	static context_menu_name = 'Play Music on Hold'
 	static command = 'moh'
 	
-	help = 'Play Hold Music for the caller'
+	help = `Play Hold Music for the caller<br/>
+<br/>
+Execution moves to the next node immediately. Use the "Wait" command if a delay is needed
+`
+
 	label = 'Play MOH'
 	
 	seconds//: number

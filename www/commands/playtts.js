@@ -8,8 +8,8 @@ export default class PlayTTS extends UINode {
 	
 	help = `Play text to speech to the caller<br/>
 <br/>
-Does not collect digits, does not proceed with route instructions until audio is finished playing<br/>
-<br/>`
+Does not collect digits, does not proceed with route instructions until audio is finished playing
+`
 	
 	get label()
 	{

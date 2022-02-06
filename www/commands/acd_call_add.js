@@ -13,8 +13,7 @@ Priority is a value from 1 - 99, higher values get answered first<br>
 <font color=red>WARNING</font> Priority completely overrides queue time, use it sparingly<br>
 <br>
 Offset is the number of seconds to artificially add to a caller's queue time. This is a much
-softer way to prioritize a call instead of the Priority value.
-`
+softer way to prioritize a call instead of the Priority value.`
 	
 	get label() {
 		return `ACD Call Add: gates=${this.gates || ''}, priority=${this.priority || ''}, offset=${this.offset || ''}`

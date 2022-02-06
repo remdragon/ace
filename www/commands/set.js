@@ -5,7 +5,8 @@ export default class Set extends UINode {
 	static context_menu_name = 'Set Variable'
 	static command = 'set'
 	
-	help = 'Saves information in a channel variable<br/>'
+	help = 'Saves information in a channel variable'
+	
 	get label()
 	{
 		if( this.name )

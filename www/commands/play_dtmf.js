@@ -8,8 +8,8 @@ export default class PlayDTMF extends UINode {
 	
 	help = `Play DTMF tone(s) to the caller<br/>
 <br/>
-Useful for auto-accepting calls from Google for example<br/>
-<br/>`
+Useful for auto-accepting calls from Google for example
+`
 	
 	get label()
 	{

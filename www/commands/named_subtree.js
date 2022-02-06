@@ -5,7 +5,6 @@ export default class NamedSubtree extends UINode {
 	static context_menu_name = 'N/A'
 	static command = ''
 	
-	//help = 'This is a subtree node'
 	get label()
 	{
 		let label = this._label

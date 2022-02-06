@@ -5,7 +5,7 @@ export default class GoTo extends UINode {
 	static context_menu_name = 'GoTo'
 	static command = 'goto'
 	
-	help = 'Jumps to a different part of the route<br/>'
+	help = 'Jumps to a different part of the route'
 	get label()
 	{
 		var self = this

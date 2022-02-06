@@ -9,7 +9,7 @@ export default class IfStr extends UINode {
 	help =
 		`Test the condition.<br/>
 <br/>
-If the condition is true, execute the "true" branch, otherwise the "false" branch<br/>`
+If the condition is true, execute the "true" branch, otherwise the "false" branch`
 	get label()
 	{
 		return 'IfStr ' + ( this.lhs || '?' ) + ' ' + ( this.op || '?' ) + ' ' + ( this.rhs || '?' )

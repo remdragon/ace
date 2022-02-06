@@ -11,6 +11,7 @@ export default class TOD extends UINode {
 	
 	help =
 		'Tests time-of-day conditions and executes different commands depending on the result'
+	
 	get label()
 	{
 		return 'TOD ' + ( this.name || '(Unnamed)' )

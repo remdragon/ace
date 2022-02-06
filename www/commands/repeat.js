@@ -7,6 +7,7 @@ export default class Repeat extends UINode {
 	
 	help =
 		'This node runs all its commands in a loop until the repeat count is met or forever if count is 0'
+	
 	get label()
 	{
 		return 'Repeat ' + this.count
@@ -40,7 +41,7 @@ export default class Repeat extends UINode {
 	fields = [
 		{
 			key: 'count',
-			type: 'number'
+			type: 'int'
 		}
 	]
 	

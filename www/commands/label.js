@@ -5,7 +5,7 @@ export default class Label extends UINode {
 	static context_menu_name = 'Label'
 	static command = 'label'
 	
-	help = 'A possible destination for GoTo command<br/>'
+	help = 'A possible destination for GoTo command'
 	get label()
 	{
 		return 'Label ' + ( this.name || '(unnamed)' )

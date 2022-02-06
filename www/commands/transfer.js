@@ -7,7 +7,7 @@ export default class Transfer extends UINode {
 	
 	help = `Transfers the call out of ACE to the FreeSWITCH dialplan.<br/>
 <br/>
-Route exection stops here<br/>`
+Route exection stops here`
 	get label()
 	{
 		return 'Transfer ' + ( this.dest || '' )

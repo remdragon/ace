@@ -1,14 +1,17 @@
-import UINode from "./UINode.js";
+import UINode from './UINode.js'
 
 export default class SetMOH extends UINode {
-	static icon = "/media/streamline/type-cursor-1.png";
+	static icon = '/media/streamline/type-cursor-1.png'
 	static context_menu_name = 'Set MOH'
-	static command = "setmoh";
+	static command = 'setmoh'
 	
-	help = "Sets the music-on-hold source for this call.";
-	label = "SetMoh";
+	help = `Sets the music-on-hold source for this call.<br/>
+<br/>
+*THIS COMMAND IS NOT IMPLEMENTED YET, PLEASE DO NOT USE IT`
 	
-	value//: string;
+	label = 'SetMoh'
 	
-	fields = [{ key: "value" }]
+	value//: string
+	
+	fields = [{ key: 'value' }]
 }

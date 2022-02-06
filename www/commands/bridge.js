@@ -7,7 +7,8 @@ export default class Bridge extends UINode {
 	
 	help = `Executes the FreeSWITCH bridge command<br/>
 <br/>
-This is an advanced feature that uses the FreeSWITCH's <a href="https://freeswitch.org/confluence/display/FREESWITCH/mod_dptools%3A+bridge">"bridge" dialplan application</a><br/>`
+This is an advanced feature that uses the FreeSWITCH's <a href="https://freeswitch.org/confluence/display/FREESWITCH/mod_dptools%3A+bridge">"bridge" dialplan application</a>
+`
 	get label()
 	{
 		if( this.name )

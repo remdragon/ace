@@ -8,8 +8,8 @@ export default class RootVoiceMail extends UINode {
 	
 	help = `This is the configuration node for your Voicemail Box<br/>
 <br/>
-Configuration settings here or right-click on the delivery node to configuration automation on delivery.<br/>
-<br/>`
+Configuration settings here or right-click on the delivery node to configuration automation on delivery.
+`
 	
 	get label()
 	{

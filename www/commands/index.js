@@ -24,9 +24,11 @@ import Select from './select.js'; export{ Select }
 import SetMOH from './setmoh.js'; export{ SetMOH }
 import SetNode from './set.js'; export{ SetNode }
 import TOD from './tod.js'; export{ TOD }
+import Tone from './tone.js'; export{ Tone }
 import Transfer from './transfer.js'; export{ Transfer }
 import Translate from './translate.js'; export{ Translate }
 import Voicemail from './voicemail.js'; export{ Voicemail }
+import Wait from './wait.js'; export{ Wait }
 
 const NODE_TYPES = {
 	acd_call_add: AcdCallAdd,
@@ -55,9 +57,11 @@ const NODE_TYPES = {
 	setNode: SetNode,
 	setmoh: SetMOH,
 	tod: TOD,
+	tone: Tone,
 	transfer: Transfer,
 	translate: Translate,
 	voicemail: Voicemail,
+	wait: Wait,
 }
 
 export default NODE_TYPES

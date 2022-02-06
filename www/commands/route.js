@@ -7,7 +7,8 @@ export default class Route extends UINode {
 	
 	help = `Choose another route to execute from here.<br/>
 <br/>
-When that route finishes, execution will resume here in this route<br/>`
+When that route finishes, execution will resume here in this route
+`
 	
 	get label()
 	{

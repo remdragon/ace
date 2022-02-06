@@ -14,8 +14,7 @@ export default class Ivr extends UINode {
 	
 	help = `This lets you play a greeting to your caller and collect digits from them.<br/>
 <br/>
-Add branches to the node by right-clicking on it.<br/>
-<br/>
+Add branches to the node by right-clicking on it.
 `
 	subtree_help = 'If the caller enters the digits indicated here, the commands under this node will be executed<br/>'
 	invalid_subtree_help = 'If the caller fails to enter valid input, the commands under this node will be executed'
@@ -72,7 +71,7 @@ Add branches to the node by right-clicking on it.<br/>
 	},
 	{
 		key: 'timeout',
-		type: 'number',
+		type: 'float',
 		maxlength: 2,
 		size: 3,
 		label: 'Timeout (seconds): ',
@@ -118,7 +117,7 @@ Add branches to the node by right-clicking on it.<br/>
 	},
 	{
 		key: 'digit_timeout',
-		type: 'number',
+		type: 'float',
 		maxlength: 2,
 		size: 3,
 		label: 'Digit Timeout (seconds): ',

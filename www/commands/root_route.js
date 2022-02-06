@@ -7,8 +7,8 @@ export default class RootRoute extends UINode {
 	
 	help = `This is the root node for your route<br/>
 <br/>
-Right-click on it to start adding instructions to your route.<br/>
-<br/>`
+Right-click on it to start adding instructions to your route.
+`
 	
 	get label()
 	{

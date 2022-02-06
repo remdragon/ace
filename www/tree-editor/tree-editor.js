@@ -82,7 +82,7 @@ async function onNodeSelected( aimaraNode )
 	
 	if( node )
 	{
-		divHelp.innerHTML = node.help
+		divHelp.innerHTML = ( node.help || '(This node is missing its help text)' ) + '<br/><br/>'
 		await node.onSelected( divHelp )
 	}
 }

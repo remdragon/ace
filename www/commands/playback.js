@@ -8,8 +8,8 @@ export default class Playback extends UINode {
 	
 	help = `Play an audio file to the caller<br/>
 <br/>
-Does not collect digits, does not proceed with route instructions until audio is finished playing<br/>
-<br/>`
+Does not collect digits, does not proceed with route instructions until audio is finished playing
+`
 	
 	get label()
 	{

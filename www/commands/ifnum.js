@@ -9,7 +9,7 @@ export default class IfNum extends UINode {
 	help =
 		`Converts both operands to numeric values and tests the condition.<br/>
 <br/>
-If the condition is true, execute the "true" branch, otherwise the "false" branch<br/>`
+If the condition is true, execute the "true" branch, otherwise the "false" branch`
 	get label()
 	{
 		return 'IfNum ' + ( this.lhs || '?' ) + ' ' + ( this.op || '?' ) + ' ' + ( this.rhs || '?' )

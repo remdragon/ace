@@ -7,6 +7,8 @@ export default class PlayPreAnnounce extends UINode {
 	static command = 'preannounce'
 	
 	help = `Plays the current preannounce greeting based on the current flags,<br/>
-holiday, and time of day.`
+holiday, and time of day.
+`
+	
 	label = 'PreAnnounce'
 }

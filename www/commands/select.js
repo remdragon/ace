@@ -7,7 +7,9 @@ export default class Select extends UINode {
 	static context_menu_name = 'Select'
 	static command = 'select'
 	
-	help = 'This is a select node'
+	help = `This is a select node<br/>
+<br/>
+*THIS COMMAND IS NOT IMPLEMENTED YET, PLEASE DO NOT TRY TO USE IT`
 	label = 'Select'
 	
 	variable//: string

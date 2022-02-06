@@ -73,8 +73,8 @@ export default class Hangup extends UINode {
 	static context_menu_name = 'Hangup'
 	static command = 'hangup'
 	
-	help = `Hangs up the call with the specified cause/reason.<br/>
-<br/>`
+	help = `Hangs up the call with the specified cause/reason.
+`
 	get label()
 	{
 		return 'Hangup ' + this.cause
