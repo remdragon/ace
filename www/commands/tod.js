@@ -3,7 +3,7 @@ import NamedSubtree from './named_subtree.js'
 import { holidays } from '/holidays.js'
 
 export default class TOD extends UINode {
-	static icon = '/media/streamline/road-sign-look-both-ways-1.png'
+	static icon = '/media/streamline/time-clock-circle.png'
 	static context_menu_name = 'TimeOfDay'
 	static command = 'tod'
 	hit_help = 'These instructions will execute if the time-of-day conditions match<br/>'

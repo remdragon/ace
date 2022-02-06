@@ -5,17 +5,59 @@ import * as commands from '/commands/index.js'
 import NODE_TYPES from '/commands/index.js'
 import { treeDidChange } from './tree-editor.js'
 
+const copyNode = {
+	text: 'Copy Node',
+	icon: '/media/streamline/edit-copy.png',
+	action: function( element )
+	{
+		let json = JSON.stringify( element.node.getJson(), null, 4 )
+		navigator.clipboard.writeText( json )
+	}
+}
+
+const cutNode = {
+	text: 'Cut Node',
+	icon: '/media/streamline/edit-scissors.png',
+	action: function(element)
+	{
+		let json = JSON.stringify( element.node.getJson(), null, 4 )
+		navigator.clipboard.writeText( json )
+		element.node.parent.remove( element.node )
+		element.removeNode()
+		treeDidChange()
+	}
+}
+
+const pasteNode = {
+	text: 'Paste',
+	icon: '/media/streamline/edit-copy.png',
+	action: async function( element )
+	{
+		let json = await navigator.clipboard.readText()
+		console.log( 'json=', json )
+		let nodeData = JSON.parse( json )
+		let NodeType = NODE_TYPES[nodeData.type]
+		if( NodeType )
+		{
+			let node = new NodeType( element.node )
+			node.createElement({ data: nodeData, NODE_TYPES })
+			treeDidChange()
+		}
+	}
+}
+
 const deleteNode = {
 	text: 'Delete Node',
 	icon: '/aimara/images/delete.png',
-	action: function(element) {
+	action: function(element)
+	{
 		element.node.parent.remove(element.node)
 		element.removeNode()
 		treeDidChange()
 	}
 }
 
-const rootActions = {
+const getJson = {
 	text: 'Get Json',
 	icon: '/aimara/images/tree.png',
 	action: function(element)
@@ -31,15 +73,7 @@ const nodeActions = {
 	action: function(element) {},
 	submenu: {
 		elements: [
-			{
-				text: 'Get Json',
-				icon: '/aimara/images/tree.png',
-				action: function(element)
-				{
-					let json = JSON.stringify( element.node.getJson(), null, 4 )
-					console.log( json )
-				}
-			},
+			getJson,
 			{
 				text: 'Move node up',
 				icon: '/aimara/images/tree.png',
@@ -283,9 +317,11 @@ const selectNodeActions = {
 
 const context_menu = {
 	contextRouteRoot: {
-		elements: [rootActions, newTelephonyNode, newLogicNode, createPlayNode]
+		elements: [copyNode, pasteNode, getJson, newTelephonyNode, newLogicNode, createPlayNode]
 	},
-	contextLeaf: { elements: [deleteNode, nodeActions] },
+	contextLeaf: {
+		elements: [copyNode, cutNode, pasteNode, deleteNode, nodeActions]
+	},
 	contextSubtree: {
 		elements: [nodeActions, newTelephonyNode, newLogicNode, createPlayNode]
 	},
