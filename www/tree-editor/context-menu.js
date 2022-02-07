@@ -36,13 +36,29 @@ const pasteNode = {
 		let json = await navigator.clipboard.readText()
 		console.log( 'json=', json )
 		let nodeData = JSON.parse( json )
-		let NodeType = NODE_TYPES[nodeData.type]
-		if( NodeType )
+		let nodes = [ nodeData ]
+		let is_multi = nodeData.type == '' || nodeData.type == 'root_route'
+		if( is_multi && nodeData.hasOwnProperty( 'nodes' ))
+			nodes = nodeData.nodes
+		let changed = false
+		for( let i = 0; i < nodes.length; i++ )
 		{
-			let node = new NodeType( element.node )
-			node.createElement({ data: nodeData, NODE_TYPES })
-			treeDidChange()
+			nodeData = nodes[i]
+			console.log( 'nodeData.type=', nodeData.type )
+			let NodeType = NODE_TYPES[nodeData.type]
+			if( NodeType )
+			{
+				let node = new NodeType( element.node )
+				node.createElement({ data: nodeData, NODE_TYPES })
+				changed = true
+			}
+			else
+			{
+				console.log( 'invalid nodeData.type=', nodeData.type )
+			}
 		}
+		if( changed )
+			treeDidChange()
 	}
 }
 
@@ -57,7 +73,7 @@ const deleteNode = {
 	}
 }
 
-const getJson = {
+/*const getJson = {
 	text: 'Get Json',
 	icon: '/aimara/images/tree.png',
 	action: function(element)
@@ -65,7 +81,7 @@ const getJson = {
 		let json = JSON.stringify( element.node.getJson(), null, 4 )
 		console.log( json )
 	}
-}
+}*/
 
 const nodeActions = {
 	text: 'Node Actions',
@@ -73,7 +89,7 @@ const nodeActions = {
 	action: function(element) {},
 	submenu: {
 		elements: [
-			getJson,
+			//getJson,
 			{
 				text: 'Move node up',
 				icon: '/aimara/images/tree.png',
@@ -317,25 +333,25 @@ const selectNodeActions = {
 
 const context_menu = {
 	contextRouteRoot: {
-		elements: [copyNode, pasteNode, getJson, newTelephonyNode, newLogicNode, createPlayNode]
+		elements: [copyNode, pasteNode, newTelephonyNode, newLogicNode, createPlayNode]
 	},
 	contextLeaf: {
 		elements: [copyNode, cutNode, pasteNode, deleteNode, nodeActions]
 	},
 	contextSubtree: {
-		elements: [nodeActions, newTelephonyNode, newLogicNode, createPlayNode]
+		elements: [copyNode, pasteNode, nodeActions, newTelephonyNode, newLogicNode, createPlayNode]
 	},
 	contextOptionalSubtree: {
-		elements: [deleteNode, nodeActions, newTelephonyNode, newLogicNode, createPlayNode]
+		elements: [copyNode, pasteNode, deleteNode, nodeActions, newTelephonyNode, newLogicNode, createPlayNode]
 	},
 	contextIVR: {
-		elements: [deleteNode, nodeActions, ivrNodeActions]
+		elements: [copyNode, deleteNode, nodeActions, ivrNodeActions]
 	},
 	contextIVRBranch: {
-		elements: [deleteNode, newTelephonyNode, newLogicNode, createPlayNode]
+		elements: [copyNode, pasteNode, deleteNode, newTelephonyNode, newLogicNode, createPlayNode]
 	},
 	contextIVRInvalid: {
-		elements: [newTelephonyNode, newLogicNode, createPlayNode]
+		elements: [copyNode, pasteNode, newTelephonyNode, newLogicNode, createPlayNode]
 	},
 	contextSelect: {
 		elements: [deleteNode, nodeActions, selectNodeActions]
