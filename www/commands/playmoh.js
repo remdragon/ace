@@ -9,10 +9,8 @@ export default class PlayMOH extends UINode {
 <br/>
 Execution moves to the next node immediately. Use the "Wait" command if a delay is needed
 `
-
+	
 	label = 'Play MOH'
 	
-	seconds//: number
-	
-	fields = [{ key: 'seconds', type: 'float' }]
+	fields = []
 }

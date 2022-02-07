@@ -7,25 +7,30 @@ export default class AcdCallAdd extends UINode {
 	
 	help = `Queue the call into the ACD to be answered by an agent<br>
 <br>
-Gates is a comma-separated list of gates to add the call to<br>
+<font color=red>WARNING</font> Priority completely overrides queue time<br>
 <br>
-Priority is a value from 1 - 99, higher values get answered first<br>
-<font color=red>WARNING</font> Priority completely overrides queue time, use it sparingly<br>
-<br>
-Offset is the number of seconds to artificially add to a caller's queue time. This is a much
-softer way to prioritize a call instead of the Priority value.`
+Offset is a much softer way to prioritize a call instead of the Priority value.`
 	
 	get label() {
-		return `ACD Call Add: gates=${this.gates || ''}, priority=${this.priority || ''}, offset=${this.offset || ''}`
+		return `ACD Call Add: gates=${this.gates ?? ''}, priority=${this.priority ?? ''}, offset=${this.offset ?? ''}`
 	}
 	
 	gates//: string
 	priority//: number
 	offset//: number
 	
-	fields = [
-		{ key: 'gates', type: 'string' },
-		{ key: 'priority', type: 'int' },
-		{ key: 'offset', type: 'int' }
-	]
+	fields = [{
+		key: 'gates',
+		type: 'string',
+		placeholder: 'Example: 1,2,3',
+		tooltip: 'Comma-separted list of gates to put the call in (1-99)',
+	},{
+		key: 'priority',
+		type: 'int',
+		tooltip: 'A value from 1-99, higher values get answered first. Completely overrides queue time: use sparingly'
+	},{
+		key: 'offset',
+		type: 'int',
+		tooltip: "The number of seconds to artificially add to the caller's queue time",
+	}]
 }

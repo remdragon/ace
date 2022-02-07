@@ -102,7 +102,7 @@ export default class UINode {
 					self[field.key] = parseBoolean( newValue )
 				else
 				{
-					console.assert( ( field.type || 'string' ) === 'string' )
+					console.assert( ( field.type ?? 'string' ) === 'string' )
 					self[field.key] = newValue
 				}
 				
@@ -136,7 +136,6 @@ export default class UINode {
 				
 				tooltip = newChild( tooltipped, 'span', { class: 'tooltip' })
 				tooltip.innerText = field.tooltip
-				
 			}
 			else if ( field.input == 'checkbox' )
 				inputParent = inputGroup
@@ -165,7 +164,7 @@ export default class UINode {
 				
 				input = newChild( inputParent, 'select', { id: id } )
 				
-				let selectedValue = this[field.key] || ''
+				let selectedValue = this[field.key] ?? ''
 				let options = await field.options( this )
 				let nice_select = null
 				let found = false
@@ -173,8 +172,8 @@ export default class UINode {
 				{
 					let optionEl = newChild( input, 'option')
 					optionEl.setAttribute( 'value', option.value )
-					optionEl.innerText = option.label || option.value
-					if ( selectedValue == ( option.value || option.label ))
+					optionEl.innerText = option.label ?? option.value
+					if ( selectedValue == ( option.value ?? option.label ))
 					{
 						optionEl.setAttribute( 'selected', 'selected' )
 						found = true
@@ -313,11 +312,11 @@ export default class UINode {
 					input.setAttribute( 'cols', field.cols )
 				if( field.placeholder )
 					input.setAttribute( 'placeholder', field.placeholder )
-				input.innerText = this[field.key] || ''
+				input.innerText = this[field.key] ?? ''
 			}
 			else
 			{
-				input = newChild( inputParent, 'input', { id: id, type: field.input || 'text' } )
+				input = newChild( inputParent, 'input', { id: id, type: field.input ?? 'text' } )
 				
 				let pattern = PATTERNS[field.type]
 				if( field.maxlength )
@@ -336,7 +335,7 @@ export default class UINode {
 						return reg.test( text + evt.key )
 					}
 				}
-				input.value = this[field.key] || ''
+				input.value = this[field.key] ?? ''
 			}
 			input.addEventListener( changeevent, onChangeEvent )
 			

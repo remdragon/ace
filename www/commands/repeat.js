@@ -10,7 +10,7 @@ export default class Repeat extends UINode {
 	
 	get label()
 	{
-		return 'Repeat ' + this.count
+		return 'Repeat ' + ( this.count || 'forever' )
 	}
 	
 	count = 1//: number = 1
