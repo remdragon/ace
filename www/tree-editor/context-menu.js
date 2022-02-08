@@ -34,17 +34,19 @@ const pasteNode = {
 	action: async function( element )
 	{
 		let json = await navigator.clipboard.readText()
-		console.log( 'json=', json )
 		let nodeData = JSON.parse( json )
 		let nodes = [ nodeData ]
-		let is_multi = nodeData.type == '' || nodeData.type == 'root_route'
-		if( is_multi && nodeData.hasOwnProperty( 'nodes' ))
+		let is_multi = {
+			'': true,
+			'root_route': true,
+			'root_voicemail': true,
+		}
+		if( is_multi[nodeData.type] && nodeData.hasOwnProperty( 'nodes' ))
 			nodes = nodeData.nodes
 		let changed = false
 		for( let i = 0; i < nodes.length; i++ )
 		{
 			nodeData = nodes[i]
-			console.log( 'nodeData.type=', nodeData.type )
 			let NodeType = NODE_TYPES[nodeData.type]
 			if( NodeType )
 			{
@@ -65,11 +67,16 @@ const pasteNode = {
 const deleteNode = {
 	text: 'Delete Node',
 	icon: '/aimara/images/delete.png',
-	action: function(element)
+	action: function( element )
 	{
-		element.node.parent.remove(element.node)
+		let name = element.node.constructor.context_menu_name
+		if ( !confirm( `Delete this "${name}" node and all its children?` ))
+			return
+		let parent = element.node.parent
+		element.node.parent.remove( element.node )
 		element.removeNode()
 		treeDidChange()
+		parent.tree.selectNode( parent.element )
 	}
 }
 
@@ -187,11 +194,11 @@ const createPlayNode = {
 	submenu: {
 		elements: [
 			...[
-				commands.Ring,
-				commands.Playback,
 				commands.PlayDTMF,
-				commands.PlayMOH,
+				commands.MOH,
+				commands.Playback,
 				commands.PlayPreAnnounce,
+				commands.Ring,
 				commands.Tone,
 				commands.PlayTTS
 				//commands.PlayEmerg,

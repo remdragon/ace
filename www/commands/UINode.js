@@ -45,6 +45,7 @@ export default class UINode {
 	{
 		if ( !parent )
 			return
+		this.tree = parent.tree
 		this.parent = parent
 		parent.children.push( this )
 	}
@@ -268,9 +269,7 @@ export default class UINode {
 								{
 									let opt = opts[i]
 									if( opt.innerText == text.value )
-									{
 										opt.className = 'option selected null'
-									}
 									else
 										opt.className = 'option null'
 								}

@@ -1716,7 +1716,8 @@ def http_routes() -> Response:
 		'</tr>',
 	] )
 	body = '\n'.join( [
-		row_html.format( route = route, url = url_for( 'http_route', route = route ), **data ) for route, data in routes
+		row_html.format( route = route, url = url_for( 'http_route', route = route ), **data )
+		for route, data in routes
 	] )
 	return html_page(
 		'<center><a id="route_new" href="#">(New Route)</a></center>',

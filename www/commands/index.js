@@ -9,11 +9,11 @@ import IfNum from './ifnum.js'; export{ IfNum }
 import IfStr from './ifstr.js'; export{ IfStr }
 import IVR from './ivr.js'; export{ IVR }
 import Label from './label.js'; export{ Label }
+import MOH from './moh.js'; export{ MOH }
 import Playback from './playback.js'; export{ Playback }
 import PlayDTMF from './play_dtmf.js'; export{ PlayDTMF }
 import PlayEmerg from './playemerg.js'; export{ PlayEmerg }
 import PlayEstHold from './playesthold.js'; export{ PlayEstHold }
-import PlayMOH from './playmoh.js'; export{ PlayMOH }
 import PlayPreAnnounce from './playpreannounce.js'; export{ PlayPreAnnounce }
 import PlayTTS from './playtts.js'; export{ PlayTTS }
 import PreAnswer from './preanswer.js'; export{ PreAnswer }
@@ -46,7 +46,7 @@ const NODE_TYPES = {
 	play_dtmf: PlayDTMF,
 	playemerg: PlayEmerg,
 	playesthold: PlayEstHold,
-	playmoh: PlayMOH,
+	moh: MOH,
 	playpreannounce: PlayPreAnnounce,
 	playtts: PlayTTS,
 	preanswer: PreAnswer,

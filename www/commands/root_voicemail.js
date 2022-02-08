@@ -51,6 +51,7 @@ Configuration settings here or right-click on the delivery node to configuration
 	constructor( tree, box, data, NODE_TYPES )
 	{
 		super( null )
+		this.tree = tree
 		
 		this.box = box
 		for( let field of this.fields )

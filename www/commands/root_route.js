@@ -25,6 +25,7 @@ Right-click on it to start adding instructions to your route.
 	constructor( tree, route, data, NODE_TYPES )
 	{
 		super( null )
+		this.tree = tree
 		
 		this.route = route
 		this.name = data.name

@@ -88,6 +88,7 @@ Add branches to the node by right-clicking on it.
 	{
 		key: 'greeting',
 		input: 'select2',
+		or_text: true,
 		label: 'Greeting Prompt: ',
 		tooltip: 'the recording to play instructing the caller what digits are expected',
 		async options( self ) {
@@ -97,6 +98,7 @@ Add branches to the node by right-clicking on it.
 	{
 		key: 'error',
 		input: 'select2',
+		or_text: true,
 		label: 'Error Prompt: ',
 		tooltip: "the recording to play if caller's input is not valid",
 		async options( self ) {
