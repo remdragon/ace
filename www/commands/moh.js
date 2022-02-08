@@ -2,7 +2,7 @@ import UINode from './UINode.js'
 
 export default class MOH extends UINode {
 	static icon = '/media/streamline/music-note-2.png'
-	static context_menu_name = 'Stream Music on Hold'
+	static context_menu_name = 'Stream MoH'
 	static command = 'moh'
 	
 	help = `Streams Hold Music for the caller<br/>

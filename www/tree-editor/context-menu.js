@@ -199,6 +199,7 @@ const createPlayNode = {
 				commands.Playback,
 				commands.PlayPreAnnounce,
 				commands.Ring,
+				commands.Silence,
 				commands.Tone,
 				commands.PlayTTS
 				//commands.PlayEmerg,
