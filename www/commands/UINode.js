@@ -154,7 +154,7 @@ export default class UINode {
 						text.setAttribute( 'size', field.size )
 					if( field.placeholder )
 						text.setAttribute( 'placeholder', field.placeholder )
-					let ttd = newChild( inputParent, 'span', { class: 'tooltipped' })
+					let ttd = newChild( label, 'span', { class: 'tooltipped' })
 					toggle = newChild( ttd, 'button' )
 					toggle.innerText = '...'
 					let tt = newChild( ttd, 'span', { class: 'tooltip' })
