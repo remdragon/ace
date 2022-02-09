@@ -1,20 +1,27 @@
 # -*- coding: utf-8 -*-
 import freeswitch
 import os
-import fsglobs
+import sys
 import importlib
-importlib.reload(fsglobs)
-from fsglobs import G
 import configparser
 
-class G:
-	config = configparser.ConfigParser()
-	config.read('/etc/itas/ace/aws.ini')
-	aws_access_key = config['aws']['aws_access_key']
-	aws_secret_key = config['aws']['aws_secret_key']
-	aws_region_name = config['aws']['aws_region_name']
-	tts_location = config['aws']['tts_location']
-	tts_default_voice = config['aws']['tts_default_voice']
+try:
+	class G:
+		config = configparser.ConfigParser()
+		try:
+			with open( '/etc/itas/ace/aws.ini', 'r' ) as f:
+				config.read_file( f )
+		except Exception as e1:
+			freeswitch.consoleLog( 'err', f'Could not load aws.ini: {e1!r}' )
+			sys.exit( -1 )
+		aws_access_key = config['aws']['aws_access_key']
+		aws_secret_key = config['aws']['aws_secret_key']
+		aws_region_name = config['aws']['aws_region_name']
+		tts_location = config['aws']['tts_location']
+		tts_default_voice = config['aws']['tts_default_voice']
+except Exception as e:
+	freeswitch.consoleLog( 'err', repr( e ))
+	sys.exit( -1 )
 
 def ttsgen(text, voice):
 	import polly
