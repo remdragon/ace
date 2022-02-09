@@ -1,5 +1,5 @@
 import CaseSubtree from '/commands/caseSubtree.js'
-import Subtree from '/commands/subtree.js'
+import NamedSubtreeSubtree from '/commands/named_subtree.js'
 
 import * as commands from '/commands/index.js'
 import NODE_TYPES from '/commands/index.js'
@@ -289,7 +289,7 @@ const ivrNodeActions = {
 							alert( 'a branch for those digits has already been created' )
 							continue
 						}
-						element.node.branches[digits] = new Subtree(
+						element.node.branches[digits] = new NamedSubtree(
 							element.node,
 							digits,
 							commands.IVR.subtree_help,
@@ -355,10 +355,13 @@ const context_menu = {
 	contextIVR: {
 		elements: [copyNode, deleteNode, nodeActions, ivrNodeActions]
 	},
+	contextIVRGreeting: {
+		elements: [copyNode, pasteNode, createPlayNode]
+	},
 	contextIVRBranch: {
 		elements: [copyNode, pasteNode, deleteNode, newTelephonyNode, newLogicNode, createPlayNode]
 	},
-	contextIVRInvalid: {
+	contextIVRFailure: {
 		elements: [copyNode, pasteNode, newTelephonyNode, newLogicNode, createPlayNode]
 	},
 	contextSelect: {

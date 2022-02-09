@@ -17,7 +17,14 @@ export default class Ivr extends UINode {
 Add branches to the node by right-clicking on it.
 `
 	subtree_help = 'If the caller enters the digits indicated here, the commands under this node will be executed<br/>'
-	invalid_subtree_help = 'If the caller fails to enter valid input, the commands under this node will be executed'
+	greeting_subtree_help = 'Add nodes here to define what the caller hears while waiting for them to input digits'
+	invalid_subtree_help = `If the caller enters digits but they fail to match any defined digits branches, these commands will be executed<br/>
+<br/>
+Note that this branch does not execute after the last attempt. Instead the failure branch executes`
+	timeout_subtree_help = `If the caller does not enter any digits at all before the greeting finishes, these commands will be executed<br/>
+<br/>
+Note that this branch does not execute after the last attempt. Instead the failure branch executes`
+	failure_subtree_help = `This branch executes if the caller exhausts all their attempts and never enters digits that match any of the defined digits branches`
 	
 	get label()
 	{
@@ -30,14 +37,15 @@ Add branches to the node by right-clicking on it.
 	max_attempts = 3 //: int
 	timeout = 3.0 //: float
 	terminators = '' //: string
-	greeting = '' //: string
-	error = 'ivr/ivr-that_was_an_invalid_entry.wav' //: string
 	digit_regex = '' //: string
 	variable_name = '' //: string
 	digit_timeout = 3.0 //: float
 	
+	greetingBranch//: greeting branch...
 	branches = {}
-	invalid//: invalid path...
+	invalidBranch//: invalid branch...
+	timeoutBranch//: timeout branch...
+	failureBranch//: failure branch
 	
 	fields = [{
 		key: 'name',
@@ -86,34 +94,6 @@ Add branches to the node by right-clicking on it.
 		tooltip: 'allows you define a dtmf such as # that the caller can use to terminate digit input',
 	},
 	{
-		key: 'greeting',
-		input: 'select2',
-		or_text: true,
-		size: 60,
-		label: 'Greeting Prompt: ',
-		tooltip: 'the recording to play instructing the caller what digits are expected',
-		async options( self ) {
-			return await sounds_options()
-		}
-	},
-	{
-		key: 'error',
-		input: 'select2',
-		or_text: true,
-		size: 60,
-		label: 'Error Prompt: ',
-		tooltip: "the recording to play if caller's input is not valid",
-		async options( self ) {
-			return await sounds_options()
-		}
-	},
-	{
-		key: 'digit_regex',
-		type: 'string',
-		label: 'Digit Regex: ',
-		tooltip: 'an advanced feature that defines what a valid input is, in addition to min_digits and max_digits. Note that the system will generate one for you based on the branches you add to this node.',
-	},
-	{
 		key: 'variable_name',
 		type: 'string',
 		label: 'Variable Name: ',
@@ -132,7 +112,7 @@ Add branches to the node by right-clicking on it.
 		isSubtree = false,
 		data = { branches: {} },
 		NODE_TYPES,
-	}) {
+	}){
 		this.uuid = data.uuid || crypto.randomUUID()
 		
 		super.createElement({
@@ -140,6 +120,16 @@ Add branches to the node by right-clicking on it.
 			data,
 			NODE_TYPES,
 			context: 'contextIVR',
+		})
+		
+		this.greetingBranch = new NamedSubtree( this, 'Greeting',
+			this.greeting_subtree_help,
+		)
+		this.greetingBranch.createElement({
+			isSubtree: true,
+			data: data.greetingBranch,
+			NODE_TYPES,
+			context: 'contextIVRGreeting',
 		})
 		
 		if ( data.branches )
@@ -163,15 +153,35 @@ Add branches to the node by right-clicking on it.
 			}
 		}
 		
-		this.invalid = new Subtree( this, 'Invalid',
+		this.invalidBranch = new NamedSubtree( this, 'Invalid',
 			this.invalid_subtree_help,
 		)
-		this.invalid.createElement(
+		this.invalidBranch.createElement({
+			isSubtree: true,
+			data: data.invalidBranch,
+			NODE_TYPES,
+			context: 'contextIVRGreeting',
+		})
+		
+		this.timeoutBranch = new NamedSubtree( this, 'Timeout',
+			this.timeout_subtree_help,
+		)
+		this.timeoutBranch.createElement({
+			isSubtree: true,
+			data: data.timeoutBranch,
+			NODE_TYPES,
+			context: 'contextIVRGreeting',
+		})
+		
+		this.failureBranch = new NamedSubtree( this, 'Failure',
+			this.failure_subtree_help,
+		)
+		this.failureBranch.createElement(
 		{
 			isSubtree: true,
-			data: { type: '', nodes: data.invalid },
+			data: data.failureBranch,
 			NODE_TYPES,
-			context: 'contextIVRInvalid',
+			context: 'contextIVRFailure',
 		})
 	}
 	
@@ -179,22 +189,32 @@ Add branches to the node by right-clicking on it.
 	{
 		const domNodes = this.element.childNodes.sort(( a, b ) =>
 		{
-			if( a.text === 'Invalid' && b.text !== 'Invalid' )
+			// greeting is always at the top:
+			if( a.text === 'Greeting' )
+				return -1
+			if( b.text === 'Greeting' )
 				return 1
 			
-			if( a.text !== 'Invalid' && b.text === 'Invalid' )
+			// failure is always the very bottom
+			if( a.text === 'Failure' )
+				return 1
+			if( b.text === 'Failure' )
+				return -1
+			
+			// timeout is always right above failure
+			if( a.text === 'Timeout' )
+				return 1
+			if( b.text === 'Timeout' )
+				return -1
+			
+			// invalid is always right above timeout
+			if( a.text === 'Invalid' )
+				return 1
+			if( b.text === 'Invalid' )
 				return -1
 			
 			const aValue = parseInt( a.text )
 			const bValue = parseInt( b.text )
-			
-			/*if (aValue === 0 && bValue !== 0) {
-				return 1
-			}
-			
-			if (aValue !== 0 && bValue === 0) {
-				return -1
-			}*/
 			
 			return aValue - bValue
 		})
@@ -220,15 +240,27 @@ Add branches to the node by right-clicking on it.
 			branchesData[digits] = branch ? branch.getJson() : {}
 		}
 		
-		let invalid = null
-		if( this.invalid )
-			invalid = this.invalid.getJson().nodes
+		let greetingBranch = null
+		if( this.greetingBranch )
+			greetingBranch = this.greetingBranch.getJson()//.nodes
+		let invalidBranch = null
+		if( this.invalidBranch )
+			invalidBranch = this.invalidBranch.getJson()//.nodes
+		let timeoutBranch = null
+		if( this.timeoutBranch )
+			timeoutBranch = this.timeoutBranch.getJson()//.nodes
+		let failureBranch = null
+		if( this.failureBranch )
+			failureBranch = this.failureBranch.getJson()//.nodes
 		
 		return {
 			...sup,
 			uuid: this.uuid,
+			greetingBranch: greetingBranch,
 			branches: branchesData,
-			invalid: invalid,
+			invalidBranch: invalidBranch,
+			timeoutBranch: timeoutBranch,
+			failureBranch: failureBranch,
 		}
 	}
 	
@@ -236,14 +268,20 @@ Add branches to the node by right-clicking on it.
 	{
 		super.walkChildren( callback )
 		console.log( this.branches )
+		if( this.greetingBranch )
+			this.greetingBranch.walkChildren( callback )
 		for( let digits in this.branches )
 		{
 			let node = this.branches[digits]
 			if ( node !== null )
 				node.walkChildren( callback )
 		}
-		if( this.invalid )
-			this.invalid.walkChildren( callback )
+		if( this.invalidBranch )
+			this.invalidBranch.walkChildren( callback )
+		if( this.timeoutBranch )
+			this.timeoutBranch.walkChildren( callback )
+		if( this.failureBranch )
+			this.failureBranch.walkChildren( callback )
 	}
 	
 	remove( node/*: UINode*/ )

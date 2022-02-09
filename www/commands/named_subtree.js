@@ -29,7 +29,7 @@ export default class NamedSubtree extends UINode {
 	}
 	
 	createElement({ isSubtree, data = {nodes:[]}, NODE_TYPES, context }) {
-		super.createElement({ isSubtree, data, NODE_TYPES, context });
+		super.createElement({ isSubtree, data, NODE_TYPES, context })
 		
 		if( data.nodes)
 		{
