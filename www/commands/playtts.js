@@ -1,5 +1,4 @@
 import UINode from './UINode.js'
-//import sounds_options from '/util/sounds_options.js'
 
 export default class PlayTTS extends UINode {
 	static icon = '/media/streamline/megaphone-tts.png'
@@ -8,7 +7,7 @@ export default class PlayTTS extends UINode {
 	
 	help = `Play text to speech to the caller<br/>
 <br/>
-Does not collect digits, does not proceed with route instructions until audio is finished playing
+Does not proceed with route instructions until audio is finished playing
 `
 	
 	get label()

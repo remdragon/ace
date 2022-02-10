@@ -147,6 +147,7 @@ const newTelephonyNode = {
 				commands.Bridge,
 				commands.Hangup,
 				commands.IVR,
+				commands.PAGD,
 				commands.PreAnswer,
 				//commands.SetMOH,
 				commands.Transfer,
@@ -171,6 +172,7 @@ const newLogicNode = {
 				commands.IfNum,
 				commands.IfStr,
 				commands.Label,
+				commands.Log,
 				commands.Repeat,
 				commands.Route,
 				//commands.Select,
@@ -355,13 +357,16 @@ const context_menu = {
 	contextIVR: {
 		elements: [copyNode, deleteNode, nodeActions, ivrNodeActions]
 	},
-	contextIVRGreeting: {
+	contextPAGD: {
+		elements: [copyNode, deleteNode, nodeActions]
+	},
+	contextIVR_PAGD_GreetingInvalidTimeout: {
 		elements: [copyNode, pasteNode, createPlayNode]
 	},
 	contextIVRBranch: {
 		elements: [copyNode, pasteNode, deleteNode, newTelephonyNode, newLogicNode, createPlayNode]
 	},
-	contextIVRFailure: {
+	contextIVR_PAGD_SuccessFailure: {
 		elements: [copyNode, pasteNode, newTelephonyNode, newLogicNode, createPlayNode]
 	},
 	contextSelect: {

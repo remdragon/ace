@@ -8,13 +8,12 @@ export default class Label extends UINode {
 	help = 'A possible destination for GoTo command'
 	get label()
 	{
-		return 'Label ' + ( this.name || '(unnamed)' )
+		return 'Label ' + ( this.name ?? '' )
 	}
 	
 	uuid//: string
 	
-	fields = [
-		{
+	fields = [{
 			key: 'name',
 			label: 'Name: ',
 		}

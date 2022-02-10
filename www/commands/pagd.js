@@ -4,30 +4,33 @@ import NamedSubtree from './named_subtree.js'
 const GREETING_LABEL = 'Greeting'
 const INVALID_LABEL = 'Invalid'
 const TIMEOUT_LABEL = 'Timeout'
+const SUCCESS_LABEL = 'Success'
 const FAILURE_LABEL = 'Failure'
 
-export default class IVR extends UINode {
+export default class PAGD extends UINode {
 	static icon = '/media/streamline/login-dial-pad-finger-password.png'
-	static context_menu_name = 'IVR'
-	static command = 'ivr'
+	static context_menu_name = 'PAGD'
+	static command = 'pagd'
 	
 	help = `This lets you play a greeting to your caller and collect digits from them.<br/>
 <br/>
-Add branches to the node by right-clicking on it.
+Add branches to the node by right-clicking on it.<br/>
+<br/>
+For help with the Digit Pattern, <a href='https://freeswitch.org/confluence/display/FREESWITCH/Regular+Expression'>see the FreeSWITCH documentation</a>
 `
-	subtree_help = 'If the caller enters the digits indicated here, the commands under this node will be executed<br/>'
 	greeting_subtree_help = 'Add nodes here to define what the caller hears while waiting for them to input digits'
-	invalid_subtree_help = `If the caller enters digits but they fail to match any defined digits branches, these commands will be executed<br/>
+	invalid_subtree_help = `If the caller enters digits but they fail to match the input criteria, these commands will be executed<br/>
 <br/>
 Note that this branch does not execute after the last attempt. Instead the failure branch executes`
 	timeout_subtree_help = `If the caller does not enter any digits at all before the greeting finishes, these commands will be executed<br/>
 <br/>
 Note that this branch does not execute after the last attempt. Instead the failure branch executes`
-	failure_subtree_help = `This branch executes if the caller exhausts all their attempts and never enters digits that match any of the defined digits branches`
+	success_subtree_help = `This branch executes if the caller enters digits that match all the criteria`
+	failure_subtree_help = `This branch executes if the caller exhausts all their attempts and never enters digits that match the input criteria`
 	
 	get label()
 	{
-		return `IVR ${this.name ?? ''}`
+		return `PAGD ${this.name ?? ''}`
 	}
 	
 	name = ''
@@ -36,6 +39,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 	max_attempts = 3 //: int
 	timeout = 3.0 //: float
 	terminators = '' //: string
+	digit_regex = '' //: string
 	variable_name = '' //: string
 	digit_timeout = 3.0 //: float
 	
@@ -72,6 +76,12 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		label: 'Max Attempts: ',
 		tooltip: 'the number of times the greeting will play while attempting to get a valid response',
 	},{
+		key: 'digit_regex',
+		type: 'string',
+		size: 30,
+		label: 'Digit Pattern: ',
+		tooltip: 'Optional pattern that defines valid input (does not override min/max digits)',
+	},{
 		key: 'timeout',
 		type: 'float',
 		maxlength: 2,
@@ -89,7 +99,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		key: 'variable_name',
 		type: 'string',
 		label: 'Variable Name: ',
-		tooltip: 'Optional channel variable name where the collected digits can be stored',
+		tooltip: 'Channel variable name where the collected digits can be stored',
 	},{
 		key: 'digit_timeout',
 		type: 'float',
@@ -110,7 +120,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 			isSubtree,
 			data,
 			NODE_TYPES,
-			context: 'contextIVR',
+			context: 'contextPAGD',
 		})
 		
 		this.greetingBranch = new NamedSubtree( this, GREETING_LABEL,
@@ -122,27 +132,6 @@ Note that this branch does not execute after the last attempt. Instead the failu
 			NODE_TYPES,
 			context: 'contextIVR_PAGD_GreetingInvalidTimeout',
 		})
-		
-		if ( data.branches )
-		{
-			let all_digits = []
-			for( const digits in data.branches )
-				all_digits.push( digits )
-			all_digits.sort()
-			for ( const digits of all_digits )
-			{
-				//console.log( `ivr.createElement: digits=${digits}` )
-				this.branches[digits] = new NamedSubtree(
-					this, digits, this.subtree_help
-				)
-				this.branches[digits].createElement({
-					isSubtree: true,
-					data: data.branches[digits],
-					NODE_TYPES,
-					context: 'contextIVRBranch',
-				})
-			}
-		}
 		
 		this.invalidBranch = new NamedSubtree( this, INVALID_LABEL,
 			this.invalid_subtree_help,
@@ -162,6 +151,17 @@ Note that this branch does not execute after the last attempt. Instead the failu
 			data: data.timeoutBranch,
 			NODE_TYPES,
 			context: 'contextIVR_PAGD_GreetingInvalidTimeout',
+		})
+		
+		this.successBranch = new NamedSubtree( this, SUCCESS_LABEL,
+			this.success_subtree_help,
+		)
+		this.successBranch.createElement(
+		{
+			isSubtree: true,
+			data: data.successBranch,
+			NODE_TYPES,
+			context: 'contextIVR_PAGD_SuccessFailure',
 		})
 		
 		this.failureBranch = new NamedSubtree( this, FAILURE_LABEL,
@@ -204,7 +204,13 @@ Note that this branch does not execute after the last attempt. Instead the failu
 			if( b.text === FAILURE_LABEL )
 				return -1
 			
-			// what's left is the digits branches:
+			// success sits where IVR digits go
+			if( a.text === SUCCESS_LABEL )
+				return 1
+			if( b.text === SUCCESS_LABEL )
+				return -1
+			
+			// shouldn't be possible to get here...
 			const aValue = parseInt( a.text )
 			const bValue = parseInt( b.text )
 			
@@ -234,14 +240,9 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		let timeoutBranch = null
 		if( this.timeoutBranch )
 			timeoutBranch = this.timeoutBranch.getJson()//.nodes
-		
-		const branchesData = {}
-		for( const digits in this.branches )
-		{
-			let branch = this.branches[digits]
-			branchesData[digits] = branch ? branch.getJson() : {}
-		}
-		
+		let successBranch = null
+		if( this.successBranch )
+			successBranch = this.successBranch.getJson()//.nodes
 		let failureBranch = null
 		if( this.failureBranch )
 			failureBranch = this.failureBranch.getJson()//.nodes
@@ -252,7 +253,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 			greetingBranch: greetingBranch,
 			invalidBranch: invalidBranch,
 			timeoutBranch: timeoutBranch,
-			branches: branchesData,
+			successBranch: successBranch,
 			failureBranch: failureBranch,
 		}
 	}
@@ -267,12 +268,8 @@ Note that this branch does not execute after the last attempt. Instead the failu
 			this.invalidBranch.walkChildren( callback )
 		if( this.timeoutBranch )
 			this.timeoutBranch.walkChildren( callback )
-		for( let digits in this.branches )
-		{
-			let node = this.branches[digits]
-			if ( node !== null )
-				node.walkChildren( callback )
-		}
+		if( this.successBranch )
+			this.successBranch.walkChildren( callback )
 		if( this.failureBranch )
 			this.failureBranch.walkChildren( callback )
 	}
