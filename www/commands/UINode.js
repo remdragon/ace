@@ -87,6 +87,26 @@ export default class UINode {
 		this.element.node = this
 	}
 	
+	createChildren( children, NODE_TYPES )
+	{
+		let changed = false
+		for( let nodeData of children )
+		{
+			let NodeType = NODE_TYPES[nodeData.type]
+			if( NodeType )
+			{
+				let node = new NodeType( this )
+				node.createElement({ data: nodeData, NODE_TYPES })
+				changed = true
+			}
+			else
+			{
+				alert( 'invalid nodeData.type=' + nodeData.type )
+			}
+		}
+		return changed
+	}
+	
 	async onSelected( divHelp )/*: void*/
 	{
 		for( let field of this.fields )

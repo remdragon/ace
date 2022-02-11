@@ -16,6 +16,8 @@ export default class PAGD extends UINode {
 <br/>
 Add branches to the node by right-clicking on it.<br/>
 <br/>
+<a href='https://freeswitch.org/confluence/display/FREESWITCH/mod_dptools%3A+play_and_get_digits'>FreeSWITCH documentation on "Play And Get Digits"</a><br/>
+<br/>
 For help with the Digit Pattern, <a href='https://freeswitch.org/confluence/display/FREESWITCH/Regular+Expression'>see the FreeSWITCH documentation</a>
 `
 	greeting_subtree_help = 'Add nodes here to define what the caller hears while waiting for them to input digits'
@@ -60,14 +62,14 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		maxlength: 2,
 		size: 3,
 		label: 'Min Digits: ',
-		tooltip: 'minimum # of digits a caller must enter for the input to be valid',
+		tooltip: 'minimum # of digits a caller must enter for the input to be valid, must be >= 0',
 	},{
 		key: 'max_digits',
 		type: 'int',
 		maxlength: 2,
 		size: 3,
 		label: 'Max Digits: ',
-		tooltip: 'maximum # of digits a caller must enter for the input to be valid',
+		tooltip: 'maximum # of digits a caller must enter for the input to be valid, must be <= 128',
 	},{
 		key: 'max_attempts',
 		type: 'int',

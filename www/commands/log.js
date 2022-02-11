@@ -8,7 +8,7 @@ export default class Log extends UINode {
 	help = 'Log diagnostic information to FreeSWITCH console/log file'
 	get label()
 	{
-		return 'Log ' + ( this.name ?? '' )
+		return `Log ${this.name || this.text || ''}`
 	}
 	
 	name//: string

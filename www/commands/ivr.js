@@ -13,8 +13,10 @@ export default class IVR extends UINode {
 	
 	help = `This lets you play a greeting to your caller and collect digits from them.<br/>
 <br/>
-Add branches to the node by right-clicking on it.
-`
+Add branches to the node by right-clicking on it.<br/>
+<br/>
+<a href='https://freeswitch.org/confluence/display/FREESWITCH/mod_dptools%3A+play_and_get_digits'>See FreeSWITCH documentation</a>`
+	
 	subtree_help = 'If the caller enters the digits indicated here, the commands under this node will be executed<br/>'
 	greeting_subtree_help = 'Add nodes here to define what the caller hears while waiting for them to input digits'
 	invalid_subtree_help = `If the caller enters digits but they fail to match any defined digits branches, these commands will be executed<br/>
@@ -56,14 +58,14 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		maxlength: 2,
 		size: 3,
 		label: 'Min Digits: ',
-		tooltip: 'minimum # of digits a caller must enter for the input to be valid',
+		tooltip: 'minimum # of digits a caller must enter for the input to be valid, must be >= 0',
 	},{
 		key: 'max_digits',
 		type: 'int',
 		maxlength: 2,
 		size: 3,
 		label: 'Max Digits: ',
-		tooltip: 'maximum # of digits a caller must enter for the input to be valid',
+		tooltip: 'maximum # of digits a caller must enter for the input to be valid, must be <= 128',
 	},{
 		key: 'max_attempts',
 		type: 'int',
@@ -104,7 +106,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		data = {},
 		NODE_TYPES,
 	}){
-		this.uuid = data.uuid || crypto.randomUUID()
+		this.uuid = data.uuid ?? crypto.randomUUID()
 		
 		super.createElement({
 			isSubtree,

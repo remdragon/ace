@@ -59,7 +59,7 @@ const NODE_TYPES = {
 	ring: Ring,
 	route: Route,
 	select: Select,
-	setNode: SetNode,
+	set: SetNode,
 	setmoh: SetMOH,
 	silence: Silence,
 	tod: TOD,

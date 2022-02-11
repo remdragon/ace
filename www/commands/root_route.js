@@ -41,16 +41,7 @@ Right-click on it to start adding instructions to your route.
 		
 		this.element.node = this
 		
-		for( let nodeData of data.nodes )
-		{
-			let NodeType = NODE_TYPES[nodeData.type]
-			
-			if( NodeType )
-			{
-				let node = new NodeType( this )
-				node.createElement( { data: nodeData, NODE_TYPES } )
-			}
-		}
+		this.createChildren( data.nodes, NODE_TYPES )
 	}
 	
 	getJson()
