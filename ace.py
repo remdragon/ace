@@ -1879,7 +1879,7 @@ def http_voicemails() -> Response:
 		'<tr>',
 			'<td><a href="{url}">{box}</a></td>',
 			'<td><a href="{url}">{name}</a></td>',
-			'<td><a class="box_delete">Delete {box}</a></td>',
+			'<td><a class="box_delete" box="{box}">Delete {box}</a></td>',
 		'</tr>',
 	] )
 	body = '\n'.join( [

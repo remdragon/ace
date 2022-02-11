@@ -75,7 +75,7 @@ Configuration settings here or right-click on the delivery node to configuration
 		)
 		this.delivery.createElement({
 			isSubtree: true,
-			data: { nodes: data.delivery },
+			data: data.delivery,
 			NODE_TYPES,
 		})
 	}
@@ -89,7 +89,7 @@ Configuration settings here or right-click on the delivery node to configuration
 			...sup,
 			type: 'root_voicemail',
 			name: this.name,
-			delivery: this.delivery.getJson().nodes
+			delivery: this.delivery.getJson()
 		}
 	}
 	
