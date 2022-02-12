@@ -1,5 +1,11 @@
 import UINode from './UINode.js'
 
+const TONE_UK_RING = '%(400,200,400,450);%(400,2200,400,450)'
+const TONE_US_RING = '%(2000,4000,440,480)'
+const TONE_US_BUSY = '%(500,500,480,620)'
+const TONE_US_REORDER = '%(300,200,480,620)'
+const TONE_US_SIT_OOSVC = '%(274,0,913.8);%(274,0,1370.6);%(380,0,1776.7)'
+
 export default class Tone extends UINode {
 	static icon = '/media/streamline/music-note-2.png'
 	static context_menu_name = 'Play Tone'
@@ -21,7 +27,7 @@ See <a href='https://freeswitch.org/confluence/display/FREESWITCH/Tone_stream'>F
 	}
 	
 	name = ''
-	tone = '%(500,500,480,620)'//: string
+	tone = TONE_US_BUSY//: string
 	loops = 1
 	
 	fields = [{
@@ -35,10 +41,11 @@ See <a href='https://freeswitch.org/confluence/display/FREESWITCH/Tone_stream'>F
 		or_text: true,
 		async options( self ) {
 			return [
-				{ label: 'UK Ring', value: '%(400,200,400,450);%(400,2200,400,450)' },
-				{ label: 'US Ring', value: '%(2000,4000,440,480)' },
-				{ label: 'US Busy', value: '%(500,500,480,620)' },
-				{ label: 'US Reorder', value: '%(300,200,480,620)' },
+				{ label: 'UK Ring', value: TONE_UK_RING },
+				{ label: 'US Ring', value: TONE_US_RING },
+				{ label: 'US Busy', value: TONE_US_BUSY },
+				{ label: 'US Reorder', value: TONE_US_REORDER },
+				{ label: 'US SIT Tone (out of service)', value: TONE_US_SIT_OOSVC },
 			]
 		},
 	},{

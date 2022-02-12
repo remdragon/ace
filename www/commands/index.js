@@ -26,6 +26,7 @@ import Select from './select.js'; export{ Select }
 import SetMOH from './setmoh.js'; export{ SetMOH }
 import SetNode from './set.js'; export{ SetNode }
 import Silence from './silence.js'; export{ Silence }
+import Throttle from './throttle.js'; export{ Throttle }
 import TOD from './tod.js'; export{ TOD }
 import Tone from './tone.js'; export{ Tone }
 import Transfer from './transfer.js'; export{ Transfer }
@@ -62,6 +63,7 @@ const NODE_TYPES = {
 	set: SetNode,
 	setmoh: SetMOH,
 	silence: Silence,
+	throttle: Throttle,
 	tod: TOD,
 	tone: Tone,
 	transfer: Transfer,

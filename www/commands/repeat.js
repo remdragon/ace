@@ -24,7 +24,7 @@ export default class Repeat extends UINode {
 	{
 		super.createElement({ isSubtree, data, NODE_TYPES, context })
 		
-		this.createChildren( data.nodes ?? [], NODES_TYPES )
+		this.createChildren( data.nodes ?? [], NODE_TYPES )
 	}
 	
 	fields = [

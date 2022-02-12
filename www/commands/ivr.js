@@ -17,7 +17,7 @@ Add branches to the node by right-clicking on it.<br/>
 <br/>
 <a href='https://freeswitch.org/confluence/display/FREESWITCH/mod_dptools%3A+play_and_get_digits'>See FreeSWITCH documentation</a>`
 	
-	subtree_help = 'If the caller enters the digits indicated here, the commands under this node will be executed<br/>'
+	digits_subtree_help = 'If the caller enters the digits indicated here, the commands under this node will be executed<br/>'
 	greeting_subtree_help = 'Add nodes here to define what the caller hears while waiting for them to input digits'
 	invalid_subtree_help = `If the caller enters digits but they fail to match any defined digits branches, these commands will be executed<br/>
 <br/>
@@ -127,15 +127,16 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		
 		if ( data.branches )
 		{
+			this.branches = {}
 			let all_digits = []
 			for( const digits in data.branches )
 				all_digits.push( digits )
 			all_digits.sort()
-			for ( const digits of all_digits )
+			for( const digits of all_digits )
 			{
 				//console.log( `ivr.createElement: digits=${digits}` )
 				this.branches[digits] = new NamedSubtree(
-					this, digits, this.subtree_help
+					this, digits, this.digits_subtree_help,
 				)
 				this.branches[digits].createElement({
 					isSubtree: true,
@@ -169,8 +170,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		this.failureBranch = new NamedSubtree( this, FAILURE_LABEL,
 			this.failure_subtree_help,
 		)
-		this.failureBranch.createElement(
-		{
+		this.failureBranch.createElement({
 			isSubtree: true,
 			data: data.failureBranch ?? {},
 			NODE_TYPES,
@@ -180,7 +180,8 @@ Note that this branch does not execute after the last attempt. Instead the failu
 	
 	reorder()
 	{
-		const domNodes = this.element.childNodes.sort(( a, b ) =>
+		let treenode = this.element
+		const domNodes = treenode.childNodes.sort(( a, b ) =>
 		{
 			// greeting is always at the top:
 			if( a.text === GREETING_LABEL )
@@ -213,14 +214,18 @@ Note that this branch does not execute after the last attempt. Instead the failu
 			return aValue - bValue
 		})
 		
-		const ulNode = this.element.childNodes[0].elementLi.parentNode
+		const ulNode = treenode.childNodes[0].elementLi.parentNode
 		
-		domNodes.forEach(el =>
+		domNodes.forEach( el =>
 		{
 			ulNode.appendChild( el.elementLi )
 		})
 		
-		// TODO: fix dotted lines after reordering
+		// fix dotted lines after reordering:
+		/*let id = treenode.parent.id
+		let ulElement = document.getElementById( `ul_${id}` )
+		console.log( 'id=', id, 'ulElement=', ulElement )
+		this.tree.adjustLines( ulElement, false ) // <<< this doesn't work sadly*/
 	}
 	
 	getJson()
@@ -262,7 +267,6 @@ Note that this branch does not execute after the last attempt. Instead the failu
 	walkChildren( callback )
 	{
 		super.walkChildren( callback )
-		console.log( this.branches )
 		if( this.greetingBranch )
 			this.greetingBranch.walkChildren( callback )
 		if( this.invalidBranch )
@@ -272,7 +276,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		for( let digits in this.branches )
 		{
 			let node = this.branches[digits]
-			if ( node !== null )
+			if ( node )
 				node.walkChildren( callback )
 		}
 		if( this.failureBranch )

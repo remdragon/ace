@@ -56,7 +56,7 @@ If the condition is true, execute the "true" branch, otherwise the "false" branc
 	
 	createElement({
 		isSubtree = false,
-		data = { trueBranch: [], falseBranch: [] },
+		data = {},
 		NODE_TYPES
 	}) {
 		super.createElement({ isSubtree, data, NODE_TYPES })

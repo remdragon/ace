@@ -53,16 +53,17 @@ const pasteNode = {
 const deleteNode = {
 	text: 'Delete Node',
 	icon: '/aimara/images/delete.png',
-	action: function( element )
+	action: function( treenode )
 	{
-		let name = element.node.constructor.context_menu_name
+		let uinode = treenode.node
+		let name = uinode.isSubtree ? uinode.label : uinode.constructor.context_menu_name
 		if ( !confirm( `Delete this "${name}" node and all its children?` ))
 			return
-		let parent = element.node.parent
-		element.node.parent.remove( element.node )
-		element.removeNode()
+		let uiparent = uinode.parent
+		uiparent.remove( uinode )
+		treenode.removeNode()
 		treeDidChange()
-		parent.tree.selectNode( parent.element )
+		uiparent.tree.selectNode( uiparent.element )
 	}
 }
 
@@ -167,6 +168,7 @@ const newLogicNode = {
 				commands.Route,
 				//commands.Select,
 				commands.SetNode,
+				commands.Throttle,
 				commands.TOD,
 				//commands.Translate,
 				commands.Wait,
@@ -182,7 +184,7 @@ const newLogicNode = {
 const createPlayNode = {
 	text: 'New Play Node',
 	icon: '/aimara/images/add1.png',
-	action: function(element) {},
+	action: function( element ) {},
 	submenu: {
 		elements: [
 			...[
@@ -284,7 +286,7 @@ const ivrNodeActions = {
 						element.node.branches[digits] = new NamedSubtree(
 							element.node,
 							digits,
-							commands.IVR.subtree_help,
+							commands.IVR.digits_subtree_help,
 						)
 						element.node.branches[digits].createElement(
 							{ NODE_TYPES, context: 'contextOptionalSubtree' }
@@ -299,10 +301,50 @@ const ivrNodeActions = {
 	}
 }
 
+
+const ivrRootVoicemailActions = {
+	text: 'Add Digit',
+	icon: '/aimara/images/add1.png',
+	action: function( element ) {},
+	submenu: {
+		elements: [
+			...[1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map( digit => (
+			{
+				text: digit,
+				icon: commands.IVR.icon, // this is confusing but I don't have a better icon right now
+				action: function( treenode )
+				{
+					let uinode = treenode.node
+					if( uinode.branches[digit] )
+					{
+						alert( 'a branch for that digit has already been created' )
+						return
+					}
+					uinode.branches[digit] = new NamedSubtree(
+						uinode,
+						digit
+					)
+					uinode.branches[digit].createElement({
+						NODE_TYPES,
+						context: 'contextRootVoicemailDigitSubtree'
+					})
+					uinode.reorder()
+					uinode.tree.selectNode( uinode.branches[digit].element )
+					treeDidChange()
+				}
+			}))
+		]
+	}
+}
+
+
+const ivrVoicemailDeliveryActions = {
+}
+
 const selectNodeActions = {
 	text: 'Select node',
 	icon: '/aimara/images/add1.png',
-	action: function(element) {},
+	action: function( element ) {},
 	submenu: {
 		elements: [
 			{
@@ -310,9 +352,8 @@ const selectNodeActions = {
 				icon: CaseSubtree.icon,
 				action: element => {
 					let i = 0
-					while(element.node.branches[`branch${i}`]) {
+					while( element.node.branches[`branch${i}`] )
 						i++
-					}
 					let branchName = `branch${i}`
 					if (!element.node.branches[branchName]) {
 						element.node.branches[branchName] = new CaseSubtree(
@@ -329,7 +370,7 @@ const selectNodeActions = {
 			}
 		]
 	}
-};
+}
 
 const context_menu = {
 	contextRouteRoot: {
@@ -363,9 +404,15 @@ const context_menu = {
 		elements: [deleteNode, nodeActions, selectNodeActions]
 	},
 	contextVoiceMailRoot: {
-		elements: []
+		elements: [ ivrRootVoicemailActions ]
 	},
-};
+	contextRootVoicemailDigitSubtree: {
+		elements: [ copyNode, pasteNode, deleteNode, newTelephonyNode, newLogicNode, createPlayNode ]
+	},
+	contextRootVoicemailDelivery: {
+		elements: [ ivrVoicemailDeliveryActions ]
+	},
+}
 
 function createNodeFromNodeType(NodeType) {
 	return element => {

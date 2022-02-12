@@ -449,7 +449,7 @@ function createTree(p_div,p_backColor,p_contextMenu) {
 		adjustLines: function(p_ul,p_recursive) {
 			var tree = p_ul;
 
-      var lists = [];
+			var lists = [];
 
 			if (tree.childNodes.length>0) {
 				lists = [ tree ];

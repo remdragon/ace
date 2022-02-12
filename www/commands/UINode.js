@@ -81,7 +81,7 @@ export default class UINode {
 			true,
 			( this.constructor /*as any*/ ).icon,
 			null,
-			context || isSubtree ? 'contextSubtree' : 'contextLeaf'
+			context ? context : isSubtree ? 'contextSubtree' : 'contextLeaf'
 		)
 		this.makeClickable()
 		
@@ -122,6 +122,27 @@ export default class UINode {
 				
 				elementLi.onkeydown = function( event )
 				{
+					/*
+					TODO FIXME:
+					
+					let fname = 'onkeydown_'
+					if( event.altKey )
+						fname += 'Alt'
+					if( event.ctrlKey )
+						fname += 'Ctrl'
+					if( event.shiftKey )
+						fname += 'Shift'
+					fname += event.key
+					let f = uinode[fname]
+					if( f && !f( event ))
+					{
+						// don't allow event to propagate:
+						event.preventDefault()
+						event.stopImmediatePropagation()
+						return false
+					}
+					return true // allow propagation
+					*/
 					if( event.altKey || !event.shiftKey || event.ctrlKey )
 						return true // allow event to propagate
 					if( event.key == 'ArrowDown' || event.key == 'ArrowUp' )
@@ -156,6 +177,45 @@ export default class UINode {
 			}
 		})
 	}
+	
+	/*
+	TODO FIXME:
+	onkeydown_ShiftArrowDown( event )
+	{
+		this.moveNode( 'down' )
+	}
+	
+	onkeydown_ShiftArrowUp( event )
+	{
+		this.moveNode( 'up' )
+	}
+	
+	function moveNode( direction )
+	{
+		// the following check *must* be here for event propagation reasons
+		if( !this.isSubtree && this.parent )
+		{
+			let uiparent = this.parent
+			let treenode = this.element
+			let treeparent = treenode.parent
+			if( direction == 'down' )
+			{
+				moveNodeDown( treeparent, treenode )
+				uiparent.moveNodeDown( this )
+			}
+			else
+			{
+				moveNodeUp( treeparent, treenode )
+				uiparent.moveNodeUp( this )
+			}
+			UINode.onChange()
+			treenode.elementLi.focus()
+			
+			return false // don't allow event to propagate:
+		}
+		return true // allow propagation
+	}
+	*/
 	
 	async onSelected( divHelp )/*: void*/
 	{
@@ -266,7 +326,6 @@ export default class UINode {
 					changeevent = 'change'
 					
 					nice_select = NiceSelect.bind( input, { searchable: true } )
-					console.log( 'nice_select=', nice_select )
 				}
 				
 				if( field.or_text )

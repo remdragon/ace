@@ -20,9 +20,9 @@ When that route finishes, execution will resume here in this route
 	fields = [
 		{
 			key: 'route',
-			type: 'int',
+			type: 'int', // TODO FIXME: change to string and call expand() from lua?
 			input: 'select',
-			label: 'Route: ',
+			label: 'Route:',
 			async options( self )
 			{
 				let params = { headers: { 'Accept': 'application/json' }}

@@ -660,7 +660,6 @@ class RepoFs( Repository ):
 		for itemFile in self.path.iterdir():
 			name = itemFile.name.lower()
 			if name.endswith( self.ending ):
-				print( f'endswith {self.ending!r}' )
 				with itemFile.open( 'r' ) as fileContent:
 					data = json.loads( fileContent.read() )
 					items.append( ( int( itemFile.stem ), data ) )
@@ -1132,7 +1131,7 @@ def try_post_did( did: int, data: Dict[str,str] ) -> int:
 @app.route( '/dids/<int:did>', methods = [ 'GET', 'POST', 'DELETE' ] )
 @login_required # type: ignore
 def http_did( did: int ) -> Response:
-	#log = logger.getChild( 'http_did' )
+	log = logger.getChild( 'http_did' )
 	return_type = accept_type()
 	path = did_file_path( did )
 	
@@ -1209,9 +1208,9 @@ def http_did( did: int ) -> Response:
 		)
 	
 	route_options: List[str] = []
-	for r, data in routes:
+	for r, routedata in routes:
 		att = ' selected' if route == r else ''
-		lbl = data.get( 'name' ) or '(Unnamed)'
+		lbl = routedata.get( 'name' ) or '(Unnamed)'
 		route_options.append( f'<option value="{r}"{att}>{r} {lbl}</option>' )
 	
 	html_rows.extend( [
