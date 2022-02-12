@@ -31,7 +31,7 @@ export default class NamedSubtree extends UINode {
 	createElement({ isSubtree, data = {nodes:[]}, NODE_TYPES, context }) {
 		super.createElement({ isSubtree, data, NODE_TYPES, context })
 		
-		this.createChildren( data.nodes, NODE_TYPES )
+		this.createChildren( data.nodes ?? [], NODE_TYPES )
 	}
 
 	getJson()/*: object*/ {

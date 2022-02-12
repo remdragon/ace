@@ -43,22 +43,7 @@ const pasteNode = {
 		}
 		if( is_multi[nodeData.type] && nodeData.hasOwnProperty( 'nodes' ))
 			nodes = nodeData.nodes
-		let changed = false
-		for( let i = 0; i < nodes.length; i++ )
-		{
-			nodeData = nodes[i]
-			let NodeType = NODE_TYPES[nodeData.type]
-			if( NodeType )
-			{
-				let node = new NodeType( element.node )
-				node.createElement({ data: nodeData, NODE_TYPES })
-				changed = true
-			}
-			else
-			{
-				console.log( 'invalid nodeData.type=', nodeData.type )
-			}
-		}
+		let changed = element.node.createChildren( nodes ?? [], NODE_TYPES )
 		if( changed )
 			treeDidChange()
 	}
@@ -379,8 +364,8 @@ const context_menu = {
 
 function createNodeFromNodeType(NodeType) {
 	return element => {
-		let node = new NodeType(element.node);
-		node.createElement({ NODE_TYPES });
+		let node = new NodeType( element.node )
+		node.createElement({ NODE_TYPES })
 		treeDidChange()
 	}
 }

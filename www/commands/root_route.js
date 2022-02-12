@@ -41,7 +41,7 @@ Right-click on it to start adding instructions to your route.
 		
 		this.element.node = this
 		
-		this.createChildren( data.nodes, NODE_TYPES )
+		this.createChildren( data.nodes ?? [], NODE_TYPES )
 	}
 	
 	getJson()

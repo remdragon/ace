@@ -1863,7 +1863,7 @@ def http_voicemails() -> Response:
 		for box_path in path.parent.glob( path.name ):
 			with box_path.open( 'r' ) as f:
 				settings = json.loads( f.read() )
-			boxes.append( { 'box': int( box_path.stem ), **settings } )
+			boxes.append( { 'box': int( box_path.stem ), 'name': '(Unnamed)', **settings } )
 	except Exception as e:
 		return _http_failure(
 			return_type,

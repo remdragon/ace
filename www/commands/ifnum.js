@@ -1,5 +1,5 @@
 import UINode from './UINode.js'
-import Subtree from './subtree.js'
+import NamedSubtree from './named_subtree.js'
 
 export default class IfNum extends UINode {
 	static icon = '/media/streamline/road-sign-look-both-ways-1.png'
@@ -18,8 +18,8 @@ If the condition is true, execute the "true" branch, otherwise the "false" branc
 	lhs//: string
 	op//: string
 	rhs//: string
-	trueBranch//: Subtree
-	falseBranch//: Subtree
+	trueBranch//: NamedSubtree
+	falseBranch//: NamedSubtree
 	
 	fields = [{
 		key: 'lhs',
@@ -48,22 +48,22 @@ If the condition is true, execute the "true" branch, otherwise the "false" branc
 	
 	createElement({
 		isSubtree = false,
-		data = { trueBranch: [], falseBranch: [] },
+		data = {},
 		NODE_TYPES
 	}) {
 		super.createElement({ isSubtree, data, NODE_TYPES })
 		
-		this.trueBranch = new Subtree(this, 'true')
+		this.trueBranch = new NamedSubtree( this, 'true' )
 		this.trueBranch.createElement({
 			isSubtree: true,
-			data: data.trueBranch,
+			data: data.trueBranch ?? {},
 			NODE_TYPES
 		})
 		
-		this.falseBranch = new Subtree(this, 'false')
+		this.falseBranch = new NamedSubtree( this, 'false' )
 		this.falseBranch.createElement({
 			isSubtree: true,
-			data: data.falseBranch,
+			data: data.falseBranch ?? {},
 			NODE_TYPES
 		})
 	}

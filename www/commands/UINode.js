@@ -1,5 +1,4 @@
 // TODO FIXME: need a Set Voice command
-// TODO FIXME: play a different prompt based on a schedule
 
 import '/nice-select2/nice-select2.js'
 import{ parseBoolean } from '/tree-editor/util.js'

@@ -1,5 +1,5 @@
 import UINode from './UINode.js'
-import Subtree from './subtree.js'
+import NamedSubtree from './named_subtree.js'
 
 export default class RootVoiceMail extends UINode {
 	static icon = '/media/streamline/kindle.png'
@@ -70,7 +70,7 @@ Configuration settings here or right-click on the delivery node to configuration
 		
 		this.element.node = this
 		
-		this.delivery = new Subtree( this, 'delivery',
+		this.delivery = new NamedSubtree( this, 'delivery',
 			'Add commands to this node to automate delivery of messages taken in this box'
 		)
 		this.delivery.createElement({
@@ -96,9 +96,6 @@ Configuration settings here or right-click on the delivery node to configuration
 	walkChildren( callback )
 	{
 		super.walkChildren( callback )
-		for( let node of this.children )
-		{
-			node.walkChildren( callback )
-		}
+		this.delivery.walkChildren( callback )
 	}
 }

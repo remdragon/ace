@@ -280,6 +280,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 	{
 		super.remove( node )
 		
+		// TODO FIXME: this code is wrong, need to figure out how to fix it
 		Object.keys( this.branches ).some( key =>
 		{
 			const branch = this.branches[key]
