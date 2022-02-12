@@ -29,6 +29,12 @@ Configuration settings here or right-click on the delivery node to configuration
 			type: 'string',
 			label: 'Name: ',
 		},{
+			key: 'pin',
+			type: 'string',
+			input: 'password',
+			label: 'PIN:',
+			tooltip: 'numeric password to admin the box',
+		},{
 			key: 'greeting',
 			type: 'int',
 			label: 'Greeting: ',
