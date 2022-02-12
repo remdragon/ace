@@ -5,7 +5,7 @@ export default class Subtree extends UINode {
 	static context_menu_name = 'N/A'
 	static command = ''
 	
-	//help = 'This is a subtree node'
+	//help: string = ...
 	label = ''
 	
 	constructor( parent /*: UINode*/, label /*: string*/, help )
@@ -18,12 +18,17 @@ export default class Subtree extends UINode {
 	
 	createElement({
 		isSubtree,
-		data = {nodes:[]},
+		data = [],
 		NODE_TYPES,
 		context,
 	})
 	{
-		super.createElement({ isSubtree, data, NODE_TYPES, context })
+		super.createElement({
+			isSubtree,
+			data,
+			NODE_TYPES,
+			context,
+		})
 		
 		this.createChildren( data.nodes ?? [], NODE_TYPES )
 	}

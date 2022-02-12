@@ -17,9 +17,7 @@ export default class Repeat extends UINode {
 	
 	createElement({
 		isSubtree = true,
-		data =  {
-			nodes: []
-		},
+		data = [],
 		NODE_TYPES,
 		context = 'contextOptionalSubtree'
 	})

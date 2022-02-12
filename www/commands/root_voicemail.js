@@ -81,7 +81,7 @@ Configuration settings here or right-click on the delivery node to configuration
 		)
 		this.delivery.createElement({
 			isSubtree: true,
-			data: data.delivery,
+			data: data.delivery ?? {},
 			NODE_TYPES,
 		})
 	}

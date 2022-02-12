@@ -1,9 +1,10 @@
 import CaseSubtree from '/commands/caseSubtree.js'
-import NamedSubtreeSubtree from '/commands/named_subtree.js'
+import NamedSubtree from '/commands/named_subtree.js'
 
 import * as commands from '/commands/index.js'
 import NODE_TYPES from '/commands/index.js'
 import { treeDidChange } from './tree-editor.js'
+import{ moveNodeUp, moveNodeDown } from './util.js'
 
 const copyNode = {
 	text: 'Copy',
@@ -85,33 +86,37 @@ const nodeActions = {
 			{
 				text: 'Move node up',
 				icon: '/aimara/images/tree.png',
-				action: function( element )
+				action: function( treenode )
 				{
-					let parentNode = element.node.parent
-					let parent = element.parent
+					let uiparent = treenode.node.parent
+					let treeparent = treenode.parent
 					
-					if ( parent && parentNode )
+					if ( treeparent && uiparent )
 					{
-						moveNodeUp( parent, element )
-						parentNode.moveNodeUp( element.node )
+						moveNodeUp( treeparent, treenode )
+						uiparent.moveNodeUp( treenode.node )
 						treeDidChange()
 					}
+					treenode.elementLi.focus()
 				}
 			},
 			{
 				text: 'Move node down',
 				icon: '/aimara/images/tree.png',
-				action: function( element )
+				action: function( treenode )
 				{
-					let parentNode = element.node.parent
-					let parent = element.parent
+					let uiparent = treenode.node.parent
+					let treeparent = treenode.parent
 					
-					if ( parent && parentNode )
+					if ( treeparent && uiparent )
 					{
-						moveNodeDown( parent, element )
-						parentNode.moveNodeDown( element.node )
+						//console.log( 'treeparent=', treeparent, ', treenode=', treenode )
+						moveNodeDown( treeparent, treenode )
+						//console.log( 'uiparent=', uiparent, ', treenode.node=', treenode.node )
+						uiparent.moveNodeDown( treenode.node )
 						treeDidChange()
 					}
+					treenode.elementLi.focus()
 				}
 			}
 		]
@@ -253,22 +258,22 @@ const ivrNodeActions = {
 					}
 					while( true )
 					{
-						digits = prompt( 'Enter Digits:', digits )
+						digits = prompt( 'Enter digit(s):', digits )
 						if( digits == null ) // the user hit cancel
 							return
 						if( digits.length < min_digits )
 						{
-							alert( 'min_digits for this IVR is ' + min_digits )
+							alert( `min_digits for this IVR is ${min_digits}` )
 							continue
 						}
 						if( digits.length > max_digits )
 						{
-							alert( 'max_digits for this IVR is ' + max_digits )
+							alert( `max_digits for this IVR is ${max_digits}` )
 							continue
 						}
 						if( regex != null && !regex.test( digits ))
 						{
-							alert( 'digits do not match digit_regex "' + digit_regex + '"' )
+							alert( `digits do not match digit_regex "${digit_regex}"` )
 							continue
 						}
 						if( element.node.branches[digits] )
@@ -368,44 +373,6 @@ function createNodeFromNodeType(NodeType) {
 		node.createElement({ NODE_TYPES })
 		treeDidChange()
 	}
-}
-
-function moveNodeUp(parent, node) {
-	let i = parent.childNodes.findIndex(n => n.id === node.id)
-
-	// if < 0 does not exist
-	// if 0 already at top of array
-	if (i < 1) {
-		return
-	}
-
-	let aux = parent.childNodes[i - 1]
-	parent.childNodes[i - 1] = parent.childNodes[i]
-	parent.childNodes[i] = aux
-
-	node.elementLi.parentNode.insertBefore(
-		parent.childNodes[i - 1].elementLi,
-		parent.childNodes[i].elementLi
-	)
-}
-
-function moveNodeDown(parent, node) {
-	let i = parent.childNodes.findIndex(n => n.id === node.id)
-
-	// if < 0 does not exist
-	// if === length already at bottom of array
-	if (i < 0 || i === parent.childNodes.length - 1) {
-		return
-	}
-
-	let aux = parent.childNodes[i + 1]
-	parent.childNodes[i + 1] = parent.childNodes[i]
-	parent.childNodes[i] = aux
-
-	node.elementLi.parentNode.insertBefore(
-		parent.childNodes[i].elementLi,
-		parent.childNodes[i + 1].elementLi
-	)
 }
 
 export default context_menu

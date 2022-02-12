@@ -26,7 +26,7 @@ Otherwise the "miss" node will be executed<br/>
 	
 	createElement({
 		isSubtree = false,
-		data = { hit: [], miss: [] },
+		data = {},
 		NODE_TYPES
 	}) {
 		super.createElement({ isSubtree, data, NODE_TYPES })
@@ -34,13 +34,13 @@ Otherwise the "miss" node will be executed<br/>
 		this.hitBranch = new Subtree(this, 'hit')
 		this.hitBranch.createElement({
 			isSubtree: true,
-			data: data.hit,
+			data: data.hit ?? {},
 			NODE_TYPES
 		})
 		this.missBranch = new Subtree(this, 'miss')
 		this.missBranch.createElement({
 			isSubtree: true,
-			data: data.miss,
+			data: data.miss ?? {},
 			NODE_TYPES
 		})
 	}

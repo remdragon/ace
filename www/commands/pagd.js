@@ -18,7 +18,7 @@ Add branches to the node by right-clicking on it.<br/>
 <br/>
 <a href='https://freeswitch.org/confluence/display/FREESWITCH/mod_dptools%3A+play_and_get_digits'>FreeSWITCH documentation on "Play And Get Digits"</a><br/>
 <br/>
-For help with the Digit Pattern, <a href='https://freeswitch.org/confluence/display/FREESWITCH/Regular+Expression'>see the FreeSWITCH documentation</a>
+<a href='https://freeswitch.org/confluence/display/FREESWITCH/Regular+Expression'>FreeSWITCH documentation on Digit Patterns</a>
 `
 	greeting_subtree_help = 'Add nodes here to define what the caller hears while waiting for them to input digits'
 	invalid_subtree_help = `If the caller enters digits but they fail to match the input criteria, these commands will be executed<br/>
@@ -130,7 +130,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		)
 		this.greetingBranch.createElement({
 			isSubtree: true,
-			data: data.greetingBranch,
+			data: data.greetingBranch ?? {},
 			NODE_TYPES,
 			context: 'contextIVR_PAGD_GreetingInvalidTimeout',
 		})
@@ -140,7 +140,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		)
 		this.invalidBranch.createElement({
 			isSubtree: true,
-			data: data.invalidBranch,
+			data: data.invalidBranch ?? {},
 			NODE_TYPES,
 			context: 'contextIVR_PAGD_GreetingInvalidTimeout',
 		})
@@ -150,7 +150,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		)
 		this.timeoutBranch.createElement({
 			isSubtree: true,
-			data: data.timeoutBranch,
+			data: data.timeoutBranch ?? {},
 			NODE_TYPES,
 			context: 'contextIVR_PAGD_GreetingInvalidTimeout',
 		})
@@ -161,7 +161,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		this.successBranch.createElement(
 		{
 			isSubtree: true,
-			data: data.successBranch,
+			data: data.successBranch ?? {},
 			NODE_TYPES,
 			context: 'contextIVR_PAGD_SuccessFailure',
 		})
@@ -172,7 +172,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		this.failureBranch.createElement(
 		{
 			isSubtree: true,
-			data: data.failureBranch,
+			data: data.failureBranch ?? {},
 			NODE_TYPES,
 			context: 'contextIVR_PAGD_SuccessFailure',
 		})
@@ -263,7 +263,6 @@ Note that this branch does not execute after the last attempt. Instead the failu
 	walkChildren( callback )
 	{
 		super.walkChildren( callback )
-		console.log( this.branches )
 		if( this.greetingBranch )
 			this.greetingBranch.walkChildren( callback )
 		if( this.invalidBranch )

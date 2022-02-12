@@ -1,7 +1,7 @@
 // TODO FIXME: need a Set Voice command
 
 import '/nice-select2/nice-select2.js'
-import{ parseBoolean } from '/tree-editor/util.js'
+import{ parseBoolean, moveNodeUp, moveNodeDown } from '/tree-editor/util.js'
 
 /*interface Field {
 	key: string
@@ -66,6 +66,7 @@ export default class UINode {
 		context: string
 	}*/)
 	{
+		this.isSubtree = isSubtree
 		if( data )
 		{
 			for( let field of this.fields )
@@ -80,8 +81,9 @@ export default class UINode {
 			true,
 			( this.constructor /*as any*/ ).icon,
 			null,
-			context ? context : isSubtree ? 'contextSubtree' : 'contextLeaf'
+			context || isSubtree ? 'contextSubtree' : 'contextLeaf'
 		)
+		this.makeClickable()
 		
 		this.element.node = this
 	}
@@ -104,6 +106,55 @@ export default class UINode {
 			}
 		}
 		return changed
+	}
+	
+	makeClickable()
+	{
+		this.walkChildren( function( uinode ){
+			let elementLi = uinode.element.elementLi
+			if( elementLi )
+			{
+				//console.log( 'elementLi=', elementLi )
+				elementLi.setAttribute( 'tabindex', 0 )
+				
+				// don't draw border around element when keyboard focus:
+				elementLi.style.outline = 'none'
+				
+				elementLi.onkeydown = function( event )
+				{
+					if( event.altKey || !event.shiftKey || event.ctrlKey )
+						return true // allow event to propagate
+					if( event.key == 'ArrowDown' || event.key == 'ArrowUp' )
+					{
+						// the following check *must* be here for event propagation reasons
+						if( !uinode.isSubtree && uinode.parent )
+						{
+							let uiparent = uinode.parent
+							let treenode = uinode.element
+							let treeparent = treenode.parent
+							if( event.key == 'ArrowDown' )
+							{
+								moveNodeDown( treeparent, treenode )
+								uiparent.moveNodeDown( uinode )
+							}
+							else
+							{
+								moveNodeUp( treeparent, treenode )
+								uiparent.moveNodeUp( uinode )
+							}
+							UINode.onChange()
+							treenode.elementLi.focus()
+							
+							// don't allow event to propagate:
+							event.preventDefault()
+							event.stopImmediatePropagation()
+							return false
+						}
+					}
+					return true // allow event to propagate
+				}
+			}
+		})
 	}
 	
 	async onSelected( divHelp )/*: void*/

@@ -1,14 +1,24 @@
-import Subtree from "./subtree.js";
+import NamedSubtree from './named_subtree.js'
 
-export default class CaseSubtree extends Subtree {
+export default class CaseSubtree extends NamedSubtree {
 	static context_menu_name = 'N/A'
 	get label() {
-		return `Case "${this.value || ""}":`;
+		let s = `Case "${this.value || ''}"`
+		if( this.name )
+			s += ' ' + this.name
+		return s
 	}
 	
 	//set label(value){}
 	
-	value /*: string*/ = "";
+	name = '' // : string
+	value /*: string*/ = ''
 	
-	fields = [{ key: "value" }];
+	fields = [{
+		key: 'name',
+		label: 'Name:'
+	},{
+		key: 'value',
+		label: 'Value:',
+	}]
 }

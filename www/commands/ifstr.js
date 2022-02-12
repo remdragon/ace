@@ -64,14 +64,14 @@ If the condition is true, execute the "true" branch, otherwise the "false" branc
 		this.trueBranch = new NamedSubtree(this, 'true')
 		this.trueBranch.createElement({
 			isSubtree: true,
-			data: data.trueBranch,
+			data: data.trueBranch ?? {},
 			NODE_TYPES
 		})
 		
 		this.falseBranch = new NamedSubtree(this, 'false')
 		this.falseBranch.createElement({
 			isSubtree: true,
-			data: data.falseBranch,
+			data: data.falseBranch ?? {},
 			NODE_TYPES
 		})
 	}

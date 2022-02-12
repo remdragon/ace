@@ -21,7 +21,7 @@ export default class Label extends UINode {
 	
 	createElement({
 		isSubtree = false,
-		data = { branches: {} },
+		data = {},
 		NODE_TYPES,
 	}) {
 		this.uuid = data.uuid || crypto.randomUUID()

@@ -28,8 +28,18 @@ export default class NamedSubtree extends UINode {
 		this.help = help || 'This is a named subtree node, click on the parent node for more information'
 	}
 	
-	createElement({ isSubtree, data = {nodes:[]}, NODE_TYPES, context }) {
-		super.createElement({ isSubtree, data, NODE_TYPES, context })
+	createElement({
+		isSubtree,
+		data = {},
+		NODE_TYPES,
+		context,
+	}) {
+		super.createElement({
+			isSubtree,
+			data,
+			NODE_TYPES,
+			context,
+		})
 		
 		this.createChildren( data.nodes ?? [], NODE_TYPES )
 	}

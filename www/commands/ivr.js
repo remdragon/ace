@@ -120,7 +120,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		)
 		this.greetingBranch.createElement({
 			isSubtree: true,
-			data: data.greetingBranch,
+			data: data.greetingBranch ?? {},
 			NODE_TYPES,
 			context: 'contextIVR_PAGD_GreetingInvalidTimeout',
 		})
@@ -139,7 +139,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 				)
 				this.branches[digits].createElement({
 					isSubtree: true,
-					data: data.branches[digits],
+					data: data.branches[digits] ?? {},
 					NODE_TYPES,
 					context: 'contextIVRBranch',
 				})
@@ -151,7 +151,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		)
 		this.invalidBranch.createElement({
 			isSubtree: true,
-			data: data.invalidBranch,
+			data: data.invalidBranch ?? {},
 			NODE_TYPES,
 			context: 'contextIVR_PAGD_GreetingInvalidTimeout',
 		})
@@ -161,7 +161,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		)
 		this.timeoutBranch.createElement({
 			isSubtree: true,
-			data: data.timeoutBranch,
+			data: data.timeoutBranch ?? {},
 			NODE_TYPES,
 			context: 'contextIVR_PAGD_GreetingInvalidTimeout',
 		})
@@ -172,7 +172,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		this.failureBranch.createElement(
 		{
 			isSubtree: true,
-			data: data.failureBranch,
+			data: data.failureBranch ?? {},
 			NODE_TYPES,
 			context: 'contextIVR_PAGD_SuccessFailure',
 		})

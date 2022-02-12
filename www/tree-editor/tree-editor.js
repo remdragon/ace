@@ -71,6 +71,8 @@ function initTree( data, Root )
 	
 	tree.drawTree()
 	
+	root.makeClickable()
+	
 	UINode.onChange = () => {
 		treeDidChange()
 	}

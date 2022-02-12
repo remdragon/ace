@@ -7,14 +7,17 @@ export default class Select extends UINode {
 	static context_menu_name = 'Select'
 	static command = 'select'
 	
-	help = `This is a select node<br/>
+	help = `Select nodes allow you pull in information and test for multiple values<br/>
 <br/>
 *THIS COMMAND IS NOT IMPLEMENTED YET, PLEASE DO NOT TRY TO USE IT`
 	label = 'Select'
 	
-	variable//: string
+	expression//: string
 	
-	fields = [{ key: 'variable' }]
+	fields = [{
+		key: 'expression',
+		tooltip: 'You can typically want to reference a channel variable like ${zip_code}',
+	}]
 	
 	branches = {
 	}
@@ -22,7 +25,7 @@ export default class Select extends UINode {
 	
 	createElement({
 		isSubtree = false,
-		data = { branches: { invalid: [] }},
+		data = {},
 		NODE_TYPES
 	}) {
 		super.createElement({
@@ -37,7 +40,7 @@ export default class Select extends UINode {
 			//Object.keys( data.branches )
 			//.filter( br => br !== 'invalid' )
 			//.forEach((k, i) =>
-			for( let k in data.branches )
+			for( let k in data.branches ?? {} )
 			{
 				//if ( !data.branches[k] )
 				//	return
@@ -57,7 +60,7 @@ export default class Select extends UINode {
 		this.invalid.createElement(
 		{
 			isSubtree: true,
-			data: data.invalid,
+			data: data.invalid ?? {},
 			NODE_TYPES
 		})
 	}
