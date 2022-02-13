@@ -42,7 +42,7 @@ for( let el of delete_links )
 		'click',
 		async function( event )
 		{
-			let id_confirm = prompt( 'Type "${id}" to delete route ${id}' )
+			let id_confirm = prompt( `Type "${id}" to delete route ${id}` )
 			if( id_confirm == id )
 			{
 				fetch(

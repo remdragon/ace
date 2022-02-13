@@ -41,8 +41,8 @@ from tornado.wsgi import WSGIContainer # pip install tornado
 from tornado.ioloop import IOLoop
 from tornado.httpserver import HTTPServer
 from typing import(
-	Any, cast, Dict, Iterator, List, Optional as Opt, Sequence as Seq, Tuple,
-	Type, TypeVar, TYPE_CHECKING, Union,
+	Any, Callable, cast, Dict, Iterator, List, Optional as Opt, Sequence as Seq,
+	Tuple, Type, TypeVar, TYPE_CHECKING, Union,
 )
 import tzlocal # pip install tzlocal
 from urllib.parse import urlencode, urlparse
@@ -136,6 +136,22 @@ def os_execute( cmd: str ) -> None:
 
 def json_dumps( data: Any ) -> str:
 	return json.dumps( data, indent = '\t', separators = ( ',', ': ' ))
+
+def walk_json_dicts( json_data: Any, callback: Callable[[Any],Opt[Any]] ) -> Opt[Any]:
+	if isinstance( json_data, dict ):
+		r = callback( json_data )
+		if r is not None:
+			return r
+		for k, v in json_data.items():
+			r = walk_json_dicts( v, callback )
+			if r is not None:
+				return r
+	elif isinstance( json_data, list ):
+		for v in json_data:
+			r = walk_json_dicts( v, callback )
+			if r is not None:
+				return r
+	return None
 
 #endregion utilities
 #region html helpers
@@ -418,21 +434,21 @@ flags_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
 chown( str( flags_path ), 'www-data', 'www-data' )
 os.chmod( str( flags_path ), 0o775 )
 def flag_file_path( flag: str ) -> Path:
-	return flags_path / f'{flag}.json'
+	return flags_path / f'{flag}.flag'
 
 dids_path = Path( ITAS_DIDS_PATH )
 dids_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
 chown( str( dids_path ), 'www-data', 'www-data' )
 os.chmod( str( dids_path ), 0o775 )
 def did_file_path( did: int ) -> Path:
-	return dids_path / f'{did}.json'
+	return dids_path / f'{did}.did'
 
 anis_path = Path( ITAS_ANIS_PATH )
 anis_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
 chown( str( anis_path ), 'www-data', 'www-data' )
 os.chmod( str( anis_path ), 0o775 )
 def ani_file_path( ani: int ) -> Path:
-	return anis_path / f'{ani}.json'
+	return anis_path / f'{ani}.ani'
 
 voicemail_meta_path = Path( ITAS_VOICEMAIL_META_PATH )
 voicemail_meta_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
@@ -954,7 +970,7 @@ def http_dids() -> Response:
 	
 	path = Path( ITAS_DIDS_PATH )
 	dids: List[Dict[str,Any]] = []
-	pattern = f'*{q_did}*.json' if q_did else '*.json'
+	pattern = f'*{q_did}*.did' if q_did else '*.did'
 	files = list( path.glob( pattern ))
 	files.sort ( key = lambda file: file.stem )
 	skipped = 0
@@ -1310,7 +1326,7 @@ def http_anis() -> Response:
 	search = request.args.get( 'search', '' )
 	path = Path( ITAS_ANIS_PATH )
 	anis: List[Dict[str,int]] = []
-	pattern = f'*{search}*.json' if search else '*.json'
+	pattern = f'*{search}*.ani' if search else '*.ani'
 	for f in path.glob( pattern ):
 		anis.append( { 'ani': int( f.stem ) } )
 	anis.sort ( key = lambda d: d['ani'] )
@@ -1685,7 +1701,7 @@ def http_routes() -> Response:
 	
 	# BEGIN route list
 	try:
-		routes = REPO_ROUTES.list()
+		routes = list( REPO_ROUTES.list() )
 	except Exception as e:
 		#raise e
 		return _http_failure(
@@ -1785,8 +1801,7 @@ def http_route( route: int ) -> Response:
 			REPO_ROUTES.update( route, data )
 			return rest_success( [ data ] )
 		elif request.method == 'DELETE':
-			REPO_ROUTES.delete( route )
-			return rest_success( [] )
+			return route_delete( route )
 		else:
 			return rest_failure( f'request method {request.method} not implemented yet', 405 )
 	except HttpFailure as e:
@@ -1796,6 +1811,63 @@ def http_route( route: int ) -> Response:
 			e.status_code,
 		)
 
+def route_delete( route: int ) -> Response:
+	# check if route even exists:
+	if not REPO_ROUTES.exists( route ):
+		raise HttpFailure( f'Route {route!r} does not exist', 404 )
+	
+	# check if route is referenced by any DID
+	for file in Path( ITAS_DIDS_PATH ).glob( '*.did' ):
+		with file.open( 'r' ) as f:
+			did = json.load( f )
+		if route == did['route']:
+			raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by DID {file.stem}' )
+	
+	# check if route is referenced by ani ANI
+	for file in Path( ITAS_ANIS_PATH ).glob( '*.ani' ):
+		with file.open( 'r' ) as f:
+			ani =json.load( f )
+		if route == ani.get( 'route' ):
+			raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by ANI {file.stem}' )
+		overrides = ani.get( 'overrides' ) or ''
+		for line in overrides.split( '\n' ):
+			parts = re.split( r'\s+', line )
+			if len( parts ) >= 2:
+				try:
+					override_route = int( parts[1] )
+				except ValueError:
+					pass
+				else:
+					if route == override_route:
+						raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by ANI {file.stem}' )
+	
+	# check if route is referenced by another route:
+	def json_dict_route_check( jdata: Any ) -> Opt[Any]:
+		nodetype = jdata.get( 'type' )
+		if nodetype == 'route':
+			try:
+				route2 = int( jdata.get( 'route' ) or '' )
+			except ValueError:
+				pass
+			if route2 == route:
+				return True
+		return None
+	
+	for route2, route_settings in REPO_ROUTES.list():
+		if route == route2:
+			continue
+		if walk_json_dicts( route_settings, json_dict_route_check ):
+			raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by route {route2!r}' )
+	
+	# check if route is referenced by a voicemail box
+	for file in voicemail_settings_path( 1 ).parent.glob( '*.box' ):
+		with file.open( 'r' ) as f:
+			box_settings = json.load( f )
+		if walk_json_dicts( box_settings, json_dict_route_check ):
+			raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by voicemail box {file.stem}' )
+	
+	REPO_ROUTES.delete( route )
+	return rest_success( [] )
 
 #endregion http - routes
 #region http - voicemail
@@ -1965,28 +2037,28 @@ def http_voicemail( box: int ) -> Response:
 			return rest_success( [ settings ] )
 		elif request.method == 'DELETE':
 			msgs_path = voicemail_box_msgs_path( box )
-			log.warning( f'{msgs_path=}' )
+			log.warning( f'msgs_path={msgs_path!r}' )
 			if msgs_path.exists():
 				try:
 					shutil.rmtree( str( msgs_path ))
 				except OSError as e1:
 					log.exception( 'Could not delete box %r messages:', box )
-					return rest_error( f'Could not delete box {box!r} messages: {e1!r}' )
+					return rest_failure( f'Could not delete box {box!r} messages: {e1!r}' )
 			
 			greetings_path = voicemail_greeting_path( box, 1 ).parent
-			log.warning( f'{greetings_path=}' )
+			log.warning( f'greetings_path={greetings_path!r}' )
 			if greetings_path.exists():
 				try:
 					shutil.rmtree( str( greetings_path ))
 				except OSError as e2:
 					log.exception( 'Could not delete box %r greetings:', box )
-					return rest_error( f'Could not delete box {box!r} greetings: {e2!r}' )
+					return rest_failure( f'Could not delete box {box!r} greetings: {e2!r}' )
 			
 			try:
 				path.unlink()
 			except OSError as e3:
 				log.exception( 'Could not delete box %r settings file:', box )
-				return rest_error( f'Could not delete box {box!r} settings file: {e3!r}' )
+				return rest_failure( f'Could not delete box {box!r} settings file: {e3!r}' )
 			return rest_success( [] )
 		else:
 			return rest_failure( f'invalid request method={request.method!r}' )
