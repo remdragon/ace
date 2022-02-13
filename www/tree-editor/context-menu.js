@@ -21,9 +21,13 @@ const cutNode = {
 	icon: '/media/streamline/edit-scissors.png',
 	action: function(element)
 	{
-		let json = JSON.stringify( element.node.getJson(), null, 4 )
+		let uinode = element.node
+		if ( !confirm( `Cut "${uinode.label}" and all its children?` ))
+			return
+		element.elementLi.focus()
+		let json = JSON.stringify( uinode.getJson(), null, 4 )
 		navigator.clipboard.writeText( json )
-		element.node.parent.remove( element.node )
+		uinode.parent.remove( uinode )
 		element.removeNode()
 		treeDidChange()
 	}
@@ -56,8 +60,7 @@ const deleteNode = {
 	action: function( treenode )
 	{
 		let uinode = treenode.node
-		let name = uinode.isSubtree ? uinode.label : uinode.constructor.context_menu_name
-		if ( !confirm( `Delete this "${name}" node and all its children?` ))
+		if ( !confirm( `Delete "${uinode.label}" and all its children?` ))
 			return
 		let uiparent = uinode.parent
 		uiparent.remove( uinode )
