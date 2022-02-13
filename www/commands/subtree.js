@@ -1,4 +1,4 @@
-import UINode from './UINode.js'
+import{ UINode, walkChild } from './UINode.js'
 
 export default class Subtree extends UINode {
 	static icon = ''
@@ -47,6 +47,6 @@ export default class Subtree extends UINode {
 		super.walkChildren( callback )
 		
 		for( let node of this.children )
-			node.walkChildren( callback )
+			walkChild( node, callback )
 	}
 }

@@ -35,13 +35,32 @@ new_link.addEventListener(
 )
 
 let delete_links = document.getElementsByClassName( 'route_delete' )
-for ( let i = 0; i < delete_links.length; i++ ) {
-	let el = delete_links[i]
+for( let el of delete_links )
+{
 	let id = el.getAttribute( 'route' )
 	el.addEventListener(
 		'click',
-		function() {
-			alert(id)
+		async function( event )
+		{
+			let id_confirm = prompt( 'Type "${id}" to delete route ${id}' )
+			if( id_confirm == id )
+			{
+				fetch(
+					`/routes/${id}`,
+					{
+						method: 'DELETE',
+						headers: { Accept: 'application/json' },
+					}
+				).then( data => {
+					if( !data.ok )
+					{
+						data.json().then( jdata => {
+							alert( jdata.error )
+						}).catch( error => alert( error ))
+					}
+					window.location.href = '/routes'
+				}).catch( error => alert( error ))
+			}
 		},
 		false,
 	)

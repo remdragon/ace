@@ -1,4 +1,4 @@
-import UINode from './UINode.js'
+import{ UINode, walkChild } from './UINode.js'
 import Subtree from './subtree.js'
 import CaseSubtree from './caseSubtree.js'
 
@@ -91,9 +91,9 @@ export default class Select extends UINode {
 	{
 		super.walkChildren( callback )
 		
-		for( let subtree of branches )
-			subtree.walkChildren( callback )
-		this.invalid.walkChildren( callback )
+		for( let node of branches )
+			walkChild( node, callback )
+		walkChild( this.invalid, callback )
 	}
 	
 	remove(node/*: UINode*/)

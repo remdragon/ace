@@ -1,4 +1,4 @@
-import UINode from './UINode.js'
+import{ UINode, walkChild } from './UINode.js'
 
 export default class RootRoute extends UINode {
 	static icon = '/media/streamline/kindle.png'
@@ -57,8 +57,6 @@ Right-click on it to start adding instructions to your route.
 	{
 		super.walkChildren( callback )
 		for( let node of this.children )
-		{
-			node.walkChildren( callback )
-		}
+			walkChild( node, callback )
 	}
 }

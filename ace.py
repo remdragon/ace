@@ -32,6 +32,7 @@ from pathlib import Path
 #import platform
 import random
 import re
+import shutil
 import socket
 import sqlite3
 import sys
@@ -1569,9 +1570,7 @@ deleteButton.addEventListener( 'click', function( event ) {
 			url,
 			{
 				method: 'DELETE',
-				headers: {
-					'Accept': 'application/json',
-				}
+				headers: { Accept: 'application/json' }
 			},
 		).then( data => {
 			if ( !data.ok )
@@ -1652,7 +1651,7 @@ def http_flags() -> Response:
 
 REPO_ROUTES = REPO_FACTORY( 'routes', '.route' )
 
-@app.route( '/routes', methods = [ 'GET', 'POST' ] )
+@app.route( '/routes', methods = [ 'GET', 'POST', 'DELETE' ] )
 @login_required # type: ignore
 def http_routes() -> Response:
 	log = logger.getChild( 'http_routes' )
@@ -1669,12 +1668,6 @@ def http_routes() -> Response:
 				f'invalid route number: {e!r}',
 				400,
 			)
-		#if not valid_route( route ):
-		#	return _http_failure(
-		#		return_type,
-		#		f'invalid route name {route!r}',
-		#		400,
-		#	)
 		
 		try:
 			REPO_ROUTES.create( route, { 'name': '', 'nodes': [] } )
@@ -1687,7 +1680,6 @@ def http_routes() -> Response:
 		if return_type == 'application/json':
 			return rest_success( [ { 'route': route } ] )
 		url = url_for( 'http_route', route = id )
-		log.warning( 'url=%r', url )
 		return redirect( url )
 		# END route creation
 	
@@ -1711,7 +1703,7 @@ def http_routes() -> Response:
 		'<tr>',
 			'<td><a href="{url}">{route}</a></td>',
 			'<td><a href="{url}">{name}</a></td>',
-			'<td><a class="route_delete" route="{route}">Delete {name}</a></td>',
+			'<td><button class="route_delete" route="{route}">Delete {route} {name}</button></td>',
 		'</tr>',
 	] )
 	body = '\n'.join( [
@@ -1878,7 +1870,7 @@ def http_voicemails() -> Response:
 		'<tr>',
 			'<td><a href="{url}">{box}</a></td>',
 			'<td><a href="{url}">{name}</a></td>',
-			'<td><a class="box_delete" box="{box}">Delete {box}</a></td>',
+			'<td><button class="box_delete" box="{box}">Delete {box} {name}</button></td>',
 		'</tr>',
 	] )
 	body = '\n'.join( [
@@ -1972,7 +1964,29 @@ def http_voicemail( box: int ) -> Response:
 				f.write( json_dumps( settings ))
 			return rest_success( [ settings ] )
 		elif request.method == 'DELETE':
-			path.unlink()
+			msgs_path = voicemail_box_msgs_path( box )
+			log.warning( f'{msgs_path=}' )
+			if msgs_path.exists():
+				try:
+					shutil.rmtree( str( msgs_path ))
+				except OSError as e1:
+					log.exception( 'Could not delete box %r messages:', box )
+					return rest_error( f'Could not delete box {box!r} messages: {e1!r}' )
+			
+			greetings_path = voicemail_greeting_path( box, 1 ).parent
+			log.warning( f'{greetings_path=}' )
+			if greetings_path.exists():
+				try:
+					shutil.rmtree( str( greetings_path ))
+				except OSError as e2:
+					log.exception( 'Could not delete box %r greetings:', box )
+					return rest_error( f'Could not delete box {box!r} greetings: {e2!r}' )
+			
+			try:
+				path.unlink()
+			except OSError as e3:
+				log.exception( 'Could not delete box %r settings file:', box )
+				return rest_error( f'Could not delete box {box!r} settings file: {e3!r}' )
 			return rest_success( [] )
 		else:
 			return rest_failure( f'invalid request method={request.method!r}' )

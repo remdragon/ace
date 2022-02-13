@@ -1,6 +1,6 @@
-import UINode from './UINode.js'
+import{ UINode, walkChild } from './UINode.js'
 import NamedSubtree from './named_subtree.js'
-import { holidays } from '/holidays.js'
+import{ holidays } from '/holidays.js'
 
 export default class TOD extends UINode {
 	static icon = '/media/streamline/time-clock-circle.png'
@@ -99,7 +99,7 @@ One range per line.`,
 	{
 		super.walkChildren( callback )
 		
-		this.hit.walkChildren( callback )
-		this.miss.walkChildren( callback )
+		walkChild( this.hit, callback )
+		walkChild( this.miss, callback )
 	}
 }

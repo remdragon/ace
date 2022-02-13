@@ -1,4 +1,4 @@
-import UINode from './UINode.js'
+import{ UINode, walkChild } from './UINode.js'
 import NamedSubtree from './named_subtree.js'
 
 const GREETING_LABEL = 'Greeting'
@@ -267,20 +267,12 @@ Note that this branch does not execute after the last attempt. Instead the failu
 	walkChildren( callback )
 	{
 		super.walkChildren( callback )
-		if( this.greetingBranch )
-			this.greetingBranch.walkChildren( callback )
-		if( this.invalidBranch )
-			this.invalidBranch.walkChildren( callback )
-		if( this.timeoutBranch )
-			this.timeoutBranch.walkChildren( callback )
+		walkChild( this.greetingBranch, callback )
+		walkChild( this.invalidBranch, callback )
+		walkChild( this.timeoutBranch, callback )
 		for( let digits in this.branches )
-		{
-			let node = this.branches[digits]
-			if ( node )
-				node.walkChildren( callback )
-		}
-		if( this.failureBranch )
-			this.failureBranch.walkChildren( callback )
+			walkChild( this.branches[digits], callback )
+		walkChild( this.failureBranch, callback )
 	}
 	
 	remove( node/*: UINode*/ )

@@ -35,13 +35,32 @@ new_link.addEventListener(
 )
 
 let delete_links = document.getElementsByClassName( 'box_delete' )
-for ( let i = 0; i < delete_links.length; i++ ) {
-	let el = delete_links[i]
+for( let el of delete_links )
+{
 	let id = el.getAttribute( 'box' )
 	el.addEventListener(
 		'click',
-		function() {
-			alert(id)
+		function( event )
+		{
+			let id_confirm = prompt( `Type "${id}" to delete voicemail box ${id} and all it's greetings and messages?` )
+			if( id_confirm == id )
+			{
+				fetch(
+					`/voicemails/${id}`,
+					{
+						method: 'DELETE',
+						headers: { Accept: 'application/json' },
+					}
+				).then( data => {
+					if( !data.ok )
+					{
+						data.json().then( jdata => {
+							alert( jdata.error )
+						}).catch( error => alert( error ))
+					}
+					window.location.href = '/voicemails'
+				}).catch( error => alert( error ))
+			}
 		},
 		false,
 	)

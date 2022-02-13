@@ -1,4 +1,4 @@
-import UINode from './UINode.js'
+import{ UINode, walkChild } from './UINode.js'
 import NamedSubtree from './named_subtree.js'
 
 export default class IfNum extends UINode {
@@ -83,7 +83,7 @@ If the condition is true, execute the "true" branch, otherwise the "false" branc
 	{
 		super.walkChildren( callback )
 		
-		this.trueBranch.walkChildren( callback )
-		this.falseBranch.walkChildren( callback )
+		walkChild( this.trueBranch, callback )
+		walkChild( this.falseBranch, callback )
 	}
 }

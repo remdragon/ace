@@ -542,3 +542,10 @@ export default class UINode {
 		})
 	}
 }
+export{ UINode }
+
+export function walkChild( node, callback )
+{
+	if( node )
+		node.walkChildren( callback )
+}

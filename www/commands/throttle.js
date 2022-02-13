@@ -1,4 +1,4 @@
-import UINode from './UINode.js'
+import{ UINode, walkChild } from './UINode.js'
 import NamedSubtree from './named_subtree.js'
 
 export default class Throttle extends UINode {
@@ -59,9 +59,7 @@ export default class Throttle extends UINode {
 	{
 		super.walkChildren( callback )
 		
-		if( this.allowedBranch )
-			this.allowedBranch.walkChildren( callback )
-		if( this.throttledBranch )
-			this.throttledBranch.walkChildren( callback )
+		walkChild( this.allowedBranch, callback )
+		walkChild( this.throttledBranch, callback )
 	}
 }

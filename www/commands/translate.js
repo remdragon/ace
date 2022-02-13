@@ -1,4 +1,4 @@
-import UINode from './UINode.js'
+import{ UINode, walkChild } from './UINode.js'
 import Subtree from './subtree.js'
 
 export default class Translate extends UINode {
@@ -59,7 +59,7 @@ Otherwise the "miss" node will be executed<br/>
 	walkChildren( callback )
 	{
 		super.walkChildren( callback )
-		this.hitBranch.walkChildren( callback )
-		this.missBranch.walkChildren( callback )
+		walkChild( this.hitBranch, callback )
+		walkChild( this.missBranch, callback )
 	}
 }

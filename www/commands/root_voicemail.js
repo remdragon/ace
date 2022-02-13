@@ -1,4 +1,4 @@
-import UINode from './UINode.js'
+import{ UINode, walkChild } from './UINode.js'
 import NamedSubtree from './named_subtree.js'
 
 const DELIVERY_LABEL = 'delivery'
@@ -167,12 +167,8 @@ Configuration settings here or right-click on the delivery node to configuration
 	{
 		super.walkChildren( callback )
 		for( let digit in this.branches )
-		{
-			let node = this.branches[digit]
-			if( node )
-				node.walkChildren( callback )
-		}
-		this.delivery.walkChildren( callback )
+			walkChild( this.branches[digit], callback )
+		walkChild( this.delivery, callback )
 	}
 	
 	remove( node/*: UINode*/ )
