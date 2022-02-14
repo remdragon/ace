@@ -5,6 +5,8 @@ export default class NamedSubtree extends UINode {
 	static context_menu_name = 'N/A'
 	static command = ''
 	
+	canPaste = true
+	
 	get label()
 	{
 		let label = this._label
@@ -31,17 +33,15 @@ export default class NamedSubtree extends UINode {
 	createElement({
 		isSubtree,
 		data = {},
-		NODE_TYPES,
 		context,
 	}) {
 		super.createElement({
 			isSubtree,
 			data,
-			NODE_TYPES,
 			context,
 		})
 		
-		this.createChildren( data.nodes ?? [], NODE_TYPES )
+		this.createChildren( data.nodes ?? [] )
 	}
 
 	getJson()/*: object*/ {
@@ -61,3 +61,5 @@ export default class NamedSubtree extends UINode {
 			walkChild( node, callback )
 	}
 }
+
+UINode.NamedSubtree = NamedSubtree // chicken vs egg: gives UINode.makeFixedBranch access to this class

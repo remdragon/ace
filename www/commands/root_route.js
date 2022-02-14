@@ -5,6 +5,7 @@ export default class RootRoute extends UINode {
 	static context_menu_name = 'N/A'
 	static command = ''
 	
+	canPaste = true
 	help = `This is the root node for your route<br/>
 <br/>
 Right-click on it to start adding instructions to your route.
@@ -22,7 +23,7 @@ Right-click on it to start adding instructions to your route.
 		{ key: 'name', type: 'string', label: 'Name: ' }
 	]
 	
-	constructor( tree, route, data, NODE_TYPES )
+	constructor( tree, route, data )
 	{
 		super( null )
 		this.tree = tree
@@ -30,7 +31,7 @@ Right-click on it to start adding instructions to your route.
 		this.route = route
 		this.name = data.name
 		
-		this.element = tree.createNode(
+		this.treenode = tree.createNode(
 			this.label,
 			true,
 			RootRoute.icon,
@@ -39,9 +40,9 @@ Right-click on it to start adding instructions to your route.
 			'contextRouteRoot'
 		)
 		
-		this.element.node = this
+		this.treenode.uinode = this
 		
-		this.createChildren( data.nodes ?? [], NODE_TYPES )
+		this.createChildren( data.nodes ?? [] )
 	}
 	
 	getJson()

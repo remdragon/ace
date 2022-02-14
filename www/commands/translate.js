@@ -1,5 +1,5 @@
 import{ UINode, walkChild } from './UINode.js'
-import Subtree from './subtree.js'
+import NamedSubtree from './named_subtree.js'
 
 export default class Translate extends UINode {
 	static icon = '/media/streamline/database-2.png'
@@ -19,29 +19,27 @@ Otherwise the "miss" node will be executed<br/>
 	table//: string
 	variable//: string
 	
-	hitBranch//: Subtree
-	missBranch//: Subtree
+	hitBranch//: NamedSubtree
+	missBranch//: NamedSubtree
 	
 	fields = [{ key: 'table' }, { key: 'variable' }]
 	
 	createElement({
 		isSubtree = false,
 		data = {},
-		NODE_TYPES
 	}) {
-		super.createElement({ isSubtree, data, NODE_TYPES })
-
-		this.hitBranch = new Subtree(this, 'hit')
+		super.createElement({ isSubtree, data })
+		
+		// TODO FIXME: makeFixedBranch
+		this.hitBranch = new NamedSubtree(this, 'hit')
 		this.hitBranch.createElement({
 			isSubtree: true,
 			data: data.hit ?? {},
-			NODE_TYPES
 		})
-		this.missBranch = new Subtree(this, 'miss')
+		this.missBranch = new NamedSubtree(this, 'miss')
 		this.missBranch.createElement({
 			isSubtree: true,
 			data: data.miss ?? {},
-			NODE_TYPES
 		})
 	}
 	

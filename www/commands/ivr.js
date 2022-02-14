@@ -41,11 +41,11 @@ Note that this branch does not execute after the last attempt. Instead the failu
 	variable_name = '' //: string
 	digit_timeout = 3.0 //: float
 	
-	greetingBranch//: greeting branch...
-	branches = {}
-	invalidBranch//: invalid branch...
-	timeoutBranch//: timeout branch...
-	failureBranch//: failure branch
+	greetingBranch = null//: greeting branch...
+	branches = null
+	invalidBranch = null//: invalid branch...
+	timeoutBranch = null//: timeout branch...
+	failureBranch = null//: failure branch
 	
 	fields = [{
 		key: 'name',
@@ -104,83 +104,67 @@ Note that this branch does not execute after the last attempt. Instead the failu
 	createElement({
 		isSubtree = false,
 		data = {},
-		NODE_TYPES,
 	}){
 		this.uuid = data.uuid ?? crypto.randomUUID()
 		
 		super.createElement({
 			isSubtree,
 			data,
-			NODE_TYPES,
 			context: 'contextIVR',
 		})
 		
-		this.greetingBranch = new NamedSubtree( this, GREETING_LABEL,
+		this.makeFixedBranch( 'greetingBranch', GREETING_LABEL,
+			'context_GreetingInvalidTimeout',
 			this.greeting_subtree_help,
+			data,
 		)
-		this.greetingBranch.createElement({
-			isSubtree: true,
-			data: data.greetingBranch ?? {},
-			NODE_TYPES,
-			context: 'contextIVR_PAGD_GreetingInvalidTimeout',
-		})
 		
+		this.branches = {}
 		if ( data.branches )
 		{
-			this.branches = {}
 			let all_digits = []
 			for( const digits in data.branches )
 				all_digits.push( digits )
 			all_digits.sort()
 			for( const digits of all_digits )
-			{
-				//console.log( `ivr.createElement: digits=${digits}` )
-				this.branches[digits] = new NamedSubtree(
-					this, digits, this.digits_subtree_help,
-				)
-				this.branches[digits].createElement({
-					isSubtree: true,
-					data: data.branches[digits] ?? {},
-					NODE_TYPES,
-					context: 'contextIVRBranch',
-				})
-			}
+				this.makeDigitsBranch( digits, data )
 		}
 		
-		this.invalidBranch = new NamedSubtree( this, INVALID_LABEL,
+		this.makeFixedBranch( 'invalidBranch', INVALID_LABEL,
+			'context_GreetingInvalidTimeout',
 			this.invalid_subtree_help,
+			data,
 		)
-		this.invalidBranch.createElement({
-			isSubtree: true,
-			data: data.invalidBranch ?? {},
-			NODE_TYPES,
-			context: 'contextIVR_PAGD_GreetingInvalidTimeout',
-		})
-		
-		this.timeoutBranch = new NamedSubtree( this, TIMEOUT_LABEL,
+		this.makeFixedBranch( 'timeoutBranch', TIMEOUT_LABEL,
+			'context_GreetingInvalidTimeout',
 			this.timeout_subtree_help,
+			data,
 		)
-		this.timeoutBranch.createElement({
-			isSubtree: true,
-			data: data.timeoutBranch ?? {},
-			NODE_TYPES,
-			context: 'contextIVR_PAGD_GreetingInvalidTimeout',
-		})
-		
-		this.failureBranch = new NamedSubtree( this, FAILURE_LABEL,
+		this.makeFixedBranch( 'failureBranch', FAILURE_LABEL,
+			'contextIVR_PAGD_SuccessFailure',
 			this.failure_subtree_help,
+			data,
 		)
-		this.failureBranch.createElement({
-			isSubtree: true,
-			data: data.failureBranch ?? {},
-			NODE_TYPES,
-			context: 'contextIVR_PAGD_SuccessFailure',
-		})
 	}
 	
+	makeDigitsBranch( digits, data )
+	{
+		//console.log( `ivr.createElement: digits=${digits}` )
+		let uinode = new NamedSubtree(
+			this, digits, this.digits_subtree_help,
+		)
+		this.branches[digits] = uinode
+		uinode.createElement({
+			isSubtree: true,
+			data: ( data.branches ?? {} )[digits] ?? {},
+			context: 'contextIVRBranch',
+		})
+		return uinode
+	}
+
 	reorder()
 	{
-		let treenode = this.element
+		let treenode = this.treenode
 		const domNodes = treenode.childNodes.sort(( a, b ) =>
 		{
 			// greeting is always at the top:
@@ -283,7 +267,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		{
 			const branch = this.branches[key]
 			
-			if( branch.element.id === node.element.id )
+			if( branch.treenode.id === node.treenode.id )
 			{
 				delete this.branches[key]
 				return true

@@ -1,5 +1,4 @@
 import{ UINode, walkChild } from './UINode.js'
-import NamedSubtree from './named_subtree.js'
 
 const GREETING_LABEL = 'Greeting'
 const INVALID_LABEL = 'Invalid'
@@ -46,7 +45,6 @@ Note that this branch does not execute after the last attempt. Instead the failu
 	digit_timeout = 3.0 //: float
 	
 	greetingBranch//: greeting branch...
-	branches = {}
 	invalidBranch//: invalid branch...
 	timeoutBranch//: timeout branch...
 	failureBranch//: failure branch
@@ -114,73 +112,45 @@ Note that this branch does not execute after the last attempt. Instead the failu
 	createElement({
 		isSubtree = false,
 		data = {},
-		NODE_TYPES,
 	}){
 		this.uuid = data.uuid || crypto.randomUUID()
 		
 		super.createElement({
 			isSubtree,
 			data,
-			NODE_TYPES,
 			context: 'contextPAGD',
 		})
 		
-		this.greetingBranch = new NamedSubtree( this, GREETING_LABEL,
+		this.makeFixedBranch( 'greetingBranch', GREETING_LABEL,
+			'context_GreetingInvalidTimeout',
 			this.greeting_subtree_help,
+			data,
 		)
-		this.greetingBranch.createElement({
-			isSubtree: true,
-			data: data.greetingBranch ?? {},
-			NODE_TYPES,
-			context: 'contextIVR_PAGD_GreetingInvalidTimeout',
-		})
-		
-		this.invalidBranch = new NamedSubtree( this, INVALID_LABEL,
+		this.makeFixedBranch( 'invalidBranch', INVALID_LABEL,
+			'context_GreetingInvalidTimeout',
 			this.invalid_subtree_help,
+			data,
 		)
-		this.invalidBranch.createElement({
-			isSubtree: true,
-			data: data.invalidBranch ?? {},
-			NODE_TYPES,
-			context: 'contextIVR_PAGD_GreetingInvalidTimeout',
-		})
-		
-		this.timeoutBranch = new NamedSubtree( this, TIMEOUT_LABEL,
+		this.makeFixedBranch( 'timeoutBranch', TIMEOUT_LABEL,
+			'context_GreetingInvalidTimeout',
 			this.timeout_subtree_help,
+			data,
 		)
-		this.timeoutBranch.createElement({
-			isSubtree: true,
-			data: data.timeoutBranch ?? {},
-			NODE_TYPES,
-			context: 'contextIVR_PAGD_GreetingInvalidTimeout',
-		})
-		
-		this.successBranch = new NamedSubtree( this, SUCCESS_LABEL,
+		this.makeFixedBranch( 'successBranch', SUCCESS_LABEL,
+			'contextIVR_PAGD_SuccessFailure',
 			this.success_subtree_help,
+			data,
 		)
-		this.successBranch.createElement(
-		{
-			isSubtree: true,
-			data: data.successBranch ?? {},
-			NODE_TYPES,
-			context: 'contextIVR_PAGD_SuccessFailure',
-		})
-		
-		this.failureBranch = new NamedSubtree( this, FAILURE_LABEL,
+		this.makeFixedBranch( 'failureBranch', FAILURE_LABEL,
+			'contextIVR_PAGD_SuccessFailure',
 			this.failure_subtree_help,
+			data,
 		)
-		this.failureBranch.createElement(
-		{
-			isSubtree: true,
-			data: data.failureBranch ?? {},
-			NODE_TYPES,
-			context: 'contextIVR_PAGD_SuccessFailure',
-		})
 	}
 	
 	reorder()
 	{
-		const domNodes = this.element.childNodes.sort(( a, b ) =>
+		const domNodes = this.treenode.childNodes.sort(( a, b ) =>
 		{
 			// greeting is always at the top:
 			if( a.text === GREETING_LABEL )
@@ -219,7 +189,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 			return aValue - bValue
 		})
 		
-		const ulNode = this.element.childNodes[0].elementLi.parentNode
+		const ulNode = this.treenode.childNodes[0].elementLi.parentNode
 		
 		domNodes.forEach(el =>
 		{
@@ -268,24 +238,5 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		walkChild( this.timeoutBranch, callback )
 		walkChild( this.successBranch, callback )
 		walkChild( this.failureBranch, callback )
-	}
-	
-	remove( node/*: UINode*/ )
-	{
-		super.remove( node )
-		
-		// TODO FIXME: this code is wrong, need to figure out how to fix it
-		Object.keys( this.branches ).some( key =>
-		{
-			const branch = this.branches[key]
-			
-			if( branch.element.id === node.element.id )
-			{
-				delete this.branches[key]
-				return true
-			}
-			
-			return false
-		})
 	}
 }

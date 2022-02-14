@@ -5,6 +5,8 @@ export default class Subtree extends UINode {
 	static context_menu_name = 'N/A'
 	static command = ''
 	
+	canPaste = true
+	
 	//help: string = ...
 	label = ''
 	
@@ -19,18 +21,16 @@ export default class Subtree extends UINode {
 	createElement({
 		isSubtree,
 		data = [],
-		NODE_TYPES,
 		context,
 	})
 	{
 		super.createElement({
 			isSubtree,
 			data,
-			NODE_TYPES,
 			context,
 		})
 		
-		this.createChildren( data.nodes ?? [], NODE_TYPES )
+		this.createChildren( data.nodes ?? [] )
 	}
 	
 	getJson()//: object

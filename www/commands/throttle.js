@@ -1,10 +1,15 @@
 import{ UINode, walkChild } from './UINode.js'
-import NamedSubtree from './named_subtree.js'
+
+const ALLOWED_LABEL = 'Allowed'
+const THROTTLED_LABEL = 'Throttled'
 
 export default class Throttle extends UINode {
 	static icon = '/media/streamline/volcano@22.png'
 	static context_menu_name = 'Throttle'
 	static command = 'throttle'
+	
+	allowed_subtree_help = 'Actions to execute if the call does not exceed throttling limits'
+	throttled_subtree_help = 'Actions to execute if the call exceeds throttling limits'
 	
 	help =
 		`Limit the number of calls based on the throttling parameters in DID setup`
@@ -13,9 +18,9 @@ export default class Throttle extends UINode {
 		return `Throttle ${this.name || ''}`
 	}
 	
-	name//: string
-	allowedBranch//: NamedSubtree
-	throttledBranch//: NamedSubtree
+	name = '' // string
+	allowedBranch = null // NamedSubtree
+	throttledBranch = null // NamedSubtree
 	
 	fields = [{
 		key: 'name',
@@ -24,24 +29,21 @@ export default class Throttle extends UINode {
 	
 	createElement({
 		isSubtree = false,
-		data = {},
-		NODE_TYPES
+		data = {}
 	}) {
-		super.createElement({ isSubtree, data, NODE_TYPES })
+		super.createElement({ isSubtree, data })
 		
-		this.allowedBranch = new NamedSubtree( this, 'allowed' )
-		this.allowedBranch.createElement({
-			isSubtree: true,
-			data: data.allowedBranch ?? {},
-			NODE_TYPES
-		})
-		
-		this.throttledBranch = new NamedSubtree( this, 'throttled' )
-		this.throttledBranch.createElement({
-			isSubtree: true,
-			data: data.throttledBranch ?? {},
-			NODE_TYPES
-		})
+		let context = null
+		this.makeFixedBranch( 'allowedBranch', ALLOWED_LABEL,
+			context,
+			this.allowed_subtree_help,
+			data,
+		)
+		this.makeFixedBranch( 'throttledBranch', THROTTLED_LABEL,
+			context,
+			this.throttled_subtree_help,
+			data,
+		)
 	}
 	
 	getJson()

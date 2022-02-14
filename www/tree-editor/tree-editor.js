@@ -4,7 +4,6 @@ import ajax from '../ajax.js'
 import UINode from '../commands/UINode.js'
 import RootRoute from '../commands/root_route.js'
 import RootVoiceMail from '../commands/root_voicemail.js'
-import NODE_TYPES from '../commands/index.js'
 
 import { debounce } from './util.js'
 
@@ -63,7 +62,7 @@ function initTree( data, Root )
 	tree = createTree( 'div_tree', 'white', context_menu )
 	
 	//console.log( 'id=', id, 'route_data=', route_data )
-	root = new Root( tree, id, route_data, NODE_TYPES )
+	root = new Root( tree, id, route_data )
 	
 	divHelp = document.getElementById( 'div_help' )
 	
@@ -80,12 +79,12 @@ function initTree( data, Root )
 
 async function onNodeSelected( aimaraNode )
 {
-	let node = aimaraNode.node
+	let uinode = aimaraNode.uinode
 	
-	if( node )
+	if( uinode )
 	{
-		divHelp.innerHTML = ( node.help || '(This node is missing its help text)' ) + '<br/><br/>'
-		await node.onSelected( divHelp )
+		divHelp.innerHTML = ( uinode.help || '(This node is missing its help text)' ) + '<br/><br/>'
+		await uinode.onSelected( divHelp )
 	}
 }
 

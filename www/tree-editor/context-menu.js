@@ -1,81 +1,53 @@
-import CaseSubtree from '/commands/caseSubtree.js'
-import NamedSubtree from '/commands/named_subtree.js'
+import PatternSubtree from '/commands/patternSubtree.js'
 
 import * as commands from '/commands/index.js'
-import NODE_TYPES from '/commands/index.js'
+import UINode from '/commands/UINode.js'
 import { treeDidChange } from './tree-editor.js'
 import{ moveNodeUp, moveNodeDown } from './util.js'
 
 const copyNode = {
-	text: 'Copy',
+	text: 'Copy (Ctrl+C)',
 	icon: '/media/streamline/edit-copy.png',
-	action: function( element )
+	action: function( treenode )
 	{
-		let json = JSON.stringify( element.node.getJson(), null, 4 )
-		navigator.clipboard.writeText( json )
+		treenode.uinode.onkeydown_ctrl_c()
 	}
 }
 
 const cutNode = {
-	text: 'Cut',
+	text: 'Cut (Ctrl+X)',
 	icon: '/media/streamline/edit-scissors.png',
-	action: function(element)
+	action: function( treenode )
 	{
-		let uinode = element.node
-		if ( !confirm( `Cut "${uinode.label}" and all its children?` ))
-			return
-		element.elementLi.focus()
-		let json = JSON.stringify( uinode.getJson(), null, 4 )
-		navigator.clipboard.writeText( json )
-		uinode.parent.remove( uinode )
-		element.removeNode()
-		treeDidChange()
+		treenode.uinode.onkeydown_ctrl_x()
 	}
 }
 
 const pasteNode = {
-	text: 'Paste',
+	text: 'Paste (Ctrl+V)',
 	icon: '/media/streamline/edit-glue.png',
-	action: async function( element )
+	action: async function( treenode )
 	{
-		let json = await navigator.clipboard.readText()
-		let nodeData = JSON.parse( json )
-		let nodes = [ nodeData ]
-		let is_multi = {
-			'': true,
-			'root_route': true,
-			'root_voicemail': true,
-		}
-		if( is_multi[nodeData.type] && nodeData.hasOwnProperty( 'nodes' ))
-			nodes = nodeData.nodes
-		let changed = element.node.createChildren( nodes ?? [], NODE_TYPES )
-		if( changed )
-			treeDidChange()
+		treenode.uinode.onkeydown_ctrl_v()
 	}
 }
 
 const deleteNode = {
-	text: 'Delete Node',
+	text: 'Delete (Delete)',
 	icon: '/aimara/images/delete.png',
 	action: function( treenode )
 	{
-		let uinode = treenode.node
-		if ( !confirm( `Delete "${uinode.label}" and all its children?` ))
-			return
-		let uiparent = uinode.parent
-		uiparent.remove( uinode )
-		treenode.removeNode()
-		treeDidChange()
-		uiparent.tree.selectNode( uiparent.element )
+		let uinode = treenode.uinode
+		uinode.onkeydown_Delete()
 	}
 }
 
 /*const getJson = {
 	text: 'Get Json',
 	icon: '/aimara/images/tree.png',
-	action: function(element)
+	action: function( treenode )
 	{
-		let json = JSON.stringify( element.node.getJson(), null, 4 )
+		let json = JSON.stringify( treenode.uinode.getJson(), null, 4 )
 		console.log( json )
 	}
 }*/
@@ -83,41 +55,41 @@ const deleteNode = {
 const nodeActions = {
 	text: 'Node Actions',
 	icon: '/aimara/images/star.png',
-	action: function(element) {},
+	action: function( treenode ) {},
 	submenu: {
 		elements: [
 			//getJson,
 			{
-				text: 'Move node up',
+				text: 'Move node up (Shift+Up)',
 				icon: '/aimara/images/tree.png',
 				action: function( treenode )
 				{
-					let uiparent = treenode.node.parent
+					let uiparent = treenode.uinode.parent
 					let treeparent = treenode.parent
 					
 					if ( treeparent && uiparent )
 					{
 						moveNodeUp( treeparent, treenode )
-						uiparent.moveNodeUp( treenode.node )
+						uiparent.moveNodeUp( treenode.uinode )
 						treeDidChange()
 					}
 					treenode.elementLi.focus()
 				}
 			},
 			{
-				text: 'Move node down',
+				text: 'Move node down (Shift+Down)',
 				icon: '/aimara/images/tree.png',
 				action: function( treenode )
 				{
-					let uiparent = treenode.node.parent
+					let uiparent = treenode.uinode.parent
 					let treeparent = treenode.parent
 					
 					if ( treeparent && uiparent )
 					{
 						//console.log( 'treeparent=', treeparent, ', treenode=', treenode )
 						moveNodeDown( treeparent, treenode )
-						//console.log( 'uiparent=', uiparent, ', treenode.node=', treenode.node )
-						uiparent.moveNodeDown( treenode.node )
+						//console.log( 'uiparent=', uiparent, ', treenode.uinode=', treenode.uinode )
+						uiparent.moveNodeDown( treenode.uinode )
 						treeDidChange()
 					}
 					treenode.elementLi.focus()
@@ -130,7 +102,7 @@ const nodeActions = {
 const newTelephonyNode = {
 	text: 'New Telephony',
 	icon: '/aimara/images/add1.png',
-	action: function( element ) {},
+	action: function( treenode ) {},
 	submenu: {
 		elements: [
 			...[
@@ -146,7 +118,7 @@ const newTelephonyNode = {
 				//commands.SetMOH,
 				commands.Transfer,
 				commands.Voicemail,
-			].map(NodeType => ({
+			].map( NodeType => ({
 				text: NodeType.context_menu_name,
 				icon: NodeType.icon,
 				action: createNodeFromNodeType( NodeType ),
@@ -158,7 +130,7 @@ const newTelephonyNode = {
 const newRouteLogicNode = {
 	text: 'New Logic',
 	icon: '/aimara/images/add1.png',
-	action: function( element ) {},
+	action: function( treenode ) {},
 	submenu: {
 		elements: [
 			...[
@@ -187,7 +159,7 @@ const newRouteLogicNode = {
 const newNotifyLogicNode = {
 	text: 'New Logic',
 	icon: '/aimara/images/add1.png',
-	action: function( element ) {},
+	action: function( treenode ) {},
 	submenu: {
 		elements: [
 			...[
@@ -216,7 +188,7 @@ const newNotifyLogicNode = {
 const newNotifyActionNode = {
 	text: 'New Notification',
 	icon: '/aimara/images/add1.png',
-	action: function( element ) {},
+	action: function( treenode ) {},
 	submenu: {
 		elements: [
 			...[
@@ -234,7 +206,7 @@ const newNotifyActionNode = {
 const createPlayNode = {
 	text: 'New Play Node',
 	icon: '/aimara/images/add1.png',
-	action: function( element ) {},
+	action: function( treenode ) {},
 	submenu: {
 		elements: [
 			...[
@@ -248,13 +220,11 @@ const createPlayNode = {
 				commands.PlayTTS
 				//commands.PlayEmerg,
 				//commands.PlayEstHold,
-			].map(
-				NodeType => ({
-					text: NodeType.context_menu_name,
-					icon: NodeType.icon,
-					action: createNodeFromNodeType( NodeType )
-				})
-			)
+			].map( NodeType => ({
+				text: NodeType.context_menu_name,
+				icon: NodeType.icon,
+				action: createNodeFromNodeType( NodeType )
+			}))
 		]
 	}
 }
@@ -262,92 +232,65 @@ const createPlayNode = {
 const ivrNodeActions = {
 	text: 'IVR node',
 	icon: '/aimara/images/add1.png',
-	action: function(element) {},
+	action: function( treenode ) {},
 	submenu: {
-		elements: [
-			/*...[1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map( branchName => (
+		elements: [{
+			text: 'Add Digits',
+			icon: commands.IVR.icon,
+			action: function( treenode )
 			{
-				text: `Create branch ${branchName}`,
-				icon: commands.IVR.icon,
-				action: element =>
+				let uinode = treenode.uinode
+				let digits = ''
+				let min_digits = parseInt( uinode.min_digits )
+				if( isNaN( min_digits ))
 				{
-					if (!element.node.branches[branchName])
-					{
-						element.node.branches[branchName] = new Subtree(
-							element.node,
-							branchName
-						)
-						element.node.branches[branchName].createElement(
-							{ NODE_TYPES, context: "contextOptionalSubtree" }
-						)
-						element.node.reorder()
-						treeDidChange()
-					}
+					alert( 'invalid min digits for this IVR, please fix it first' )
+					return
 				}
-			}))*/
-			{
-				text: 'Add Digits',
-				icon: commands.IVR.icon,
-				action: element =>
+				let max_digits = parseInt( uinode.max_digits )
+				if( isNaN( max_digits ))
 				{
-					let digits = ''
-					let min_digits = parseInt( element.node.min_digits )
-					if( isNaN( min_digits ))
-					{
-						alert( 'invalid min digits for this IVR, please fix it first' )
+					alert( 'invalid max digits for this IVR, please fix it first' )
+					return
+				}
+				let regex = null
+				if( uinode.digit_regex )
+				{
+					regex = new RegExp( uinode.digit_regex )
+				}
+				while( true )
+				{
+					digits = prompt( 'Enter digit(s):', digits )
+					if( digits == null ) // the user hit cancel
 						return
-					}
-					let max_digits = parseInt( element.node.max_digits )
-					if( isNaN( max_digits ))
+					if( digits.length < min_digits )
 					{
-						alert( 'invalid max digits for this IVR, please fix it first' )
-						return
+						alert( `min_digits for this IVR is ${min_digits}` )
+						continue
 					}
-					let regex = null
-					if( element.node.digit_regex )
+					if( digits.length > max_digits )
 					{
-						regex = new RegExp( element.node.digit_regex )
+						alert( `max_digits for this IVR is ${max_digits}` )
+						continue
 					}
-					while( true )
+					if( regex != null && !regex.test( digits ))
 					{
-						digits = prompt( 'Enter digit(s):', digits )
-						if( digits == null ) // the user hit cancel
-							return
-						if( digits.length < min_digits )
-						{
-							alert( `min_digits for this IVR is ${min_digits}` )
-							continue
-						}
-						if( digits.length > max_digits )
-						{
-							alert( `max_digits for this IVR is ${max_digits}` )
-							continue
-						}
-						if( regex != null && !regex.test( digits ))
-						{
-							alert( `digits do not match digit_regex "${digit_regex}"` )
-							continue
-						}
-						if( element.node.branches[digits] )
-						{
-							alert( 'a branch for those digits has already been created' )
-							continue
-						}
-						element.node.branches[digits] = new NamedSubtree(
-							element.node,
-							digits,
-							commands.IVR.digits_subtree_help,
-						)
-						element.node.branches[digits].createElement(
-							{ NODE_TYPES, context: UINode.contextOptionalSubtree }
-						)
-						element.node.reorder()
-						treeDidChange()
-						return
+						alert( `digits do not match digit_regex "${digit_regex}"` )
+						continue
 					}
+					if( uinode.branches[digits] )
+					{
+						alert( 'a branch for those digits has already been created' )
+						continue
+					}
+					let new_uinode = uinode.makeDigitsBranch( digits, {} )
+					uinode.reorder()
+					uinode.tree.selectNode( new_uinode.treenode )
+					treeDidChange()
+					return
 				}
 			}
-		]
+		}]
 	}
 }
 
@@ -355,7 +298,7 @@ const ivrNodeActions = {
 const ivrRootVoicemailActions = {
 	text: 'Add Digit',
 	icon: '/aimara/images/add1.png',
-	action: function( element ) {},
+	action: function( treenode ) {},
 	submenu: {
 		elements: [
 			...[1, 2, 3, 4, 5, 6, 7, 8, 9, 0].map( digit => (
@@ -364,22 +307,15 @@ const ivrRootVoicemailActions = {
 				icon: commands.IVR.icon, // this is confusing but I don't have a better icon right now
 				action: function( treenode )
 				{
-					let uinode = treenode.node
+					let uinode = treenode.uinode
 					if( uinode.branches[digit] )
 					{
 						alert( 'a branch for that digit has already been created' )
 						return
 					}
-					uinode.branches[digit] = new NamedSubtree(
-						uinode,
-						digit
-					)
-					uinode.branches[digit].createElement({
-						NODE_TYPES,
-						context: 'contextRootVoicemailDigitSubtree'
-					})
+					let new_uinode = uinode.makeDigitBranch( digit, {} )
 					uinode.reorder()
-					uinode.tree.selectNode( uinode.branches[digit].element )
+					uinode.tree.selectNode( new_uinode.treenode )
 					treeDidChange()
 				}
 			}))
@@ -388,34 +324,23 @@ const ivrRootVoicemailActions = {
 }
 
 
-const ivrVoicemailDeliveryActions = {
-}
-
 const selectNodeActions = {
 	text: 'Select node',
 	icon: '/aimara/images/add1.png',
-	action: function( element ) {},
+	action: function( treenode ) {},
 	submenu: {
 		elements: [
 			{
-				text: 'New case branch',
-				icon: CaseSubtree.icon,
-				action: element => {
+				text: 'New pattern branch',
+				icon: PatternSubtree.icon,
+				action: function( treenode )
+				{
+					let uinode = treenode.uinode
 					let i = 0
-					while( element.node.branches[`branch${i}`] )
-						i++
-					let branchName = `branch${i}`
-					if (!element.node.branches[branchName]) {
-						element.node.branches[branchName] = new CaseSubtree(
-							element.node,
-							branchName
-						)
-						element.node.branches[branchName].createElement(
-							{ NODE_TYPES, context: UINode.contextOptionalSubtree }
-						)
-						element.node.reorder()
-						treeDidChange()
-					}
+					let pattern = prompt( 'Pattern:' )
+					let new_uinode = uinode.makePatternBranch( pattern, {} )
+					uinode.reorder()
+					treeDidChange()
 				}
 			}
 		]
@@ -444,7 +369,7 @@ const context_menu = {
 	contextPAGD: {
 		elements: [ copyNode, deleteNode, nodeActions ]
 	},
-	contextIVR_PAGD_GreetingInvalidTimeout: {
+	context_GreetingInvalidTimeout: {
 		elements: [ copyNode, pasteNode, createPlayNode ]
 	},
 	contextIVRBranch: {
@@ -467,10 +392,12 @@ const context_menu = {
 	},
 }
 
-function createNodeFromNodeType(NodeType) {
-	return element => {
-		let node = new NodeType( element.node )
-		node.createElement({ NODE_TYPES })
+function createNodeFromNodeType( NodeType )
+{
+	return function( treenode )
+	{
+		let node = new NodeType( treenode.uinode )
+		node.createElement()
 		treeDidChange()
 	}
 }

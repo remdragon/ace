@@ -57,22 +57,20 @@ If the condition is true, execute the "true" branch, otherwise the "false" branc
 	createElement({
 		isSubtree = false,
 		data = {},
-		NODE_TYPES
 	}) {
-		super.createElement({ isSubtree, data, NODE_TYPES })
+		super.createElement({ isSubtree, data })
 		
+		// TODO FIXME: makeFixedBranch
 		this.trueBranch = new NamedSubtree(this, 'true')
 		this.trueBranch.createElement({
 			isSubtree: true,
 			data: data.trueBranch ?? {},
-			NODE_TYPES
 		})
 		
 		this.falseBranch = new NamedSubtree(this, 'false')
 		this.falseBranch.createElement({
 			isSubtree: true,
 			data: data.falseBranch ?? {},
-			NODE_TYPES
 		})
 	}
 	

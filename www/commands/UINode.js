@@ -34,13 +34,16 @@ export default class UINode {
 	static onChange = () => {}//: function
 	static contextLeaf = 'contextLeaf'
 	static contextSubtree = 'contextSubtree'
-	static contextOptionalSubtree = 'contextOptionalSubtree'
+	static NODE_TYPES = null // chicken vs egg - gives access to this here - set from index.js
+	static NamedSubtree = null // chicken vs egg - gives access to a specific subclass - set from named_subtree.js
+	canDelete = true // most nodes can be deleted
+	canPaste = false // most nodes can't be pasted to
 	
 	help//: string
 	fields = []//: Field[];
 	
 	parent//: UINode | null
-	element//: any
+	treenode//: any
 	children = []//: UINode[]
 	
 	constructor( parent /*: UINode*/ )
@@ -60,12 +63,10 @@ export default class UINode {
 	createElement({
 		isSubtree = false,
 		data,
-		NODE_TYPES,
 		context
 	}/*: {
 		isSubtree: boolean
 		data: any
-		NODE_TYPES: object
 		context: string
 	}*/)
 	{
@@ -79,7 +80,7 @@ export default class UINode {
 			}
 		}
 		
-		this.element = this.parent.element.createChildNode(
+		this.treenode = this.parent.treenode.createChildNode(
 			this.label,
 			true,
 			( this.constructor /*as any*/ ).icon,
@@ -88,19 +89,19 @@ export default class UINode {
 		)
 		this.makeClickable()
 		
-		this.element.node = this
+		this.treenode.uinode = this
 	}
 	
-	createChildren( children, NODE_TYPES )
+	createChildren( children )
 	{
 		let changed = false
 		for( let nodeData of children )
 		{
-			let NodeType = NODE_TYPES[nodeData.type]
+			let NodeType = UINode.NODE_TYPES[nodeData.type]
 			if( NodeType )
 			{
 				let node = new NodeType( this )
-				node.createElement({ data: nodeData, NODE_TYPES })
+				node.createElement({ data: nodeData })
 				changed = true
 			}
 			else
@@ -111,69 +112,61 @@ export default class UINode {
 		return changed
 	}
 	
+	makeFixedBranch( key, label, context, help, data )
+	{
+		this[key] = new UINode.NamedSubtree( this, label, help )
+		this[key].canDelete = false
+		this[key].createElement({
+			isSubtree: true,
+			data: data[key] ?? {},
+			context: context,
+		})
+	}
+	
+	contextOptionalSubtree()
+	{
+		if( this.parent )
+			return this.parent.contextOptionalSubtree()
+		else
+			return 'contextOptionalSubtree'
+	}
+	
 	makeClickable()
 	{
 		this.walkChildren( function( uinode ){
-			let elementLi = uinode.element.elementLi
+			let elementLi = uinode.treenode.elementLi
 			if( elementLi )
 			{
 				//console.log( 'elementLi=', elementLi )
 				elementLi.setAttribute( 'tabindex', 0 )
 				
-				// don't draw border around element when keyboard focus:
+				// don't draw border around treenode when keyboard focus:
 				elementLi.style.outline = 'none'
 				
 				elementLi.onkeydown = function( event )
 				{
-					/*
-					TODO FIXME:
-					
+					if( event.key == 'Control' ) // ignore keydowns of the meta keys themselves (to reduce logging noise)
+						return true // allow event to propagate
 					let fname = 'onkeydown_'
 					if( event.altKey )
-						fname += 'Alt'
+						fname += 'alt_'
 					if( event.ctrlKey )
-						fname += 'Ctrl'
+						fname += 'ctrl_'
 					if( event.shiftKey )
-						fname += 'Shift'
+						fname += 'shift_'
 					fname += event.key
+					//console.log( 'fname=', fname )
 					let f = uinode[fname]
-					if( f && !f( event ))
+					if( true && !f )
+						console.log( `no handler for ${fname} in`, uinode )
+					if( f )
 					{
+						f.apply( uinode )
 						// don't allow event to propagate:
+						console.log( 'cancelling propagation' )
 						event.preventDefault()
 						event.stopImmediatePropagation()
 						return false
-					}
-					return true // allow propagation
-					*/
-					if( event.altKey || !event.shiftKey || event.ctrlKey )
-						return true // allow event to propagate
-					if( event.key == 'ArrowDown' || event.key == 'ArrowUp' )
-					{
-						// the following check *must* be here for event propagation reasons
-						if( !uinode.isSubtree && uinode.parent )
-						{
-							let uiparent = uinode.parent
-							let treenode = uinode.element
-							let treeparent = treenode.parent
-							if( event.key == 'ArrowDown' )
-							{
-								moveNodeDown( treeparent, treenode )
-								uiparent.moveNodeDown( uinode )
-							}
-							else
-							{
-								moveNodeUp( treeparent, treenode )
-								uiparent.moveNodeUp( uinode )
-							}
-							UINode.onChange()
-							treenode.elementLi.focus()
-							
-							// don't allow event to propagate:
-							event.preventDefault()
-							event.stopImmediatePropagation()
-							return false
-						}
 					}
 					return true // allow event to propagate
 				}
@@ -181,25 +174,73 @@ export default class UINode {
 		})
 	}
 	
-	/*
-	TODO FIXME:
-	onkeydown_ShiftArrowDown( event )
+	async onkeydown_ctrl_c()
+	{
+		let json = JSON.stringify( this.getJson(), null, 4 )
+		navigator.clipboard.writeText( json )
+	}
+	
+	async onkeydown_ctrl_x()
+	{
+		if ( !confirm( `Cut "${this.label}" and all its children?` ))
+			return
+		this.treenode.elementLi.focus()
+		let json = JSON.stringify( this.getJson(), null, 4 )
+		navigator.clipboard.writeText( json )
+		this.parent.remove( this )
+		this.treenode.removeNode()
+		UINode.onChange()
+	}
+	
+	async onkeydown_ctrl_v()
+	{
+		if( !this.canPaste )
+			return alert( "Sorry, you can't paste here - try it from a parent node?" )
+			
+		let json = await navigator.clipboard.readText()
+		let nodeData = JSON.parse( json )
+		let nodes = [ nodeData ]
+		let is_multi = {
+			'': true,
+			'root_route': true,
+			'root_voicemail': true,
+		}
+		if( is_multi[nodeData.type] && nodeData.hasOwnProperty( 'nodes' ))
+			nodes = nodeData.nodes
+		let changed = this.createChildren( nodes ?? [] )
+		if( changed )
+			UINode.onChange()
+	}
+	
+	async onkeydown_Delete()
+	{
+		if ( !confirm( `Delete "${this.label}" and all its children?` ))
+			return
+		
+		let uiparent = this.parent
+		uiparent.remove( this )
+		this.treenode.removeNode()
+		UINode.onChange()
+		uiparent.tree.selectNode( uiparent.treenode )
+	}
+	
+	async onkeydown_shift_ArrowDown()
 	{
 		this.moveNode( 'down' )
 	}
 	
-	onkeydown_ShiftArrowUp( event )
+	async onkeydown_shift_ArrowUp()
 	{
 		this.moveNode( 'up' )
 	}
 	
-	function moveNode( direction )
+	moveNode( direction )
 	{
 		// the following check *must* be here for event propagation reasons
 		if( !this.isSubtree && this.parent )
 		{
 			let uiparent = this.parent
-			let treenode = this.element
+			let treenode = this.treenode
 			let treeparent = treenode.parent
 			if( direction == 'down' )
 			{
@@ -213,12 +254,8 @@ export default class UINode {
 			}
 			UINode.onChange()
 			treenode.elementLi.focus()
-			
-			return false // don't allow event to propagate:
 		}
-		return true // allow propagation
 	}
-	*/
 	
 	async onSelected( divHelp )/*: void*/
 	{
@@ -242,7 +279,7 @@ export default class UINode {
 				
 				UINode.onChange()
 				
-				self.element.elementSpan.children[1].innerText = self.label
+				self.treenode.elementSpan.children[1].innerText = self.label
 			}
 			
 			let onChangeEvent = function( evt )
@@ -537,18 +574,18 @@ export default class UINode {
 		this.children[i] = aux
 	}
 	
-	remove( node/*: UINode*/ )
+	remove( uinode/*: UINode*/ )
 	{
 		this.children = this.children.filter( n =>
 		{
-			return n.element.id !== node.element.id
+			return n.treenode.id !== uinode.treenode.id
 		})
 	}
 }
 export{ UINode }
 
-export function walkChild( node, callback )
+export function walkChild( uinode, callback )
 {
-	if( node )
-		node.walkChildren( callback )
+	if( uinode )
+		uinode.walkChildren( callback )
 }

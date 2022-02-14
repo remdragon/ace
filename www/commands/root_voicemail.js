@@ -3,8 +3,6 @@ import NamedSubtree from './named_subtree.js'
 
 const DELIVERY_LABEL = 'delivery'
 
-UINode.contextOptionalSubtree = 'contextOptionalSubtreeVoicemailDelivery'
-
 export default class RootVoiceMail extends UINode {
 	static icon = '/media/streamline/kindle.png'
 	static context_menu_name = 'N/A'
@@ -15,6 +13,7 @@ export default class RootVoiceMail extends UINode {
 Configuration settings here or right-click on the delivery node to configuration automation on delivery.
 `
 	digit_subtree_help = 'If this digit is pressed during the greeting, do this instead'
+	delivery_subtree_help = 'Use this to send emails and SMS msgs when a message has been created.'
 	
 	get label()
 	{
@@ -29,7 +28,8 @@ Configuration settings here or right-click on the delivery node to configuration
 	max_greeting_seconds//: integer
 	max_message_seconds//: integer
 	
-	branches = {} // NamedSubtree
+	branches = null
+	delivery = null
 	
 	fields = [
 		{
@@ -63,7 +63,7 @@ Configuration settings here or right-click on the delivery node to configuration
 		}
 	]
 	
-	constructor( tree, box, data, NODE_TYPES )
+	constructor( tree, box, data )
 	{
 		super( null )
 		this.tree = tree
@@ -74,7 +74,7 @@ Configuration settings here or right-click on the delivery node to configuration
 			this[field.key] = data[field.key]
 		}
 		
-		this.element = tree.createNode(
+		this.treenode = tree.createNode(
 			this.label,
 			true,
 			RootVoiceMail.icon,
@@ -83,43 +83,49 @@ Configuration settings here or right-click on the delivery node to configuration
 			'contextVoiceMailRoot',
 		)
 		
-		this.element.node = this
+		this.treenode.uinode = this
 		
+		this.branches = {}
 		if( data.branches )
 		{
-			this.branches = {}
 			let all_digits = []
 			for( const digit in data.branches )
 				all_digits.push( digit )
 			all_digits.sort()
 			for( const digit of all_digits )
-			{
-				this.branches[digit] = new NamedSubtree(
-					this, digit, this.digit_subtree_help,
-				)
-				this.branches[digit].createElement({
-					isSubtree: true,
-					data: data.branches[digit] ?? {},
-					NODE_TYPES,
-					context: 'contextRootVoicemailDigitSubtree',
-				})
-			}
+				this.makeDigitBranch( digit, data )
 		}
 		
-		this.delivery = new NamedSubtree( this, DELIVERY_LABEL,
-			'Add commands to this node to automate delivery of messages taken in this box'
+		this.makeFixedBranch(
+			'delivery',
+			DELIVERY_LABEL,
+			'contextRootVoicemailDelivery',
+			this.delivery_subtree_help,
+			data.delivery ?? {},
 		)
-		this.delivery.createElement({
+		this.delivery.contextOptionalSubtree = function()
+		{
+			return 'contextOptionalSubtreeVoicemailDelivery'
+		}
+	}
+	
+	makeDigitBranch( digit, data )
+	{
+		let uinode = new NamedSubtree(
+			this, digit, this.digit_subtree_help,
+		)
+		this.branches[digit] = uinode
+		uinode.createElement({
 			isSubtree: true,
-			data: data.delivery ?? {},
-			NODE_TYPES,
-			context: 'contextRootVoicemailDelivery',
+			data: ( data.branches ?? {} )[digit] ?? {},
+			context: 'contextRootVoicemailDigitSubtree',
 		})
+		return uinode
 	}
 	
 	reorder()
 	{
-		const domNodes = this.element.childNodes.sort(( a, b ) =>
+		const domNodes = this.treenode.childNodes.sort(( a, b ) =>
 		{
 			// delivery is always at the bottom
 			if( a.text === DELIVERY_LABEL )
@@ -134,7 +140,7 @@ Configuration settings here or right-click on the delivery node to configuration
 			return aValue - bValue
 		})
 		
-		const ulNode = this.element.childNodes[0].elementLi.parentNode
+		const ulNode = this.treenode.childNodes[0].elementLi.parentNode
 		
 		domNodes.forEach( el =>
 		{
@@ -173,18 +179,15 @@ Configuration settings here or right-click on the delivery node to configuration
 		walkChild( this.delivery, callback )
 	}
 	
-	remove( node/*: UINode*/ )
+	remove( uinode/*: UINode*/ )
 	{
-		super.remove( node )
+		super.remove( uinode )
 		
 		for( let digit in this.branches )
 		{
 			let branch = this.branches[digit]
-			if( branch.element.id === node.element.id )
-			{
-				console.log( `deleting ${digit}` )
+			if( branch.treenode.id === uinode.treenode.id )
 				delete this.branches[digit]
-			}
 		}
 	}
 }

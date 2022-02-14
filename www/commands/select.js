@@ -1,6 +1,5 @@
 import{ UINode, walkChild } from './UINode.js'
-import Subtree from './subtree.js'
-import CaseSubtree from './caseSubtree.js'
+import PatternSubtree from './patternSubtree.js'
 
 export default class Select extends UINode {
 	static icon = '/media/streamline/hierarchy.png'
@@ -10,6 +9,9 @@ export default class Select extends UINode {
 	help = `Select nodes allow you pull in information and test for multiple values<br/>
 <br/>
 *THIS COMMAND IS NOT IMPLEMENTED YET, PLEASE DO NOT TRY TO USE IT`
+	invalid_subtree_help = `If the expression does not match any of the provided patterns,<br/>
+these commands will be executed`
+	
 	label = 'Select'
 	
 	expression//: string
@@ -19,50 +21,43 @@ export default class Select extends UINode {
 		tooltip: 'You can typically want to reference a channel variable like ${zip_code}',
 	}]
 	
-	branches = {
-	}
-	invalid = []
+	branches = null
+	invalid = null
 	
 	createElement({
 		isSubtree = false,
 		data = {},
-		NODE_TYPES
 	}) {
 		super.createElement({
 			isSubtree,
 			data,
-			NODE_TYPES,
 			context: 'contextSelect'
 		})
 		
-		if( data.branches )
-		{
-			//Object.keys( data.branches )
-			//.filter( br => br !== 'invalid' )
-			//.forEach((k, i) =>
-			for( let k in data.branches ?? {} )
-			{
-				//if ( !data.branches[k] )
-				//	return
-				
-				this.branches[k] = new CaseSubtree( this, k )
-				this.branches[k].createElement(
-				{
-					isSubtree: true,
-					data: data.branches[k],
-					NODE_TYPES,
-					context: UINode.contextOptionalSubtree,
-				})
-			}
-		}
+		this.branches = []
+		//Object.keys( data.branches )
+		//.filter( br => br !== 'invalid' )
+		//.forEach((k, i) =>
+		for( let i in data.branches ?? [] )
+			this.makePatternBranch( pattern, data.branches[i] ?? {} )
 		
-		this.invalid = new Subtree( this, 'Invalid' )
-		this.invalid.createElement(
-		{
+		this.makeFixedBranch( 'invalid', INVALID_LABEL,
+			'context_GreetingInvalidTimeout',
+			this.invalid_subtree_help,
+			data,
+		)
+	}
+	
+	makePatternBranch( pattern, data )
+	{
+		let uinode = new PatternSubtree( this, pattern )
+		this.branches.push( uinode )
+		uinode.createElement({
 			isSubtree: true,
-			data: data.invalid ?? {},
-			NODE_TYPES
+			data: data ?? {},
+			context: uinode.contextOptionalSubtree(),
 		})
+		return uinode
 	}
 	
 	getJson()
@@ -70,12 +65,12 @@ export default class Select extends UINode {
 		const sup = super.getJson()
 		
 		const branchesData = {}
-		for( let k in this.branches )
+		for( let i in this.branches )
 		{
-			if ( this.branches[k] )
-				branchesData[k] = this.branches[k].getJson()
+			if ( this.branches[i] )
+				branchesData[i] = this.branches[i].getJson()
 			else
-				branchesData[k] = []
+				branchesData[i] = []
 		}
 		
 		let invalidData = this.invalid.getJson()
@@ -96,43 +91,37 @@ export default class Select extends UINode {
 		walkChild( this.invalid, callback )
 	}
 	
-	remove(node/*: UINode*/)
+	remove( uinode/*: UINode*/ )
 	{
-		super.remove( node )
+		super.remove( uinode )
 		
-		Object.keys( this.branches ).some( key =>
-			{
-			const branch = this.branches[key]
+		for( let i in this.branches )
+		{
+			let branch = this.patters[i]
 			
-			if (branch.element.id === node.element.id)
+			if( branch.treenode.id === uinode.treenode.id )
 			{
-				delete this.branches[key]
-				return true
+				delete this.branches[i]
+				return
 			}
-			
-			return false
-		})
+		}
 	}
 	
 	reorder() {
-		const domNodes = this.element.childNodes.sort(( a, b ) => {
-			const aText = a.text
-			const bText = b.text
-			if( aText === 'Invalid' && bText !== 'Invalid' )
+		const domNodes = this.treenode.childNodes.sort(( a, b ) => {
+			// invalid stays at the bottom
+			if( a.text === 'Invalid' && b.text !== 'Invalid' )
 				return 1
-			if( aText !== 'Invalid' && bText === 'Invalid' )
+			if( a.text !== 'Invalid' && b.text === 'Invalid' )
 				return -1
-			if( aText < bText )
-				return -1
-			if( aText > bText )
-				return 1
+			// everything else stays put
 			return 0
 		})
 		
-		const ulNode = this.element.childNodes[0].elementLi.parentNode
+		const ulNode = this.treenode.childNodes[0].elementLi.parentNode
 		
 		domNodes.forEach(el => {
-			ulNode.appendChild(el.elementLi)
+			ulNode.appendChild( el.elementLi )
 		})
 		
 		// TODO: fix dotted lines after reordering

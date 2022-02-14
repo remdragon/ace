@@ -1,3 +1,4 @@
+import UINode from './UINode.js'
 import AcdCallAdd from './acd_call_add.js'; export{ AcdCallAdd }
 import AcdCallGate from './acd_call_gate.js'; export{ AcdCallGate }
 import AcdCallUnGate from './acd_call_ungate.js'; export{ AcdCallUnGate }
@@ -75,5 +76,6 @@ const NODE_TYPES = {
 	voicemail: Voicemail,
 	wait: Wait,
 }
+UINode.NODE_TYPES = NODE_TYPES
 
 export default NODE_TYPES
