@@ -18,7 +18,7 @@ import Playback from './playback.js'; export{ Playback }
 import PlayDTMF from './play_dtmf.js'; export{ PlayDTMF }
 import PlayEmerg from './playemerg.js'; export{ PlayEmerg }
 import PlayEstHold from './playesthold.js'; export{ PlayEstHold }
-import PlayPreAnnounce from './playpreannounce.js'; export{ PlayPreAnnounce }
+import PreAnnounce from './preannounce.js'; export{ PreAnnounce }
 import PlayTTS from './playtts.js'; export{ PlayTTS }
 import PreAnswer from './preanswer.js'; export{ PreAnswer }
 import Repeat from './repeat.js'; export{ Repeat }
@@ -37,45 +37,50 @@ import Translate from './translate.js'; export{ Translate }
 import Voicemail from './voicemail.js'; export{ Voicemail }
 import Wait from './wait.js'; export{ Wait }
 
-const NODE_TYPES = {
-	acd_call_add: AcdCallAdd,
-	acd_call_gate: AcdCallGate,
-	acd_call_ungate: AcdCallUnGate,
-	answer: Answer,
-	bridge: Bridge,
-	email: Email,
-	goto: GoTo,
-	hangup: Hangup,
-	ifnum: IfNum,
-	ifstr: IfStr,
-	ivr: IVR,
-	label: Label,
-	log: Log,
-	moh: MOH,
-	pagd: PAGD,
-	playback: Playback,
-	play_dtmf: PlayDTMF,
-	playemerg: PlayEmerg,
-	playesthold: PlayEstHold,
-	playpreannounce: PlayPreAnnounce,
-	playtts: PlayTTS,
-	preanswer: PreAnswer,
-	repeat: Repeat,
-	ring: Ring,
-	route: Route,
-	select: Select,
-	set: SetNode,
-	setmoh: SetMOH,
-	silence: Silence,
-	sms: SMS,
-	throttle: Throttle,
-	tod: TOD,
-	tone: Tone,
-	transfer: Transfer,
-	translate: Translate,
-	voicemail: Voicemail,
-	wait: Wait,
-}
+let all_commands =
+	[ AcdCallAdd
+	, AcdCallGate
+	, AcdCallUnGate
+	, Answer
+	, Bridge
+	, Email
+	, GoTo
+	, Hangup
+	, IfNum
+	, IfStr
+	, IVR
+	, Label
+	, Log
+	, MOH
+	, PAGD
+	, Playback
+	, PlayDTMF
+	, PlayEmerg
+	, PlayEstHold
+	, PreAnnounce
+	, PlayTTS
+	, PreAnswer
+	, Repeat
+	, Ring
+	, Route
+	, Select
+	, SetNode
+	, SetMOH
+	, Silence
+	, SMS
+	, Throttle
+	, TOD
+	, Tone
+	, Transfer
+	, Translate
+	, Voicemail
+	, Wait
+	]
+
+const NODE_TYPES = {}
+all_commands.map( NodeType => {
+	NODE_TYPES[NodeType.command] = NodeType
+})
 UINode.NODE_TYPES = NODE_TYPES
 
 export default NODE_TYPES

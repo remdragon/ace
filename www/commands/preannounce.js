@@ -1,6 +1,6 @@
 import UINode from './UINode.js'
 
-export default class PlayPreAnnounce extends UINode {
+export default class PreAnnounce extends UINode {
 	static icon = '/media/streamline/music-note-2@20.png'
 	static context_menu_name = 'Play Pre-Announce'
 	static command = 'preannounce'

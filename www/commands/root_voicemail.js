@@ -1,7 +1,7 @@
 import{ UINode, walkChild } from './UINode.js'
 import NamedSubtree from './named_subtree.js'
 
-const DELIVERY_LABEL = 'delivery'
+const DELIVERY_LABEL = 'Delivery'
 
 export default class RootVoiceMail extends UINode {
 	static icon = '/media/streamline/kindle.png'
@@ -58,10 +58,12 @@ Configuration settings here or right-click on the delivery node to configuration
 		key: 'max_greeting_seconds',
 		type: 'int',
 		label: 'Max greeting seconds: ',
+		size: 4,
 	},{
 		key: 'max_message_seconds',
 		type: 'int',
 		label: 'Max message seconds: ',
+		size: 4,
 	},{
 		key: 'default_email_subject',
 		size: 40,

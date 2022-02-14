@@ -5,6 +5,7 @@ export default class Repeat extends UINode {
 	static context_menu_name = 'Repeat'
 	static command = 'repeat'
 	
+	canPaste = true
 	help =
 		'This node runs all its commands in a loop until the repeat count is met or forever if count is 0'
 	

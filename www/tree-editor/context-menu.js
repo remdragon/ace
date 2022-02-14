@@ -60,7 +60,7 @@ const nodeActions = {
 		elements: [
 			//getJson,
 			{
-				text: 'Move node up (Shift+Up)',
+				text: 'Move up (Shift+Up)',
 				icon: '/aimara/images/tree.png',
 				action: function( treenode )
 				{
@@ -77,7 +77,7 @@ const nodeActions = {
 				}
 			},
 			{
-				text: 'Move node down (Shift+Down)',
+				text: 'Move down (Shift+Down)',
 				icon: '/aimara/images/tree.png',
 				action: function( treenode )
 				{
@@ -213,7 +213,7 @@ const createPlayNode = {
 				commands.PlayDTMF,
 				commands.MOH,
 				commands.Playback,
-				commands.PlayPreAnnounce,
+				commands.PreAnnounce,
 				commands.Ring,
 				commands.Silence,
 				commands.Tone,
