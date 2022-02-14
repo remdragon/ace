@@ -27,7 +27,8 @@ function newChild( parent, tag, atts )
 	return child
 }
 
-export default class UINode {
+export default class UINode
+{
 	static icon//: string
 	static context_menu_name//: string
 	static command//: string
@@ -44,14 +45,17 @@ export default class UINode {
 	
 	parent//: UINode | null
 	treenode//: any
-	children = []//: UINode[]
+	children = null//: UINode[]
 	
 	constructor( parent /*: UINode*/ )
 	{
+		this.children = []
 		if ( !parent )
 			return
 		this.tree = parent.tree
 		this.parent = parent
+		if( parent.children == null )
+			alert( `programming error, ${parent.constructor.name} did not call it's super constructor` )
 		parent.children.push( this )
 	}
 	

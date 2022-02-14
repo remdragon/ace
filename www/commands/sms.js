@@ -11,7 +11,7 @@ This command only works for voicemail notify, it does nothing if invoked in a ro
 	
 	get label()
 	{
-		return 'SMS ' + ( this.name || '' )
+		return 'SMS ' + ( this.name || this.smsto || '' )
 	}
 	
 	name = '' // string
@@ -27,5 +27,6 @@ This command only works for voicemail notify, it does nothing if invoked in a ro
 	},{
 		key: 'message',
 		label: 'Message:',
+		size: 60,
 	}]
 }

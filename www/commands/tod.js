@@ -2,15 +2,18 @@ import{ UINode, walkChild } from './UINode.js'
 import NamedSubtree from './named_subtree.js'
 import{ holidays } from '/holidays.js'
 
+const HIT_LABEL = 'Hit'
+const MISS_LABEL = 'Miss'
+
 export default class TOD extends UINode {
 	static icon = '/media/streamline/time-clock-circle.png'
 	static context_menu_name = 'TimeOfDay'
 	static command = 'tod'
-	hit_help = 'These instructions will execute if the time-of-day conditions match<br/>'
-	miss_help = "These instructions will execute if the time-of-day conditions don't match<br/>"
 	
 	help =
 		'Tests time-of-day conditions and executes different commands depending on the result'
+	hit_help = 'These instructions will execute if the time-of-day conditions match'
+	miss_help = "These instructions will execute if the time-of-day conditions don't match"
 	
 	get label()
 	{
@@ -68,18 +71,17 @@ One range per line.`,
 	}) {
 		super.createElement({ isSubtree, data })
 		
-		// TODO FIXME: makeFixedBranch
-		this.hit = new NamedSubtree( this, 'hit', this.hit_help )
-		this.hit.createElement({
-			isSubtree: true,
-			data: data.hit ?? {},
-		})
-		
-		this.miss = new NamedSubtree( this, 'miss', this.miss_help )
-		this.miss.createElement({
-			isSubtree: true,
-			data: data.miss ?? {},
-		})
+		let context = null // use the default
+		this.makeFixedBranch( 'hit', HIT_LABEL,
+			context,
+			this.hit_help,
+			data ?? {},
+		)
+		this.makeFixedBranch( 'miss', MISS_LABEL,
+			context,
+			this.miss_help,
+			data ?? {},
+		)
 	}
 	
 	getJson()

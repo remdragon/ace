@@ -1,15 +1,22 @@
 import{ UINode, walkChild } from './UINode.js'
 import NamedSubtree from './named_subtree.js'
 
+const TRUE_LABEL = 'True'
+const FALSE_LABEL = 'False'
+
 export default class IfNum extends UINode {
 	static icon = '/media/streamline/road-sign-look-both-ways-1.png'
 	static context_menu_name = 'IfNum'
 	static command = 'ifnum'
 	
-	help =
-		`Converts both operands to numeric values and tests the condition.<br/>
+	help = `Convert both values to a number and test for a condition i.e. 1000 > 11.<br/>
 <br/>
-If the condition is true, execute the "true" branch, otherwise the "false" branch`
+If an alphabetical comparison where "1000" < "11", use the IfStr node instead<br/>
+<br/>
+If the condition is true, execute the "${TRUE_LABEL}" branch, otherwise the "${FALSE_LABEL}" branch`
+	true_subtree_help = 'commands to execute if the condition result is "true"'
+	false_subtree_help = 'commands to execute if the condition result is "true"'
+	
 	get label()
 	{
 		return 'IfNum ' + ( this.lhs || '?' ) + ' ' + ( this.op || '?' ) + ' ' + ( this.rhs || '?' )
@@ -18,8 +25,8 @@ If the condition is true, execute the "true" branch, otherwise the "false" branc
 	lhs//: string
 	op//: string
 	rhs//: string
-	trueBranch//: NamedSubtree
-	falseBranch//: NamedSubtree
+	trueBranch = null//: NamedSubtree
+	falseBranch = null//: NamedSubtree
 	
 	fields = [{
 		key: 'lhs',
@@ -52,18 +59,17 @@ If the condition is true, execute the "true" branch, otherwise the "false" branc
 	}) {
 		super.createElement({ isSubtree, data })
 		
-		// TODO FIXME: makeFixedBranch
-		this.trueBranch = new NamedSubtree( this, 'true' )
-		this.trueBranch.createElement({
-			isSubtree: true,
-			data: data.trueBranch ?? {},
-		})
-		
-		this.falseBranch = new NamedSubtree( this, 'false' )
-		this.falseBranch.createElement({
-			isSubtree: true,
-			data: data.falseBranch ?? {},
-		})
+		let context = null // use the default
+		this.makeFixedBranch( 'trueBranch', TRUE_LABEL,
+			context,
+			this.true_subtree_help,
+			data ?? {},
+		)
+		this.makeFixedBranch( 'falseBranch', FALSE_LABEL,
+			context,
+			this.false_subtree_help,
+			data ?? {},
+		)
 	}
 	
 	getJson()

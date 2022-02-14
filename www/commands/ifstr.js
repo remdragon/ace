@@ -1,15 +1,19 @@
 import{ UINode, walkChild } from './UINode.js'
 import NamedSubtree from './named_subtree.js'
 
+const TRUE_LABEL = 'True'
+const FALSE_LABEL = 'False'
+
 export default class IfStr extends UINode {
 	static icon = '/media/streamline/road-sign-look-both-ways-1.png'
 	static context_menu_name = 'IfStr'
 	static command = 'ifstr'
 	
-	help =
-		`Test the condition.<br/>
+	help = `Test for a condition using an alphabetical comparison, i.e. "1000" < "11".<br/>
 <br/>
-If the condition is true, execute the "true" branch, otherwise the "false" branch`
+If a numerical comparison where 1000 > 11, use the IfNum node instead<br/>
+<br/>
+If the condition is true, execute the "${TRUE_LABEL}" branch, otherwise the "${FALSE_LABEL}" branch`
 	get label()
 	{
 		return 'IfStr ' + ( this.lhs || '?' ) + ' ' + ( this.op || '?' ) + ' ' + ( this.rhs || '?' )
@@ -60,18 +64,17 @@ If the condition is true, execute the "true" branch, otherwise the "false" branc
 	}) {
 		super.createElement({ isSubtree, data })
 		
-		// TODO FIXME: makeFixedBranch
-		this.trueBranch = new NamedSubtree(this, 'true')
-		this.trueBranch.createElement({
-			isSubtree: true,
-			data: data.trueBranch ?? {},
-		})
-		
-		this.falseBranch = new NamedSubtree(this, 'false')
-		this.falseBranch.createElement({
-			isSubtree: true,
-			data: data.falseBranch ?? {},
-		})
+		let context = null // use the default
+		this.makeFixedBranch( 'trueBranch', TRUE_LABEL,
+			context,
+			this.true_subtree_help,
+			data ?? {},
+		)
+		this.makeFixedBranch( 'falseBranch', FALSE_LABEL,
+			context,
+			this.false_subtree_help,
+			data ?? {},
+		)
 	}
 	
 	getJson()

@@ -27,41 +27,57 @@ Configuration settings here or right-click on the delivery node to configuration
 	allow_guest_urgent//: boolean
 	max_greeting_seconds//: integer
 	max_message_seconds//: integer
+	default_email_subject = ''
+	default_email_body = ''
+	default_sms_message = ''
 	
 	branches = null
 	delivery = null
 	
-	fields = [
-		{
-			key: 'name',
-			type: 'string',
-			label: 'Name: ',
-		},{
-			key: 'pin',
-			type: 'int',
-			input: 'password',
-			label: 'PIN:',
-			tooltip: 'numeric password to admin the box',
-		},{
-			key: 'greeting',
-			type: 'int',
-			label: 'Greeting: ',
-			tooltip: 'greeting # to play (1-9) - can be changed from the voicemail admin menu',
-		},{
-			key: 'allow_guest_urgent',
-			type: 'boolean',
-			input: 'checkbox',
-			label: 'Allow guests to make URGENT',
-		},{
-			key: 'max_greeting_seconds',
-			type: 'int',
-			label: 'Max greeting seconds: ',
-		},{
-			key: 'max_message_seconds',
-			type: 'int',
-			label: 'Max message seconds: ',
-		}
-	]
+	fields = [{
+		key: 'name',
+		type: 'string',
+		label: 'Name: ',
+	},{
+		key: 'pin',
+		type: 'int',
+		input: 'password',
+		label: 'PIN:',
+		tooltip: 'numeric password to admin the box',
+	},{
+		key: 'greeting',
+		type: 'int',
+		label: 'Greeting: ',
+		tooltip: 'greeting # to play (1-9) - can be changed from the voicemail admin menu',
+	},{
+		key: 'allow_guest_urgent',
+		type: 'boolean',
+		input: 'checkbox',
+		label: 'Allow guests to make URGENT',
+	},{
+		key: 'max_greeting_seconds',
+		type: 'int',
+		label: 'Max greeting seconds: ',
+	},{
+		key: 'max_message_seconds',
+		type: 'int',
+		label: 'Max message seconds: ',
+	},{
+		key: 'default_email_subject',
+		size: 40,
+		label: 'Default Email Subject:',
+	},{
+		key: 'default_email_body',
+		size: 40,
+		label: 'Default Email Body:',
+		input: 'textarea',
+		cols: 60,
+		rows: 10,
+	},{
+		key: 'default_sms_message',
+		size: 40,
+		label: 'Default SMS Message:',
+	}]
 	
 	constructor( tree, box, data )
 	{
@@ -70,9 +86,7 @@ Configuration settings here or right-click on the delivery node to configuration
 		
 		this.box = box
 		for( let field of this.fields )
-		{
 			this[field.key] = data[field.key]
-		}
 		
 		this.treenode = tree.createNode(
 			this.label,
@@ -96,12 +110,10 @@ Configuration settings here or right-click on the delivery node to configuration
 				this.makeDigitBranch( digit, data )
 		}
 		
-		this.makeFixedBranch(
-			'delivery',
-			DELIVERY_LABEL,
+		this.makeFixedBranch( 'delivery', DELIVERY_LABEL,
 			'contextRootVoicemailDelivery',
 			this.delivery_subtree_help,
-			data.delivery ?? {},
+			data ?? {},
 		)
 		this.delivery.contextOptionalSubtree = function()
 		{

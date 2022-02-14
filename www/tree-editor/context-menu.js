@@ -397,7 +397,7 @@ function createNodeFromNodeType( NodeType )
 	return function( treenode )
 	{
 		let node = new NodeType( treenode.uinode )
-		node.createElement()
+		node.createElement({})
 		treeDidChange()
 	}
 }

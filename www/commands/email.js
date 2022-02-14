@@ -11,7 +11,7 @@ This command only works for voicemail notify, it does nothing if invoked in a ro
 	
 	get label()
 	{
-		return 'Email ' + ( this.name || '' )
+		return 'Email ' + ( this.name || this.mailto || '' )
 	}
 	
 	name = '' // string
