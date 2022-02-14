@@ -51,7 +51,7 @@ export default class Select extends UINode {
 					isSubtree: true,
 					data: data.branches[k],
 					NODE_TYPES,
-					context: 'contextOptionalSubtree'
+					context: UINode.contextOptionalSubtree,
 				})
 			}
 		}

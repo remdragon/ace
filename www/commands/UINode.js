@@ -32,6 +32,9 @@ export default class UINode {
 	static context_menu_name//: string
 	static command//: string
 	static onChange = () => {}//: function
+	static contextLeaf = 'contextLeaf'
+	static contextSubtree = 'contextSubtree'
+	static contextOptionalSubtree = 'contextOptionalSubtree'
 	
 	help//: string
 	fields = []//: Field[];

@@ -3,6 +3,8 @@ import NamedSubtree from './named_subtree.js'
 
 const DELIVERY_LABEL = 'delivery'
 
+UINode.contextOptionalSubtree = 'contextOptionalSubtreeVoicemailDelivery'
+
 export default class RootVoiceMail extends UINode {
 	static icon = '/media/streamline/kindle.png'
 	static context_menu_name = 'N/A'

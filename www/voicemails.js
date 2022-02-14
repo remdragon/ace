@@ -34,7 +34,7 @@ new_link.addEventListener(
 	false,
 )
 
-let delete_links = document.getElementsByClassName( 'box_delete' )
+let delete_links = document.getElementsByClassName( 'delete' )
 for( let el of delete_links )
 {
 	let id = el.getAttribute( 'box' )

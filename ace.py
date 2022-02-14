@@ -494,25 +494,25 @@ class Repository( metaclass = ABCMeta ):
 		# Return single dictionary by id
 		cls = type( self )
 		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.get_by_id' )
-
+	
 	@abstractmethod
 	def list( self ) -> Seq[Tuple[int, Dict[str, Any]]]:
 		# Return all dictionaries of type
 		cls = type( self )
 		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.list' )
-
+	
 	@abstractmethod
 	def create( self, id: REPOID, resource: Dict[str,Any] ) -> None:
 		# Persist new dictionary and return it
 		cls = type( self )
 		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.create' )
-
+	
 	@abstractmethod
 	def update( self, id: REPOID, resource: Dict[str,Any] ) -> Dict[str,Any]:
 		# Update by id and return updated dict
 		cls = type( self )
 		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.update' )
-
+	
 	@abstractmethod
 	def delete( self, id: REPOID ) -> Dict[str,Any]:
 		# delete by id and return deleted dict
@@ -715,6 +715,7 @@ class RepoFs( Repository ):
 #region repo config
 
 REPO_FACTORY: Type[Repository]
+REPO_FACTORY_NOFS: Type[Repository]
 
 # Setup repositories based on config
 if ITAS_REPOSITORY_TYPE.startswith( 'sqlite:' ):
@@ -742,6 +743,8 @@ elif ITAS_REPOSITORY_TYPE.startswith( 'fs:' ):
 
 else:
 	raise Exception( f'invalid ITAS_REPOSITORY_TYPE={ITAS_REPOSITORY_TYPE!r}' )
+
+REPO_FACTORY_NOFS = RepoSqlite if REPO_FACTORY == RepoFs else REPO_FACTORY
 
 #endregion repo config
 #region session management
@@ -1719,7 +1722,7 @@ def http_routes() -> Response:
 		'<tr>',
 			'<td><a href="{url}">{route}</a></td>',
 			'<td><a href="{url}">{name}</a></td>',
-			'<td><button class="route_delete" route="{route}">Delete {route} {name}</button></td>',
+			'<td><button class="delete" route="{route}">Delete {route} {name}</button></td>',
 		'</tr>',
 	] )
 	body = '\n'.join( [
@@ -1942,7 +1945,7 @@ def http_voicemails() -> Response:
 		'<tr>',
 			'<td><a href="{url}">{box}</a></td>',
 			'<td><a href="{url}">{name}</a></td>',
-			'<td><button class="box_delete" box="{box}">Delete {box} {name}</button></td>',
+			'<td><button class="delete" box="{box}">Delete {box} {name}</button></td>',
 		'</tr>',
 	] )
 	body = '\n'.join( [

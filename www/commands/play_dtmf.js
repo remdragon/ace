@@ -2,7 +2,7 @@ import UINode from './UINode.js'
 import sounds_options from '/util/sounds_options.js'
 
 export default class PlayDTMF extends UINode {
-	static icon = '/media/streamline/music-note-2.png'
+	static icon = '/media/streamline/music-note-2@20.png'
 	static context_menu_name = 'Play DTMF'
 	static command = 'playdtmf'
 	

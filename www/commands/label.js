@@ -14,10 +14,9 @@ export default class Label extends UINode {
 	uuid//: string
 	
 	fields = [{
-			key: 'name',
-			label: 'Name: ',
-		}
-	]
+		key: 'name',
+		label: 'Name: ',
+	}]
 	
 	createElement({
 		isSubtree = false,

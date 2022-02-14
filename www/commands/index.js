@@ -3,6 +3,7 @@ import AcdCallGate from './acd_call_gate.js'; export{ AcdCallGate }
 import AcdCallUnGate from './acd_call_ungate.js'; export{ AcdCallUnGate }
 import Answer from './answer.js'; export{ Answer }
 import Bridge from './bridge.js'; export{ Bridge }
+import Email from './email.js'; export{ Email }
 import GoTo from './goto.js'; export{ GoTo }
 import Hangup from './hangup.js'; export{ Hangup }
 import IfNum from './ifnum.js'; export{ IfNum }
@@ -26,6 +27,7 @@ import Select from './select.js'; export{ Select }
 import SetMOH from './setmoh.js'; export{ SetMOH }
 import SetNode from './set.js'; export{ SetNode }
 import Silence from './silence.js'; export{ Silence }
+import SMS from './sms.js'; export{ SMS }
 import Throttle from './throttle.js'; export{ Throttle }
 import TOD from './tod.js'; export{ TOD }
 import Tone from './tone.js'; export{ Tone }
@@ -40,6 +42,7 @@ const NODE_TYPES = {
 	acd_call_ungate: AcdCallUnGate,
 	answer: Answer,
 	bridge: Bridge,
+	email: Email,
 	goto: GoTo,
 	hangup: Hangup,
 	ifnum: IfNum,
@@ -63,6 +66,7 @@ const NODE_TYPES = {
 	set: SetNode,
 	setmoh: SetMOH,
 	silence: Silence,
+	sms: SMS,
 	throttle: Throttle,
 	tod: TOD,
 	tone: Tone,

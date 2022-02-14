@@ -19,7 +19,7 @@ export default class Repeat extends UINode {
 		isSubtree = true,
 		data = [],
 		NODE_TYPES,
-		context = 'contextOptionalSubtree'
+		context = UINode.contextOptionalSubtree,
 	})
 	{
 		super.createElement({ isSubtree, data, NODE_TYPES, context })

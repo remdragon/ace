@@ -7,7 +7,7 @@ const TONE_US_REORDER = '%(300,200,480,620)'
 const TONE_US_SIT_OOSVC = '%(274,0,913.8);%(274,0,1370.6);%(380,0,1776.7)'
 
 export default class Tone extends UINode {
-	static icon = '/media/streamline/music-note-2.png'
+	static icon = '/media/streamline/music-note-2@20.png'
 	static context_menu_name = 'Play Tone'
 	static command = 'tone'
 	
