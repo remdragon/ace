@@ -61,3 +61,4 @@ For a list of all voices available, <a href='https://docs.aws.amazon.com/polly/l
 		cols: 40
 	}]
 }
+// The number you called from is <say-as interpret-as="telephone" format="1">${caller_id_number}</say-as>.
