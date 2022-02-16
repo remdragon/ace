@@ -337,8 +337,9 @@ if not cfg_path.is_file():
 		f'ITAS_AUDIT_FILE = {"%Y-%m-%d.log"!r}',
 		f'ITAS_AUDIT_TIME = {"%Y-%m-%d %H:%M:%S.%f %Z%z"!r}',
 		f'ITAS_FREESWITCH_SOUNDS = {["/usr/share/freeswitch/sounds/en/us/callie"]!r}',
-		f'ITAS_REPOSITORY_TYPE = {"fs:/usr/share/itas/ace/"!r}',
-		f'ITAS_SQLITE_REPOSITORY_FILE = {"/usr/share/itas/ace/database.db"!r}',
+		f'ITAS_REPOSITORY_TYPE = {"fs"!r}',
+		f'ITAS_REPOSITORY_FS_PATH = {"/usr/share/itas/ace/"!r}',
+		f'ITAS_REPOSITORY_SQLITE_PATH = {"/usr/share/itas/ace/database.db"!r}',
 		f'ITAS_FLAGS_PATH = {str(default_data_path)!r}',
 		f'ITAS_DIDS_PATH = {str(default_data_path/"did")!r}',
 		f'ITAS_ANIS_PATH = {str(default_data_path/"ani")!r}',
@@ -380,7 +381,8 @@ ITAS_AUDIT_FILE: str = ''
 ITAS_AUDIT_TIME: str = ''
 ITAS_FREESWITCH_SOUNDS: List[str] = []
 ITAS_REPOSITORY_TYPE: str = ''
-ITAS_SQLITE_REPOSITORY_FILE: str = ''
+ITAS_REPOSITORY_FS_PATH: str = ''
+ITAS_REPOSITORY_SQLITE_PATH: str = ''
 ITAS_FLAGS_PATH: str = ''
 ITAS_DIDS_PATH: str = ''
 ITAS_ANIS_PATH: str = ''
@@ -474,9 +476,11 @@ REPOID = int
 
 class Repository( metaclass = ABCMeta ):
 	type = 'Abstract repository'
+	schemas: Dict[str,List[SqlBase]]
 	
-	def __init__( self, tablename: str, ending: str ) -> None:
-		assert False # don't call super.__init__() - this function only exists for mypy
+	def __init__( self, tablename: str, ending: str, fields: List[SqlBase] ) -> None:
+		assert tablename not in RepoSqlite.schemas, f'duplicate schema definition for table {tablename!r}'
+		self.schemas[tablename] = fields
 	
 	@abstractmethod
 	def valid_id( self, id: REPOID ) -> REPOID:
@@ -520,6 +524,168 @@ class Repository( metaclass = ABCMeta ):
 		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.delete' )
 
 
+class SqlBase( metaclass = ABCMeta ):
+	def __init__( self, name: str, *,
+		null: bool,
+		primary: bool = False,
+		unique: bool = False,
+		index: bool = False,
+	) -> None:
+		assert not name.lower().startswith( 'idx_' ), '"idx_" prefix is not allowed for field names, it is reserved for indexes'
+		self.name = name
+		self.null = null
+		
+		# only one of the following 3 should be set to true
+		self.primary = primary
+		self.unique = unique and not self.primary
+		self.index = index and not self.unique
+	
+	@abstractmethod
+	def validate( self ) -> None:
+		cls = type( self )
+		raise NotImplementedError( f'{cls.__module__}.{cls.__qualname__}.validate()' )
+	
+	@abstractmethod
+	def to_sqlite( self ) -> str:
+		cls = type( self )
+		raise NotImplementedError( f'{cls.__module__}.{cls.__qualname__}.to_sqlite()' )
+	
+	def to_sqlite_extra( self ) -> List[str]:
+		# this is used to create extra entries inside the create table statement
+		return []
+	
+	def to_sqlite_after( self, table: str ) -> List[str]:
+		# this is used to create supplemental entries after the create table statement
+		sql: List[str] = []
+		if self.index:
+			sql.append( 'CREATE INDEX "idx_{table}_{self.name}" ON "{table}" ({self.name})' )
+		return sql
+
+
+class SqlCharVar( SqlBase ):
+	def __init__( self, name: str, *,
+		size: int,
+		null: bool,
+		primary: bool = False,
+		unique: bool = False,
+		index: bool = False,
+	) -> None:
+		super().__init__( name,
+			null = null,
+			primary = primary,
+			unique = unique,
+			index = index,
+		)
+		assert isinstance( size, int ) and 1 <= size <= 255, f'invalid size={size!r}'
+		self.size = size
+	
+	def validate( self ) -> None:
+		assert self.size > 0
+	
+	def to_sqlite( self ) -> str:
+		sql: List[str] = [
+			self.name,
+			f'INTEGER({self.size})',
+			'NULL' if self.null else 'NOT NULL',
+			'PRIMARY KEY' if self.primary else '',
+			'UNIQUE' if self.unique else '',
+		]
+		return ' '.join( filter( None, sql ))
+
+
+class SqlInteger( SqlBase ):
+	def __init__( self, name: str, *,
+		size: int,
+		null: bool,
+		auto: bool = False,
+		primary: bool = False,
+		unique: bool = False,
+		index: bool = False,
+	) -> None:
+		super().__init__( name,
+			null = null,
+			primary = primary,
+			unique = unique,
+			index = index,
+		)
+		assert isinstance( size, int ) and 1 <= size <= 20, f'invalid size={size!r}'
+		self.size = size
+		self.auto = auto
+	
+	def validate( self ) -> None:
+		assert self.size > 0
+	
+	def to_sqlite( self ) -> str:
+		sql: List[str] = [
+			self.name,
+			f'INTEGER({self.size})',
+			'NULL' if self.null else 'NOT NULL',
+			'PRIMARY KEY' if self.primary else '',
+			'UNIQUE' if self.unique else '',
+			'AUTOINCREMENT' if self.auto else '',
+		]
+		return ' '.join( filter( None, sql ))
+
+
+class SqlText( SqlBase ):
+	def __init__( self, name: str, *,
+		null: bool,
+		primary: bool = False,
+		unique: bool = False,
+		index: bool = False,
+	) -> None:
+		assert not unique, 'text fields cannot be unique'
+		assert not primary, 'text fields cannot be primary keys'
+		super().__init__( name,
+			null = null,
+			primary = primary,
+			unique = unique,
+			index = index,
+		)
+	
+	def validate( self ) -> None:
+		pass
+	
+	def to_sqlite( self ) -> str:
+		sql: List[str] = [
+			self.name,
+			'TEXT',
+			'NULL' if self.null else 'NOT NULL',
+			#'PRIMARY KEY' if self.primary else '',
+			#'UNIQUE' if self.unique else '',
+		]
+		return ' '.join( filter( None, sql ))
+
+
+class SqlJson( SqlBase ):
+	def __init__( self, name: str, *,
+		null: bool,
+		primary: bool = False,
+		unique: bool = False,
+		index: bool = False,
+	) -> None:
+		assert not unique, 'json fields cannot be unique'
+		assert not primary, 'json fields cannot be primary keys'
+		super().__init__( name,
+			null = null,
+			primary = primary,
+			unique = unique,
+			index = index,
+		)
+	
+	def validate( self ) -> None:
+		pass
+	
+	def to_sqlite( self ) -> str:
+		sql: List[str] = [
+			self.name,
+			'TEXT',
+			'NULL' if self.null else 'NOT NULL',
+			#'PRIMARY KEY' if self.primary else '',
+			#'UNIQUE' if self.unique else '',
+		]
+		return ' '.join( filter( None, sql ))
+
 #endregion repo base
 #region repo sqlite
 
@@ -534,19 +700,45 @@ class RepoSqlite( Repository ):
 	database: sqlite3.Connection
 	
 	@classmethod
-	def setup( cls, database_file: Path ) -> None:
-		cls.database = sqlite3.connect( str( database_file ) )
+	def setup( cls ) -> None:
+		sqlite_path = Path( ITAS_REPOSITORY_SQLITE_PATH )
+		if not sqlite_path.exists():
+			sqlite_path.touch()
+		cls.database = sqlite3.connect( str( sqlite_path ))
 		setattr( cls.database, 'row_factory', dict_factory )
-		with closing( cls.database.cursor() ) as cur:
-			cur.execute(
-				'CREATE TABLE IF NOT EXISTS "routes" (id INTEGER PRIMARY KEY, name TEXT, json TEXT)' )
-			#cur.execute(
-			#	'CREATE TABLE IF NOT EXISTS "audits" (id INTEGER PRIMARY KEY AUTOINCREMENT)' )
-			#cur.execute( 'CREATE TABLE IF NOT EXISTS "users" (id INTEGER PRIMARY KEY AUTOINCREMENT)' )
+		#with closing( cls.database.cursor() ) as cur:
+		#	#cur.execute(
+		#	#	'CREATE TABLE IF NOT EXISTS "audits" (id INTEGER PRIMARY KEY AUTOINCREMENT)' )
+		#	#cur.execute( 'CREATE TABLE IF NOT EXISTS "users" (id INTEGER PRIMARY KEY AUTOINCREMENT)' )
 	
-	def __init__( self, tablename: str, ending: str ) -> None:
-		# TODO FIXME: validate tablename
+	def __init__( self, tablename: str, ending: str, fields: List[SqlBase] ) -> None:
+		assert re.match( r'^[a-z][a-z_0-9]+$', tablename )
+		
+		assert fields, f'no fields defined for table {tablename!r}'
+		
+		if not hasattr( RepoSqlite, 'database' ):
+			RepoSqlite.setup()
+		
+		super().__init__( tablename, ending, fields )
+		if not RepoSqlite.schemas:
+			RepoSqlite.setup()
+		
+		
 		self.tablename = tablename
+		fldsql: List[str] = []
+		fldxtra: List[str] = []
+		fldsupp: List[str] = []
+		for fld in fields:
+			fldsql.append( fld.to_sqlite() )
+			fldxtra.extend( fld.to_sqlite_extra() )
+			fldsupp.extend( fld.to_sqlite_after( tablename ))
+		
+		_flds_ = ',\n'.join( fldsql + fldxtra )
+		_supp_ = ';\n'.join( fldsupp )
+		sql: str = f'CREATE TABLE IF NOT EXISTS "{tablename}" (_flds_); _supp_'
+		
+		with closing( self.database.cursor() ) as cur:
+			cur.execute( sql )
 	
 	def valid_id( self, id: REPOID ) -> REPOID:
 		log = logger.getChild( 'RepoFs.valid_id' )
@@ -642,10 +834,12 @@ class RepoFs( Repository ):
 	base_path: Path
 	
 	@classmethod
-	def setup( cls, base_path: Path ) -> None:
-		cls.base_path = base_path
+	def setup( cls ) -> None:
+		cls.base_path = Path( ITAS_REPOSITORY_FS_PATH )
 	
-	def __init__( self, tablename: str, ending: str ) -> None:
+	def __init__( self, tablename: str, ending: str, fields: List[Dict[str,Union[int,str]]] ) -> None:
+		if not hasattr( RepoFs, 'base_path' ):
+			RepoFs.setup()
 		self.type = 'fs'
 		self.path = self.base_path / tablename
 		self.path.mkdir( mode = 0o770, parents = True, exist_ok = True )
@@ -715,36 +909,18 @@ class RepoFs( Repository ):
 #region repo config
 
 REPO_FACTORY: Type[Repository]
-REPO_FACTORY_NOFS: Type[Repository]
 
 # Setup repositories based on config
-if ITAS_REPOSITORY_TYPE.startswith( 'sqlite:' ):
-	m = re.match( '^sqlite:([^:]+)$', ITAS_REPOSITORY_TYPE )
-	if not m:
-		raise Exception( f'flask.cfg ITAS_REPOSITORY_TYPE invalid syntax {ITAS_REPOSITORY_TYPE!r}, expecting "sqlite:path"' )
-	sqlite_path = Path( m.group( 1 ) )
-	
-	if not sqlite_path.exists():
-		sqlite_path.touch()
-	
-	RepoSqlite.setup( sqlite_path )
-	
+if ITAS_REPOSITORY_TYPE == 'sqlite':
 	REPO_FACTORY = RepoSqlite
-
-elif ITAS_REPOSITORY_TYPE.startswith( 'fs:' ):
-	m = re.match( '^fs:([^:]+)$', ITAS_REPOSITORY_TYPE )
-	if not m:
-		raise Exception( f'flask.cfg ITAS_REPOSITORY_TYPE invalid syntax {ITAS_REPOSITORY_TYPE!r}, expecting "fs:path"' )
-	fs_path = m.group( 1 )
-	
-	RepoFs.setup( Path( fs_path ) )
-	
+elif ITAS_REPOSITORY_TYPE == 'fs':
 	REPO_FACTORY = RepoFs
-
 else:
 	raise Exception( f'invalid ITAS_REPOSITORY_TYPE={ITAS_REPOSITORY_TYPE!r}' )
 
-REPO_FACTORY_NOFS = RepoSqlite if REPO_FACTORY == RepoFs else REPO_FACTORY
+REPO_FACTORY_NOFS: Type[Repository] = REPO_FACTORY
+if REPO_FACTORY == RepoFs:
+	REPO_FACTORY_NOFS = RepoSqlite
 
 #endregion repo config
 #region session management
@@ -1668,7 +1844,11 @@ def http_flags() -> Response:
 #endregion http - flags
 #region http - routes
 
-REPO_ROUTES = REPO_FACTORY( 'routes', '.route' )
+REPO_ROUTES = REPO_FACTORY( 'routes', '.route', [
+	SqlInteger( 'id', null = False, size = 10, auto = True, primary = True ),
+	SqlText( 'name', null = True ),
+	SqlJson( 'json', null = False ),
+])
 
 @app.route( '/routes', methods = [ 'GET', 'POST', 'DELETE' ] )
 @login_required # type: ignore
