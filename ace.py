@@ -517,7 +517,7 @@ class SqlBase( metaclass = ABCMeta ):
 		return sql
 
 
-class SqlCharVar( SqlBase ):
+class SqlVarChar( SqlBase ):
 	def __init__( self, name: str, *,
 		size: int,
 		null: bool,
@@ -540,10 +540,37 @@ class SqlCharVar( SqlBase ):
 	def to_sqlite( self ) -> str:
 		sql: List[str] = [
 			self.name,
-			f'INTEGER({self.size})',
+			f'VARCHAR({self.size})',
 			'NULL' if self.null else 'NOT NULL',
 			'PRIMARY KEY' if self.primary else '',
 			'UNIQUE' if self.unique else '',
+		]
+		return ' '.join( filter( None, sql ))
+
+
+class SqlDateTime( SqlBase ):
+	def __init__( self, name: str, *,
+		size: int,
+		null: bool,
+		index: bool = False,
+	) -> None:
+		super().__init__( name,
+			null = null,
+			primary = False,
+			unique = False,
+			index = index,
+		)
+		assert isinstance( size, int ) and 1 <= size <= 255, f'invalid size={size!r}'
+		self.size = size
+	
+	def validate( self ) -> None:
+		assert self.size > 0
+	
+	def to_sqlite( self ) -> str:
+		sql: List[str] = [
+			self.name,
+			'TEXT', # sqlite doesn't have a DATETIME type
+			'NULL' if self.null else 'NOT NULL',
 		]
 		return ' '.join( filter( None, sql ))
 
