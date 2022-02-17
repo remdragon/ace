@@ -665,11 +665,11 @@ class SqlJson( SqlBase ):
 
 class Repository( metaclass = ABCMeta ):
 	type = 'Abstract repository'
-	schemas: Dict[str,List[SqlBase]]
+	schemas: Dict[str,List[SqlBase]] = {}
 	
 	def __init__( self, tablename: str, ending: str, fields: List[SqlBase] ) -> None:
-		assert tablename not in RepoSqlite.schemas, f'duplicate schema definition for table {tablename!r}'
-		self.schemas[tablename] = fields
+		assert tablename not in Repository.schemas, f'duplicate schema definition for table {tablename!r}'
+		Repository.schemas[tablename] = fields
 	
 	@abstractmethod
 	def valid_id( self, id: REPOID ) -> REPOID:
