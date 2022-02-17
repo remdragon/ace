@@ -550,7 +550,6 @@ class SqlVarChar( SqlBase ):
 
 class SqlDateTime( SqlBase ):
 	def __init__( self, name: str, *,
-		size: int,
 		null: bool,
 		index: bool = False,
 	) -> None:
@@ -560,11 +559,9 @@ class SqlDateTime( SqlBase ):
 			unique = False,
 			index = index,
 		)
-		assert isinstance( size, int ) and 1 <= size <= 255, f'invalid size={size!r}'
-		self.size = size
 	
 	def validate( self ) -> None:
-		assert self.size > 0
+		pass
 	
 	def to_sqlite( self ) -> str:
 		sql: List[str] = [
