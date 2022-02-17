@@ -1,23 +1,23 @@
 # EMAIL SETUP
 
-sudo nano /usr/share/freeswitch/scripts/eximcompat.sh
+`sudo nano /usr/share/freeswitch/scripts/eximcompat.sh`
 ```
 #!/bin/bash
 exec exim4 -t
 ```
 
-sudo chmod +x /usr/share/freeswitch/scripts/eximcompat.sh
+`sudo chmod +x /usr/share/freeswitch/scripts/eximcompat.sh`
 
-sudo nano /etc/freeswitch/autoload_configs/switch.conf.xml
+`sudo nano /etc/freeswitch/autoload_configs/switch.conf.xml`
 ```
 <param name="mailer-app" value="/usr/share/freeswitch/scripts/eximcompat.sh"/>
 <!--param name="mailer-app-args" value="-t" /--> <!-- make sure this is commented out -->
 <param name="dump-cores" value="yes"/> <!-- optional -->
 ```
 
-sudo apt-get update
-sudo apt-get install exim4-daemon-light
-sudo dpkg-reconfigure exim4-config
+`sudo apt-get update`
+`sudo apt-get install exim4-daemon-light`
+`sudo dpkg-reconfigure exim4-config`
 ```
 localhost
 127.0.0.1
@@ -31,17 +31,17 @@ yes
 root
 ```
 
-sudo nano /etc/exim4/passwd.client
+`sudo nano /etc/exim4/passwd.client`
 ```
 smtpserver:SMTPUSER:SMTPPASSWORD
 ```
 
-sudo nano /etc/email-addresses
+`sudo nano /etc/email-addresses`
 ```
 root:FROM@EXAMPLE.COM
 ```
 
-Preparing for testing by running this in a separate shell:
+Prepare for testing by running this in a separate shell:
 ```
 tail -f /var/log/exim4/mainlog
 ```
