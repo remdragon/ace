@@ -11,6 +11,7 @@
 
 
 from abc import ABCMeta, abstractmethod
+from time import sleep
 import accept_types # type: ignore # pip install accept-types
 from contextlib import closing
 import datetime
@@ -2433,13 +2434,62 @@ def service_command( cmd: str ) -> int:
 
 
 #endregion service management
-#region CDR Vaccuum
+#region CDR Vacuum
 
 REPO_JSON_CDR = REPO_FACTORY_NOFS( 'cdr', '.cdr' ,[
 	SqlInteger( 'id', null = False, size = 16, auto = True, primary = True ),
-	SqlCharVar( 'core-uuid', size = 36, null = False ),
-	Sql
+	SqlVarChar( 'call_uuid', size = 36, null = False ),
+	SqlDateTime( 'start_stamp', null = False ),
+	SqlDateTime( 'answered_stamp', null = True ),
+	SqlDateTime( 'end_stamp', null = False ),
+	SqlJson('json', null = False)
 ])
+
+def _uepoch_to_timestamp(uepoch: Union[int, str]) -> str:
+	uepoch_float = float(uepoch) / 1000000
+	float_datetime = datetime.datetime.fromtimestamp(uepoch_float)
+	return float_datetime.strftime('%Y-%m-%d %H:%M:%S.%f')
+
+
+def _cdr_vacuum():
+	log = logger.getChild( 'cdr_processor._vacuum' )
+	path = Path( ITAS_FREESWITCH_JSON_CDR_PATH )
+	removal_list = []
+	for item in path.iterdir():
+		if item.is_file() and item.exists():
+			try:
+				with open(item, 'r') as cdr_file:
+					data = json.load(cdr_file)
+				call_uuid = data['variables']['uuid']
+				start_stamp = _uepoch_to_timestamp(data['variables']['start_uepoch'])
+				answered_stamp = _uepoch_to_timestamp(data['variables']['answered_uepoch'])
+				end_stamp = _uepoch_to_timestamp(data['variables']['end_uepoch'])
+				try:
+					REPO_JSON_CDR.create('json_cdr',{
+						'call_uuid': call_uuid,
+						'start_stamp': start_stamp,
+						'answered_stamp': answered_stamp,
+						'end_stamp': end_stamp,
+						'json': data
+					})
+					os.remove(item)
+				except Exception:
+					log.exception(f'Unable to create CDR database entry for file {item!r}:')
+
+			except Exception:
+				log.exception( f'Unable to import JSON file {item!r}:')
+						
+
+def cdr_processor():
+	running = True
+	log = logger.getChild( 'cdr_processor' )
+	while running:
+		try:
+			_cdr_vacuum()
+		except Exception:
+			log.exception('CDR processor exception:')
+		sleep(60)
+	
 
 def spawn ( target: Callable[...,Any], *args: Any, **kwargs: Any ) -> Thread:
 	def _target ( *args: Any, **kwargs: Any ) -> Any:
@@ -2458,7 +2508,7 @@ def spawn ( target: Callable[...,Any], *args: Any, **kwargs: Any ) -> Thread:
 	return thread
 
 
-#endregion CDR Vaccuum
+#endregion CDR Vacuum
 
 #region bootstrap
 
@@ -2500,7 +2550,8 @@ if __name__ == '__main__':
 			logger.debug( 'using existing adhoc cert %r', crt_path )
 	
 	address = '0.0.0.0' # TODO FIXME: load from flask.cfg?
-	
+	#Spawn CDR vacuum
+	spawn( cdr_processor )
 	wsgi = WSGIContainer( app )
 	http_server = HTTPServer(
 		wsgi,
