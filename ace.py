@@ -37,6 +37,7 @@ import socket
 import sqlite3
 import sys
 import tempfile
+from threading import Thread
 from tornado.wsgi import WSGIContainer # pip install tornado
 from tornado.ioloop import IOLoop
 from tornado.httpserver import HTTPServer
@@ -336,6 +337,7 @@ if not cfg_path.is_file():
 		f'ITAS_AUDIT_DIR = {"/var/log/itas/ace/"!r}',
 		f'ITAS_AUDIT_FILE = {"%Y-%m-%d.log"!r}',
 		f'ITAS_AUDIT_TIME = {"%Y-%m-%d %H:%M:%S.%f %Z%z"!r}',
+		f'ITAS_FREESWITCH_JSON_CDR_PATH = {["/var/log/freeswitch/json_cdr"]!r}',
 		f'ITAS_FREESWITCH_SOUNDS = {["/usr/share/freeswitch/sounds/en/us/callie"]!r}',
 		f'ITAS_REPOSITORY_TYPE = {"fs"!r}',
 		f'ITAS_REPOSITORY_FS_PATH = {"/usr/share/itas/ace/"!r}',
@@ -379,6 +381,7 @@ ITAS_CERTIFICATE_PEM: str = ''
 ITAS_AUDIT_DIR: str = ''
 ITAS_AUDIT_FILE: str = ''
 ITAS_AUDIT_TIME: str = ''
+ITAS_FREESWITCH_JSON_CDR_PATH: str = ''
 ITAS_FREESWITCH_SOUNDS: List[str] = []
 ITAS_REPOSITORY_TYPE: str = ''
 ITAS_REPOSITORY_FS_PATH: str = ''
@@ -2406,6 +2409,33 @@ def service_command( cmd: str ) -> int:
 
 
 #endregion service management
+#region CDR Vaccuum
+
+REPO_JSON_CDR = REPO_FACTORY_NOFS( 'cdr', '.cdr' ,[
+	SqlInteger( 'id', null = False, size = 16, auto = True, primary = True ),
+	SqlCharVar( 'core-uuid', size = 36, null = False ),
+	Sql
+])
+
+def spawn ( target: Callable[...,Any], *args: Any, **kwargs: Any ) -> Thread:
+	def _target ( *args: Any, **kwargs: Any ) -> Any:
+		log = logger.getChild ( 'spawn._target' )
+		try:
+			return target ( *args, **kwargs )
+		except Exception:
+			log.exception ( 'Unhandled exception exit from thread:' )
+	thread = Thread (
+		target = _target,
+		args = args,
+		kwargs = kwargs,
+		daemon = True,
+	)
+	thread.start()
+	return thread
+
+
+#endregion CDR Vaccuum
+
 #region bootstrap
 
 
