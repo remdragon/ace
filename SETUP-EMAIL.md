@@ -19,6 +19,7 @@ exec exim4 -t
 `sudo apt-get install exim4-daemon-light`
 `sudo dpkg-reconfigure exim4-config`
 ```
+mail sent by smarthost, recevied via SMTP or fetchmail
 localhost
 127.0.0.1
 (blank)
