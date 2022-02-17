@@ -472,56 +472,8 @@ def voicemail_box_msgs_path( box: int ) -> Path:
 #endregion paths and auditing
 #region repo base
 
-REPOID = int
 
-class Repository( metaclass = ABCMeta ):
-	type = 'Abstract repository'
-	schemas: Dict[str,List[SqlBase]]
-	
-	def __init__( self, tablename: str, ending: str, fields: List[SqlBase] ) -> None:
-		assert tablename not in RepoSqlite.schemas, f'duplicate schema definition for table {tablename!r}'
-		self.schemas[tablename] = fields
-	
-	@abstractmethod
-	def valid_id( self, id: REPOID ) -> REPOID:
-		cls = type( self )
-		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.valid_id' )
-	
-	@abstractmethod
-	def exists( self, id: REPOID ) -> bool:
-		# does the indicated id exist?
-		cls = type( self )
-		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.exists' )
-	
-	@abstractmethod
-	def get_by_id( self, id: REPOID ) -> Dict[str, Any]:
-		# Return single dictionary by id
-		cls = type( self )
-		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.get_by_id' )
-	
-	@abstractmethod
-	def list( self ) -> Seq[Tuple[int, Dict[str, Any]]]:
-		# Return all dictionaries of type
-		cls = type( self )
-		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.list' )
-	
-	@abstractmethod
-	def create( self, id: REPOID, resource: Dict[str,Any] ) -> None:
-		# Persist new dictionary and return it
-		cls = type( self )
-		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.create' )
-	
-	@abstractmethod
-	def update( self, id: REPOID, resource: Dict[str,Any] ) -> Dict[str,Any]:
-		# Update by id and return updated dict
-		cls = type( self )
-		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.update' )
-	
-	@abstractmethod
-	def delete( self, id: REPOID ) -> Dict[str,Any]:
-		# delete by id and return deleted dict
-		cls = type( self )
-		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.delete' )
+REPOID = int
 
 
 class SqlBase( metaclass = ABCMeta ):
@@ -686,8 +638,60 @@ class SqlJson( SqlBase ):
 		]
 		return ' '.join( filter( None, sql ))
 
+
+class Repository( metaclass = ABCMeta ):
+	type = 'Abstract repository'
+	schemas: Dict[str,List[SqlBase]]
+	
+	def __init__( self, tablename: str, ending: str, fields: List[SqlBase] ) -> None:
+		assert tablename not in RepoSqlite.schemas, f'duplicate schema definition for table {tablename!r}'
+		self.schemas[tablename] = fields
+	
+	@abstractmethod
+	def valid_id( self, id: REPOID ) -> REPOID:
+		cls = type( self )
+		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.valid_id' )
+	
+	@abstractmethod
+	def exists( self, id: REPOID ) -> bool:
+		# does the indicated id exist?
+		cls = type( self )
+		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.exists' )
+	
+	@abstractmethod
+	def get_by_id( self, id: REPOID ) -> Dict[str, Any]:
+		# Return single dictionary by id
+		cls = type( self )
+		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.get_by_id' )
+	
+	@abstractmethod
+	def list( self ) -> Seq[Tuple[int, Dict[str, Any]]]:
+		# Return all dictionaries of type
+		cls = type( self )
+		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.list' )
+	
+	@abstractmethod
+	def create( self, id: REPOID, resource: Dict[str,Any] ) -> None:
+		# Persist new dictionary and return it
+		cls = type( self )
+		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.create' )
+	
+	@abstractmethod
+	def update( self, id: REPOID, resource: Dict[str,Any] ) -> Dict[str,Any]:
+		# Update by id and return updated dict
+		cls = type( self )
+		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.update' )
+	
+	@abstractmethod
+	def delete( self, id: REPOID ) -> Dict[str,Any]:
+		# delete by id and return deleted dict
+		cls = type( self )
+		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.delete' )
+
+
 #endregion repo base
 #region repo sqlite
+
 
 def dict_factory( cursor: Any, row: Seq[Any] ) -> Dict[str,Any]:
 	d: Dict[str,Any] = {}
