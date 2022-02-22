@@ -9,5 +9,5 @@ export default class Ring extends UINode {
 <br/>
 Execution moves to the next node immediately. Use the "Wait" command if a delay is needed
 `
-	label = 'Ring'
+	label = 'Stream RingTone'
 }

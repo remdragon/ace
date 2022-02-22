@@ -2,7 +2,7 @@ import UINode from './UINode.js'
 
 export default class PreAnswer extends UINode {
 	static icon = '/media/streamline/robot-1.png'
-	static context_menu_name = 'Pre-Answer'
+	static context_menu_name = 'Pre-Answer State'
 	static command = 'preanswer'
 	
 	help = `pre-answer transitions a call from the "routing" to the "ringing" state<br>

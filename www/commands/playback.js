@@ -26,6 +26,7 @@ Does not proceed with route instructions until audio is finished playing
 		key: 'name',
 		label: 'Name: ',
 		type: 'string',
+		tooltip: 'This is cosmetic and only used in the tree',
 	},{
 		key: 'sound',
 		label: 'Sound:',

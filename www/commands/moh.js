@@ -10,7 +10,7 @@ export default class MOH extends UINode {
 Execution moves to the next node immediately. Use the "Wait" command if a delay is needed
 `
 	
-	label = 'Play MOH'
+	label = 'Stream MOH'
 	
 	fields = []
 }
