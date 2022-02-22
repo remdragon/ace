@@ -1442,10 +1442,16 @@ def http_did( did: int ) -> Response:
 		)
 	
 	route_options: List[str] = []
+	found = False
 	for r, routedata in routes:
-		att = ' selected' if route == r else ''
+		att = ''
+		if route == r:
+			att = ' selected'
+			found = True
 		lbl = routedata.get( 'name' ) or '(Unnamed)'
 		route_options.append( f'<option value="{r}"{att}>{r} {lbl}</option>' )
+	if not found:
+		route_options.insert( 0, f'<option value="{route}" selected>{route} DOES NOT EXIST</option>' )
 	
 	html_rows.extend( [
 		
