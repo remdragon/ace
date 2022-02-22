@@ -1209,7 +1209,7 @@ def http_dids() -> Response:
 			if q_name and q_name not in data.get( 'name', '' ):
 				log.debug( f'rejecting {str(file)!r} b/c {q_name!r} not in {data.get("name","")!r}' )
 				continue
-			if q_route and q_route not in data.get( 'route', '' ):
+			if q_route and q_route not in str( data.get( 'route', '' )):
 				log.debug( f'rejecting {str(file)!r} b/c {q_route!r} not in {data.get("route","")!r}' )
 				continue
 			if q_notes and q_notes not in data.get( 'notes', '' ):
