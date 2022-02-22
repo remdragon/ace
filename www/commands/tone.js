@@ -34,6 +34,7 @@ See <a href='https://freeswitch.org/confluence/display/FREESWITCH/Tone_stream'>F
 		key: 'name',
 		label: 'Name: ',
 		type: 'string',
+		tooltip: 'This is cosmetic and only used in the tree',
 	},{
 		key: 'tone',
 		label: 'Tone:',
