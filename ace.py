@@ -766,11 +766,12 @@ class RepoSqlite( Repository ):
 			fldsupp.extend( fld.to_sqlite_after( tablename ))
 		
 		_flds_ = ',\n'.join( fldsql + fldxtra )
-		_supp_ = ';\n'.join( fldsupp )
-		sql: str = f'CREATE TABLE IF NOT EXISTS "{tablename}" (_flds_); _supp_'
+		sql: List[str] = [ f'CREATE TABLE IF NOT EXISTS "{tablename}" (_flds_);' ]
+		sql.extend( fldsupp )
 		
 		with closing( self.database.cursor() ) as cur:
-			cur.execute( sql )
+			for sql_ in sql:
+				cur.execute( sql_ )
 	
 	def valid_id( self, id: REPOID ) -> REPOID:
 		log = logger.getChild( 'RepoFs.valid_id' )
@@ -2457,10 +2458,10 @@ def _uepoch_to_timestamp(uepoch: Union[int, str]) -> str:
 	return float_datetime.strftime('%Y-%m-%d %H:%M:%S.%f')
 
 
-def _cdr_vacuum():
+def _cdr_vacuum() -> None:
 	log = logger.getChild( 'cdr_processor._vacuum' )
 	path = Path( ITAS_FREESWITCH_JSON_CDR_PATH )
-	removal_list = []
+	#removal_list = []
 	for item in path.iterdir():
 		if item.is_file() and item.exists():
 			try:
@@ -2471,7 +2472,7 @@ def _cdr_vacuum():
 				answered_stamp = _uepoch_to_timestamp(data['variables']['answered_uepoch'])
 				end_stamp = _uepoch_to_timestamp(data['variables']['end_uepoch'])
 				try:
-					REPO_JSON_CDR.create('json_cdr',{
+					REPO_JSON_CDR.create('json_cdr',{ # TODO FIXME JMP: this isn't right...
 						'call_uuid': call_uuid,
 						'start_stamp': start_stamp,
 						'answered_stamp': answered_stamp,
@@ -2481,12 +2482,11 @@ def _cdr_vacuum():
 					os.remove(item)
 				except Exception:
 					log.exception(f'Unable to create CDR database entry for file {item!r}:')
-
+			
 			except Exception:
 				log.exception( f'Unable to import JSON file {item!r}:')
-						
 
-def cdr_processor():
+def cdr_processor() -> None:
 	running = True
 	log = logger.getChild( 'cdr_processor' )
 	while running:
@@ -2495,7 +2495,6 @@ def cdr_processor():
 		except Exception:
 			log.exception('CDR processor exception:')
 		sleep(60)
-	
 
 def spawn ( target: Callable[...,Any], *args: Any, **kwargs: Any ) -> Thread:
 	def _target ( *args: Any, **kwargs: Any ) -> Any:
