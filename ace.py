@@ -1178,6 +1178,7 @@ def http_dids() -> Response:
 	q_tf = request.args.get( 'tf', '' ).strip()
 	q_acct = request.args.get( 'acct', '' ).strip()
 	q_name = request.args.get( 'name', '' ).strip()
+	q_route = request.args.get( 'route', '' ).strip()
 	q_notes = request.args.get( 'notes', '' ).strip()
 	
 	path = Path( ITAS_DIDS_PATH )
@@ -1192,7 +1193,7 @@ def http_dids() -> Response:
 	}
 	for file in files:
 		data: Dict[str,Any] = {}
-		if q_tf or q_acct or q_name or q_notes:
+		if q_tf or q_acct or q_name or q_route or q_notes:
 			with file.open( 'r' ) as f:
 				try:
 					data = cast( Dict[str,Any], json.loads( f.read() ))
@@ -1207,6 +1208,9 @@ def http_dids() -> Response:
 				continue
 			if q_name and q_name not in data.get( 'name', '' ):
 				log.debug( f'rejecting {str(file)!r} b/c {q_name!r} not in {data.get("name","")!r}' )
+				continue
+			if q_route and q_route not in data.get( 'route', '' ):
+				log.debug( f'rejecting {str(file)!r} b/c {q_route!r} not in {data.get("route","")!r}' )
 				continue
 			if q_notes and q_notes not in data.get( 'notes', '' ):
 				log.debug( f'rejecting {str(file)!r} b/c {q_notes!r} not in {data.get("notes","")!r}' )
@@ -1252,6 +1256,7 @@ def http_dids() -> Response:
 		f'<span class="tooltipped"><input type="text" name="tf" placeholder="TF#" value="{html_att(q_tf)}" maxlength="10" size="10"/><span class="tooltip">Performs substring search of all TF #s</span></span>',
 		f'<span class="tooltipped"><input type="text" name="acct" placeholder="Acct#" value="{html_att(q_acct)}" maxlength="4" size="4"/><span class="tooltip">Performs substring search of all Account #s</span></span>',
 		f'<span class="tooltipped"><input type="text" name="name" placeholder="Name" value="{html_att(q_name)}" size="10"/><span class="tooltip">Performs substring search of all Account Names</span></span>',
+		f'<span class="tooltipped"><input type="text" name="route" placeholder="Route" value="{html_att(q_route)}" size="4"/><span class="tooltip">Performs substring search of all Routes</span></span>',
 		f'<span class="tooltipped"><input type="text" name="notes" placeholder="Notes" value="{html_att(q_notes)}" size="10"/><span class="tooltip">Performs substring search of all Account Names</span></span>',
 		'<input type="submit" value="Search"/>',
 		'<button id="clear" type="button" onclick="window.location=\'?\'">Clear</button>'
