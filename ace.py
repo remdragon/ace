@@ -2471,8 +2471,12 @@ def _uepoch_to_timestamp(uepoch: Union[int, str]) -> str:
 
 def _cdr_vacuum() -> None:
 	log = logger.getChild( 'cdr_processor._vacuum' )
+	assert ITAS_FREESWITCH_JSON_CDR_PATH
 	path = Path( ITAS_FREESWITCH_JSON_CDR_PATH )
 	#removal_list = []
+	if not path.is_dir():
+		log.warning( 'json_cdr path does not exist: %r', str( path ))
+		return
 	for item in path.iterdir():
 		if item.is_file() and item.exists():
 			try:
@@ -2483,7 +2487,7 @@ def _cdr_vacuum() -> None:
 				answered_stamp = _uepoch_to_timestamp(data['variables']['answered_uepoch'])
 				end_stamp = _uepoch_to_timestamp(data['variables']['end_uepoch'])
 				try:
-					REPO_JSON_CDR.create('json_cdr',{ # TODO FIXME JMP: this isn't right...
+					REPO_JSON_CDR.create( call_uuid, {
 						'call_uuid': call_uuid,
 						'start_stamp': start_stamp,
 						'answered_stamp': answered_stamp,
