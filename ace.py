@@ -1443,7 +1443,7 @@ def http_did( did: int ) -> Response:
 	
 	route_options: List[str] = []
 	found = False
-	for r, routedata in routes:
+	for r, routedata in sorted( routes, key = lambda kv: kv[0] ):
 		att = ''
 		if route == r:
 			att = ' selected'
