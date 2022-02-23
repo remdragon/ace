@@ -1965,12 +1965,6 @@ def http_routes() -> Response:
 	log = logger.getChild( 'http_routes' )
 	return_type = accept_type()
 	
-	q_limit = qry_int( 'limit', 20, min = 1, max = 1000 )
-	q_offset = qry_int( 'offset', 0, min = 0 )
-	
-	q_route = request.args.get( 'route', '' ).strip()
-	q_name = request.args.get( 'name', '' ).strip()
-	
 	if request.method == 'POST':
 		# BEGIN route creation
 		inp = inputs()
@@ -1996,6 +1990,12 @@ def http_routes() -> Response:
 		url = url_for( 'http_route', route = id )
 		return redirect( url )
 		# END route creation
+	
+	q_limit = qry_int( 'limit', 20, min = 1, max = 1000 )
+	q_offset = qry_int( 'offset', 0, min = 0 )
+	
+	q_route = request.args.get( 'route', '' ).strip()
+	q_name = request.args.get( 'name', '' ).strip()
 	
 	filters = {}
 	if q_route:
@@ -2028,11 +2028,15 @@ def http_routes() -> Response:
 		'</tr>',
 	] )
 	body = '\n'.join( [
-		row_html.format( route = route, url = url_for( 'http_route', route = route ), **data )
+		row_html.format(
+			route = route,
+			name = data.get( 'name' ) or '(Unnamed)',
+			url = url_for( 'http_route', route = route ),
+		)
 		for route, data in routes
 	] )
-	prevpage = urlencode( { 'name': q_name, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit ) } )
-	nextpage = urlencode( { 'name': q_name, 'limit': q_limit, 'offset': q_offset + q_limit } )
+	prevpage = urlencode( { 'route': q_route, 'name': q_name, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit ) } )
+	nextpage = urlencode( { 'route': q_route, 'name': q_name, 'limit': q_limit, 'offset': q_offset + q_limit } )
 	return html_page(
 		'<table width="100%"><tr>',
 		f'<td align="left"><a href="?{prevpage}">Prev Page</a></td>',
@@ -2042,7 +2046,7 @@ def http_routes() -> Response:
 		'<td align="center">'
 		'<form method="GET">'
 		f'<span class="tooltipped"><input type="text" name="route" placeholder="Route" value="{html_att(q_route)}" size="10"/><span class="tooltip">Performs substring search of all Route numbers</span></span>',
-		f'<span class="tooltipped"><input type="text" name="name" placeholder="Name" value="{html_att(q_name)}" size="10"/><span class="tooltip">Performs substring search of all Account Names</span></span>',
+		f'<span class="tooltipped"><input type="text" name="name" placeholder="Name" value="{html_att(q_name)}" size="10"/><span class="tooltip">Performs substring search of all Route Names</span></span>',
 		'<input type="submit" value="Search"/>',
 		'<button id="clear" type="button" onclick="window.location=\'?\'">Clear</button>'
 		'</form>',
@@ -2242,19 +2246,39 @@ def http_voicemails() -> Response:
 		# END voicemail box creation
 	
 	# BEGIN voicemail boxes list
+	
+	q_limit = qry_int( 'limit', 20, min = 1, max = 1000 )
+	q_offset = qry_int( 'offset', 0, min = 0 )
+	
+	q_box = request.args.get( 'box', '' ).strip()
+	q_name = request.args.get( 'name', '' ).strip()
+	
 	try:
 		path = voicemail_settings_path( '*' )
 		boxes: List[Dict[str,Any]] = []
 		for box_path in path.parent.glob( path.name ):
 			with box_path.open( 'r' ) as f:
 				settings = json.loads( f.read() )
-			boxes.append( { 'box': int( box_path.stem ), 'name': '(Unnamed)', **settings } )
+			boxid = int( box_path.stem )
+			if q_box and q_box not in str( boxid ):
+				continue
+			boxdata: Dict[str,Any] = { 'box': boxid, 'name': '(Unnamed)', **settings }
+			if q_name and q_name.lower() not in str( boxdata['name'] ).lower():
+				continue
+			boxes.append( boxdata )
 	except Exception as e:
 		return _http_failure(
 			return_type,
 			f'Error querying voicemail boxes list: {e!r}',
 			500,
 		)
+	
+	boxes.sort( key = lambda box: cast( int, box['box'] ))
+	if q_offset:
+		boxes = boxes[q_offset:]
+	if q_limit:
+		boxes = boxes[:q_limit]
+	
 	if return_type == 'application/json':
 		return rest_success( boxes )
 	
@@ -2269,12 +2293,30 @@ def http_voicemails() -> Response:
 	] )
 	body = '\n'.join( [
 		row_html.format(
+			box = box['box'],
+			name = box.get( 'name' ) or '(Unnamed)',
 			url = url_for( 'http_voicemail', box = box['box'] ),
-			**box
 		) for box in boxes
 	] )
+	prevpage = urlencode( { 'box': q_box, 'name': q_name, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit ) } )
+	nextpage = urlencode( { 'box': q_box, 'name': q_name, 'limit': q_limit, 'offset': q_offset + q_limit } )
 	return html_page(
-		'<center><a id="box_new" href="#">(New Voicemail Box)</a></center>',
+		'<table width="100%"><tr>',
+		f'<td align="left"><a href="?{prevpage}">Prev Page</a></td>',
+		'<td align="center">',
+		'<a id="box_new" href="#">(New Voicemail Box)</a>',
+		'</td>',
+		'<td align="center">'
+		'<form method="GET">'
+		f'<span class="tooltipped"><input type="text" name="box" placeholder="Box" value="{html_att(q_box)}" size="10"/><span class="tooltip">Performs substring search of all Box numbers</span></span>',
+		f'<span class="tooltipped"><input type="text" name="name" placeholder="Name" value="{html_att(q_name)}" size="10"/><span class="tooltip">Performs substring search of all Box Names</span></span>',
+		'<input type="submit" value="Search"/>',
+		'<button id="clear" type="button" onclick="window.location=\'?\'">Clear</button>'
+		'</form>',
+		'</td>',
+		f'<td align="right"><a href="?{nextpage}">Next Page</a></td>',
+		'</tr></table>',
+		
 		'<table border=1>',
 		'<tr>',
 			'<th>Box</th>',
