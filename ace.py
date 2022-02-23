@@ -159,6 +159,20 @@ def walk_json_dicts( json_data: Any, callback: Callable[[Any],Opt[Any]] ) -> Opt
 #region html helpers
 
 
+def qry_int( name: str, default: int, *,
+	min: Opt[int] = None,
+	max: Opt[int] = None,
+) -> int:
+	try:
+		q = int( request.args.get( name, '' ))
+	except ValueError:
+		q = default
+	if min is not None and q < min:
+		return min
+	if max is not None and q > max:
+		return max
+	return q
+
 def html_text( text: str ) -> str:
 	return html.escape( text, quote = False )
 
@@ -545,6 +559,7 @@ class SqlVarChar( SqlBase ):
 			'NULL' if self.null else 'NOT NULL',
 			'PRIMARY KEY' if self.primary else '',
 			'UNIQUE' if self.unique else '',
+			'COLLATE NOCASE',
 		]
 		return ' '.join( filter( None, sql ))
 
@@ -633,6 +648,7 @@ class SqlText( SqlBase ):
 			'NULL' if self.null else 'NOT NULL',
 			#'PRIMARY KEY' if self.primary else '',
 			#'UNIQUE' if self.unique else '',
+			'COLLATE NOCASE',
 		]
 		return ' '.join( filter( None, sql ))
 
@@ -693,7 +709,12 @@ class Repository( metaclass = ABCMeta ):
 		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.get_by_id' )
 	
 	@abstractmethod
-	def list( self ) -> Seq[Tuple[int, Dict[str, Any]]]:
+	def list( self,
+		filters: Dict[str,str] = {},
+		*,
+		limit: Opt[int] = None,
+		offset: int = 0,
+	) -> Seq[Tuple[int, Dict[str, Any]]]:
 		# Return all dictionaries of type
 		cls = type( self )
 		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.list' )
@@ -797,14 +818,39 @@ class RepoSqlite( Repository ):
 		
 		return item
 	
-	def list( self ) -> Seq[Tuple[int,Dict[str,Any]]]:
+	def list( self,
+		filters: Dict[str,str] = {},
+		*,
+		limit: Opt[int] = None,
+		offset: int = 0,
+	) -> Seq[Tuple[int, Dict[str, Any]]]:
 		items: Seq[Tuple[int, Dict[str, Any]]]
 		
+		params: List[str] = []
+		if filters:
+			wheres: List[str] = []
+			for k, v in filters.items():
+				wheres.append( f'"{k}" like ?' )
+				params.append( f'%{v}%' )
+			_where_ = f'where {" and ".join(wheres)}'
+		else:
+			_where_ = ''
+		
+		paging: List[str] = []
+		if limit or offset:
+			paging.append( f'limit {int(limit or -1)!r}' )
+			if offset:
+				paging.append( f'offset {int(offset or 0)!r}' )
+		_paging_ = ' '.join( paging )
+		
+		sql = f'select * from "{self.tablename}" {_where_} order by id {_paging_}'
 		with closing( self.database.cursor() ) as cur:
-			cur.execute( f'select * from "{self.tablename}"' )
+			cur.execute( sql, params )
 			items = cur.fetchall()
 		
-		return items
+		if not limit:
+			limit = len( items )
+		return items[offset:offset+limit]
 	
 	def create( self, id: REPOID, resource: Dict[str,Any] ) -> None:
 		keys = []
@@ -898,16 +944,38 @@ class RepoFs( Repository ):
 		
 		return item
 	
-	def list( self ) -> List[Tuple[int,Dict[str,Any]]]:
+	def list( self,
+		filters: Dict[str,str] = {},
+		*,
+		limit: Opt[int] = None,
+		offset: int = 0,
+	) -> Seq[Tuple[int, Dict[str, Any]]]:
 		items: List[Tuple[int, Dict[str, Any]]] = []
+		
+		def _filter( id: int, data: Dict[str,Any] ) -> bool:
+			for k, v in filters.items():
+				if k == 'id':
+					if v not in str( id ):
+						return True
+				else:
+					if v.lower() not in data.get( k, '' ).lower():
+						return True
+			return False
 		
 		for itemFile in self.path.iterdir():
 			name = itemFile.name.lower()
 			if name.endswith( self.ending ):
 				with itemFile.open( 'r' ) as fileContent:
+					id = int( itemFile.stem )
 					data = json.loads( fileContent.read() )
-					items.append( ( int( itemFile.stem ), data ) )
+					if not _filter( id, data ):
+						items.append( ( id, data ) )
 		
+		items = sorted( items, key = lambda kv: kv[0] )
+		if offset:
+			items = items[offset:]
+		if limit:
+			items = items[:limit]
 		return items
 	
 	def create( self, id: REPOID, resource: Dict[str,Any] ) -> None:
@@ -1156,23 +1224,14 @@ def http_sounds() -> Response:
 #region http - DID
 
 
-@app.route( '/dids/', methods = [ 'GET', 'POST' ] )
+@app.route( '/dids/', methods = [ 'GET' ] )
 @login_required # type: ignore
 def http_dids() -> Response:
 	log = logger.getChild( 'http_dids' )
 	return_type = accept_type()
 	
-	try:
-		q_limit = int( request.args.get( 'limit', '' ))
-	except ValueError:
-		q_limit = 20
-	q_limit = clamp( q_limit, 1, 1000 )
-	
-	try:
-		q_offset = int( request.args.get( 'offset', '' ))
-	except ValueError:
-		q_offset = 0
-	q_offset = max( 0, q_offset )
+	q_limit = qry_int( 'limit', 20, min = 1, max = 1000 )
+	q_offset = qry_int( 'offset', 0, min = 0 )
 	
 	q_did = request.args.get( 'did', '' ).strip()
 	q_tf = request.args.get( 'tf', '' ).strip()
@@ -1201,19 +1260,19 @@ def http_dids() -> Response:
 					log.error( f'error parsing json of {str(file)!r}: {e!r}' )
 					continue
 			if q_tf and q_tf not in data.get( 'tollfree', '' ):
-				log.debug( f'rejecting {str(file)!r} b/c {q_tf!r} not in {data.get("tollfree","")!r}' )
+				#log.debug( f'rejecting {str(file)!r} b/c {q_tf!r} not in {data.get("tollfree","")!r}' )
 				continue
 			if q_acct and q_acct not in str( data.get( 'acct', '' )):
-				log.debug( f'rejecting {str(file)!r} b/c {q_acct!r} not in {data.get("acct","")!r}' )
+				#log.debug( f'rejecting {str(file)!r} b/c {q_acct!r} not in {data.get("acct","")!r}' )
 				continue
 			if q_name and q_name not in data.get( 'name', '' ):
-				log.debug( f'rejecting {str(file)!r} b/c {q_name!r} not in {data.get("name","")!r}' )
+				#log.debug( f'rejecting {str(file)!r} b/c {q_name!r} not in {data.get("name","")!r}' )
 				continue
 			if q_route and q_route not in str( data.get( 'route', '' )):
-				log.debug( f'rejecting {str(file)!r} b/c {q_route!r} not in {data.get("route","")!r}' )
+				#log.debug( f'rejecting {str(file)!r} b/c {q_route!r} not in {data.get("route","")!r}' )
 				continue
 			if q_notes and q_notes not in data.get( 'notes', '' ):
-				log.debug( f'rejecting {str(file)!r} b/c {q_notes!r} not in {data.get("notes","")!r}' )
+				#log.debug( f'rejecting {str(file)!r} b/c {q_notes!r} not in {data.get("notes","")!r}' )
 				continue
 		if skipped < q_offset:
 			skipped += 1
@@ -1443,7 +1502,7 @@ def http_did( did: int ) -> Response:
 	
 	route_options: List[str] = []
 	found = False
-	for r, routedata in sorted( routes, key = lambda kv: kv[0] ):
+	for r, routedata in routes:
 		att = ''
 		if route == r:
 			att = ' selected'
@@ -1906,6 +1965,11 @@ def http_routes() -> Response:
 	log = logger.getChild( 'http_routes' )
 	return_type = accept_type()
 	
+	q_limit = qry_int( 'limit', 20, min = 1, max = 1000 )
+	q_offset = qry_int( 'offset', 0, min = 0 )
+	
+	q_name = request.args.get( 'name', '' ).strip()
+	
 	if request.method == 'POST':
 		# BEGIN route creation
 		inp = inputs()
@@ -1932,9 +1996,17 @@ def http_routes() -> Response:
 		return redirect( url )
 		# END route creation
 	
+	filters = {}
+	if q_name:
+		filters['name'] = q_name
+	
 	# BEGIN route list
 	try:
-		routes = list( REPO_ROUTES.list() )
+		routes = list( REPO_ROUTES.list( 
+			filters,
+			limit = q_limit,
+			offset = q_offset,
+		))
 	except Exception as e:
 		#raise e
 		return _http_failure(
@@ -1942,11 +2014,8 @@ def http_routes() -> Response:
 			f'Error querying routes list: {e!r}',
 			500,
 		)
-	routes.sort( key = lambda kv: kv[0] )
 	if return_type == 'application/json':
 		return rest_success( [ { 'route': id, 'name': route.get( 'name' ) } for id, route in routes ] )
-	
-	# TODO FIXME: pagination anyone?
 	
 	row_html = '\n'.join( [
 		'<tr>',
@@ -1959,8 +2028,24 @@ def http_routes() -> Response:
 		row_html.format( route = route, url = url_for( 'http_route', route = route ), **data )
 		for route, data in routes
 	] )
+	prevpage = urlencode( { 'name': q_name, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit ) } )
+	nextpage = urlencode( { 'name': q_name, 'limit': q_limit, 'offset': q_offset + q_limit } )
 	return html_page(
-		'<center><a id="route_new" href="#">(New Route)</a></center>',
+		'<table width="100%"><tr>',
+		f'<td align="left"><a href="?{prevpage}">Prev Page</a></td>',
+		'<td align="center">',
+		'<a id="route_new" href="#">(New Route)</a>',
+		'</td>',
+		'<td align="center">'
+		'<form method="GET">'
+		f'<span class="tooltipped"><input type="text" name="name" placeholder="Name" value="{html_att(q_name)}" size="10"/><span class="tooltip">Performs substring search of all Account Names</span></span>',
+		'<input type="submit" value="Search"/>',
+		'<button id="clear" type="button" onclick="window.location=\'?\'">Clear</button>'
+		'</form>',
+		'</td>',
+		f'<td align="right"><a href="?{nextpage}">Next Page</a></td>',
+		'</tr></table>',
+		
 		'<table border=1>',
 		'<tr><th>Route</th><th>Name</th><th>Delete</th></tr>',
 		body,
@@ -2529,7 +2614,6 @@ def spawn ( target: Callable[...,Any], *args: Any, **kwargs: Any ) -> Thread:
 
 
 #endregion CDR Vacuum
-
 #region bootstrap
 
 
