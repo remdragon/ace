@@ -1301,8 +1301,8 @@ def http_dids() -> Response:
 	body = '\n'.join( [
 		row_html.format( **d ) for d in dids
 	] )
-	prevpage = urlencode( { 'did': q_did, 'tf': q_tf, 'acct': q_acct, 'name': q_name, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit ) } )
-	nextpage = urlencode( { 'did': q_did, 'tf': q_tf, 'acct': q_acct, 'name': q_name, 'limit': q_limit, 'offset': q_offset + q_limit } )
+	prevpage = urlencode( { 'did': q_did, 'tf': q_tf, 'acct': q_acct, 'name': q_name, 'route': q_route, 'notes': q_notes, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit ) } )
+	nextpage = urlencode( { 'did': q_did, 'tf': q_tf, 'acct': q_acct, 'name': q_name, 'route': q_route, 'notes': q_notes, 'limit': q_limit, 'offset': q_offset + q_limit } )
 	return html_page(
 		'<table width="100%"><tr>',
 		f'<td align="left"><a href="?{prevpage}">Prev Page</a></td>',
@@ -2145,14 +2145,16 @@ def route_delete( route: int ) -> Response:
 	# check if route is referenced by any DID
 	for file in Path( ITAS_DIDS_PATH ).glob( '*.did' ):
 		with file.open( 'r' ) as f:
-			did = json.load( f )
-		if route == did['route']:
+			raw = f.read()
+		did = json.loads( raw ) if raw else {}
+		if route == did.get( 'route' ):
 			raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by DID {file.stem}' )
 	
 	# check if route is referenced by ani ANI
 	for file in Path( ITAS_ANIS_PATH ).glob( '*.ani' ):
 		with file.open( 'r' ) as f:
-			ani =json.load( f )
+			raw = f.read()
+		ani = json.loads( raw ) if raw else {}
 		if route == ani.get( 'route' ):
 			raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by ANI {file.stem}' )
 		overrides = ani.get( 'overrides' ) or ''
@@ -2188,7 +2190,8 @@ def route_delete( route: int ) -> Response:
 	# check if route is referenced by a voicemail box
 	for file in voicemail_settings_path( 1 ).parent.glob( '*.box' ):
 		with file.open( 'r' ) as f:
-			box_settings = json.load( f )
+			raw = f.read()
+		box_settings = json.loads( raw ) if raw else {}
 		if walk_json_dicts( box_settings, json_dict_route_check ):
 			raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by voicemail box {file.stem}' )
 	
@@ -2611,8 +2614,9 @@ def _cdr_vacuum() -> None:
 	for item in path.iterdir():
 		if item.is_file() and item.exists():
 			try:
-				with open(item, 'r') as cdr_file:
-					data = json.load(cdr_file)
+				with open( item, 'r' ) as cdr_file:
+					raw = cdr_file.read()
+				data = json.loads( raw ) if raw else {}
 				call_uuid = data['variables']['uuid']
 				start_stamp = _uepoch_to_timestamp(data['variables']['start_uepoch'])
 				answered_stamp = _uepoch_to_timestamp(data['variables']['answered_uepoch'])
