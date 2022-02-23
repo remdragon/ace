@@ -491,7 +491,7 @@ def voicemail_box_msgs_path( box: int ) -> Path:
 #region repo base
 
 
-REPOID = int
+REPOID = Union[int,str]
 
 
 class SqlBase( metaclass = ABCMeta ):
@@ -714,7 +714,7 @@ class Repository( metaclass = ABCMeta ):
 		*,
 		limit: Opt[int] = None,
 		offset: int = 0,
-	) -> Seq[Tuple[int, Dict[str, Any]]]:
+	) -> Seq[Tuple[REPOID, Dict[str, Any]]]:
 		# Return all dictionaries of type
 		cls = type( self )
 		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.list' )
@@ -823,8 +823,8 @@ class RepoSqlite( Repository ):
 		*,
 		limit: Opt[int] = None,
 		offset: int = 0,
-	) -> Seq[Tuple[int, Dict[str, Any]]]:
-		items: Seq[Tuple[int, Dict[str, Any]]]
+	) -> Seq[Tuple[REPOID, Dict[str, Any]]]:
+		items: Seq[Tuple[REPOID, Dict[str, Any]]]
 		
 		params: List[str] = []
 		if filters:
@@ -949,8 +949,8 @@ class RepoFs( Repository ):
 		*,
 		limit: Opt[int] = None,
 		offset: int = 0,
-	) -> Seq[Tuple[int, Dict[str, Any]]]:
-		items: List[Tuple[int, Dict[str, Any]]] = []
+	) -> Seq[Tuple[REPOID, Dict[str, Any]]]:
+		items: List[Tuple[REPOID, Dict[str, Any]]] = []
 		
 		def _filter( id: int, data: Dict[str,Any] ) -> bool:
 			for k, v in filters.items():
@@ -985,15 +985,15 @@ class RepoFs( Repository ):
 		with path.open( 'w' ) as fileContent:
 			fileContent.write( json_dumps( resource ))
 	
-	def update( self, id: Union[int,str], resource: Dict[str,Any] = {} ) -> Dict[str,Any]:
-		print( f"updating {resource}" )
+	def update( self, id: REPOID, resource: Dict[str,Any] = {} ) -> Dict[str,Any]:
+		print( f'updating {resource}' )
 		path = self._path_from_id( id )
 		with path.open( 'w' ) as fileContent:
 			fileContent.write( json_dumps( resource ))
 		
 		return resource
 	
-	def delete( self, id: Union[int,str] ) -> Dict[str,Any]:
+	def delete( self, id: REPOID ) -> Dict[str,Any]:
 		path = self._path_from_id( id )
 		with path.open( 'r' ) as fileContent:
 			resource: Dict[str,Any] = json.loads( fileContent.read() )
@@ -1002,7 +1002,7 @@ class RepoFs( Repository ):
 		
 		return resource
 	
-	def _path_from_id( self, id: Union[int,str] ) -> Path:
+	def _path_from_id( self, id: REPOID ) -> Path:
 		return self.path / f'{id}{self.ending}'
 
 
