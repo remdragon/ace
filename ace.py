@@ -1968,6 +1968,7 @@ def http_routes() -> Response:
 	q_limit = qry_int( 'limit', 20, min = 1, max = 1000 )
 	q_offset = qry_int( 'offset', 0, min = 0 )
 	
+	q_route = request.args.get( 'route', '' ).strip()
 	q_name = request.args.get( 'name', '' ).strip()
 	
 	if request.method == 'POST':
@@ -1997,6 +1998,8 @@ def http_routes() -> Response:
 		# END route creation
 	
 	filters = {}
+	if q_route:
+		filters['id'] = q_route
 	if q_name:
 		filters['name'] = q_name
 	
@@ -2038,6 +2041,7 @@ def http_routes() -> Response:
 		'</td>',
 		'<td align="center">'
 		'<form method="GET">'
+		f'<span class="tooltipped"><input type="text" name="route" placeholder="Route" value="{html_att(q_route)}" size="10"/><span class="tooltip">Performs substring search of all Route numbers</span></span>',
 		f'<span class="tooltipped"><input type="text" name="name" placeholder="Name" value="{html_att(q_name)}" size="10"/><span class="tooltip">Performs substring search of all Account Names</span></span>',
 		'<input type="submit" value="Search"/>',
 		'<button id="clear" type="button" onclick="window.location=\'?\'">Clear</button>'
