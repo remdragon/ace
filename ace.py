@@ -2211,6 +2211,7 @@ def http_voicemails() -> Response:
 	if request.method == 'POST':
 		# BEGIN voicemail box creation
 		inp = inputs()
+		log.debug( f'{inp=}' )
 		try:
 			box = int( inp.get( 'box', '' ).strip() )
 		except ValueError as e:
@@ -2225,18 +2226,40 @@ def http_voicemails() -> Response:
 			return _http_failure(
 				return_type,
 				f'voicemail box number {box!r} already exists',
-				400,
 			)
 		
-		digits = list( '1234567890' )
-		random.shuffle( digits )
-		settings = {
-			'pin': digits[:8],
-			'max_greeting_seconds': 120, # TODO FIXME: system default?
-			'max_message_seconds': 120, # TODO FIXME: system default?
-			'allow_guest_urgent': True,
-			'post_save': [],
-		}
+		settings = inp.get( 'settings', None )
+		if settings:
+			if not isinstance( settings, dict ):
+				return _http_failure( return_type,
+					f'invalid type: {settings=}',
+				)
+			if not settings.get( 'pin', '' ).isnumeric():
+				return _http_failure( return_type,
+					f'missing pin: {settings=}',
+				)
+			if not isinstance( settings.get( 'max_greeting_seconds', None ), int ):
+				return _http_failure( return_type,
+					f'missing max_greeting_seconds: {settings=}',
+				)
+			if not isinstance( settings.get( 'max_message_seconds', None ), int ):
+				return _http_failure( return_type,
+					f'missing max_message_seconds: {settings=}',
+				)
+			if not isinstance( settings.get( 'allow_guest_urgent', None ), bool ):
+				return _http_failure( return_type,
+					f'missing allow_guest_urgent: {settings=}',
+				)
+		else:
+			digits = list( '1234567890' )
+			random.shuffle( digits )
+			settings = {
+				'pin': digits[:8],
+				'max_greeting_seconds': 120, # TODO FIXME: system default?
+				'max_message_seconds': 120, # TODO FIXME: system default?
+				'allow_guest_urgent': True,
+			}
+		
 		with path.open( 'w' ) as f:
 			f.write( json_dumps( settings ))
 		
@@ -2291,6 +2314,7 @@ def http_voicemails() -> Response:
 		'<tr>',
 			'<td><a href="{url}">{box}</a></td>',
 			'<td><a href="{url}">{name}</a></td>',
+			'<td><button class="clone" box="{box}">Clone {box} {name}</button></td>',
 			'<td><button class="delete" box="{box}">Delete {box} {name}</button></td>',
 		'</tr>',
 	] )
@@ -2324,6 +2348,7 @@ def http_voicemails() -> Response:
 		'<tr>',
 			'<th>Box</th>',
 			'<th>Name</th>',
+			'<th>Clone</th>',
 			'<th>Delete</th>',
 		'</tr>',
 		body,

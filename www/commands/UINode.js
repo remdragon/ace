@@ -188,7 +188,7 @@ export default class UINode
 	{
 		if ( !confirm( `Cut "${this.label}" and all its children?` ))
 			return
-		this.treenode.elementLi.focus()
+		this.treenode.elementLi.focus() // TODO FIXME: why does this only work for mouse and not for for Ctrl+X keyboard shortcut?
 		let json = JSON.stringify( this.getJson(), null, 4 )
 		navigator.clipboard.writeText( json )
 		this.parent.remove( this )
