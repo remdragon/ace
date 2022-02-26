@@ -9,7 +9,7 @@ export default class SMS extends UINode {
 <br/>
 This command only works for voicemail notify, it does nothing if invoked in a route<br/>
 <br/>
-Message supports placeholders like ${box} ${ani} ${did}`
+Message supports placeholders like \${box} \${ani} \${did}`
 	
 	get label()
 	{

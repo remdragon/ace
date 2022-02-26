@@ -70,10 +70,10 @@ One range per line. First pattern matched is used`,
 	createElement({
 		isSubtree = false,
 		data = {},
+		context = this.contextOptionalSubtree(),
 	}) {
-		super.createElement({ isSubtree, data })
+		super.createElement({ isSubtree, data, context })
 		
-		let context = null // use the default
 		this.makeFixedBranch( 'hit', HIT_LABEL,
 			context,
 			this.hit_help,

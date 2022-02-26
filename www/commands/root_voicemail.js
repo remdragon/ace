@@ -14,7 +14,7 @@ Configuration settings here or right-click on the delivery node to configuration
 <br/>
 If user doesn't press any digits, timeout plays a beep and records a message<br/>
 <br/>
-Email Subject/Body and SMS Message support placeholders like ${box} ${ani} ${did}``
+Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${did}`
 	
 	digit_subtree_help = 'If this digit is pressed during the greeting, do this instead'
 	delivery_subtree_help = 'Use this to send emails and SMS msgs when a message has been created.'
@@ -59,6 +59,7 @@ Email Subject/Body and SMS Message support placeholders like ${box} ${ani} ${did
 		type: 'boolean',
 		input: 'checkbox',
 		label: 'Allow guests to make URGENT',
+		tooltip: 'enables extra prompt after guest records message giving them option to make message urgent',
 	},{
 		key: 'max_greeting_seconds',
 		type: 'int',
