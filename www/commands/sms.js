@@ -7,7 +7,9 @@ export default class SMS extends UINode {
 	
 	help = `Sends sms notification about a voicemail message<br/>
 <br/>
-This command only works for voicemail notify, it does nothing if invoked in a route`
+This command only works for voicemail notify, it does nothing if invoked in a route<br/>
+<br/>
+Message supports placeholders like ${box} ${ani} ${did}`
 	
 	get label()
 	{

@@ -19,9 +19,12 @@ Right-click on it to start adding instructions to your route.
 	route//: integer
 	name//: string
 	
-	fields = [
-		{ key: 'name', type: 'string', label: 'Name: ' }
-	]
+	fields = [{
+		key: 'name',
+		type: 'string',
+		label: 'Name: ',
+		tooltip: 'This is cosmetic and only used in the tree',
+	}]
 	
 	constructor( tree, route, data )
 	{

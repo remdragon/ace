@@ -12,7 +12,9 @@ export default class RootVoiceMail extends UINode {
 <br/>
 Configuration settings here or right-click on the delivery node to configuration automation on delivery.<br/>
 <br/>
-If user doesn't press any digits, timeout plays a beep and records a message`
+If user doesn't press any digits, timeout plays a beep and records a message<br/>
+<br/>
+Email Subject/Body and SMS Message support placeholders like ${box} ${ani} ${did}``
 	
 	digit_subtree_help = 'If this digit is pressed during the greeting, do this instead'
 	delivery_subtree_help = 'Use this to send emails and SMS msgs when a message has been created.'
@@ -40,6 +42,7 @@ If user doesn't press any digits, timeout plays a beep and records a message`
 		key: 'name',
 		type: 'string',
 		label: 'Name: ',
+		tooltip: 'This is cosmetic and only used in the tree',
 	},{
 		key: 'pin',
 		type: 'int',

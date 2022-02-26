@@ -7,7 +7,9 @@ export default class Email extends UINode {
 	
 	help = `Sends voicemail message as an email<br/>
 <br/>
-This command only works for voicemail notify, it does nothing if invoked in a route`
+This command only works for voicemail notify, it does nothing if invoked in a route<br/>
+<br/>
+Subject/Body support placeholders like ${box} ${ani} ${did}`
 	
 	get label()
 	{
@@ -22,21 +24,26 @@ This command only works for voicemail notify, it does nothing if invoked in a ro
 	
 	fields = [{
 		key: 'name',
-		label: 'Name:', // TODO FIXME: tooltip
+		label: 'Name:',
+		tooltip: 'This is cosmetic and only used in the tree',
 	},{
 		key: 'mailto',
-		label: 'Email To:', // TODO FIXME: tooltip
+		label: 'Email To:',
+		placeholder: '(recipient email address)',
+		tooltip: 'Enter the recipient email address here, multiple recipients not supported',
 	},{
 		key: 'subject',
 		label: 'Subject:', // TODO FIXME: tooltip
 		placeholder: '(Using default email subject)',
+		tooltip: 'If left blank, the box default is used',
 	},{
 		key: 'body',
 		label: 'Body:',
 		input: 'textarea', // TODO FIXME: tooltip
-		placeholder: '(using default email body)',
 		cols: 60,
 		rows: 10,
+		placeholder: '(using default email body)',
+		tooltip: 'If left blank, the box default is used',
 	},{
 		key: 'format',
 		label: 'Attached Greeting File Format:',
