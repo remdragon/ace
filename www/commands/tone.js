@@ -4,7 +4,7 @@ const TONE_UK_RING = '%(400,200,400,450);%(400,2200,400,450)'
 const TONE_US_RING = '%(2000,4000,440,480)'
 const TONE_US_BUSY = '%(500,500,480,620)'
 const TONE_US_REORDER = '%(300,200,480,620)'
-const TONE_US_SIT_OOSVC = '%(274,0,913.8);%(274,0,1370.6);%(380,0,1776.7)'
+const TONE_US_SIT_OOSVC = '%(274,0,913.8);%(274,0,1370.6);%(380,1000,1776.7)'
 
 export default class Tone extends UINode {
 	static icon = '/media/streamline/music-note-2@20.png'

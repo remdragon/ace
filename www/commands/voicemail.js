@@ -9,7 +9,7 @@ export default class Voicemail extends UINode {
 <br/>
 If "box" is blank or 0, invokes the voicemail checkin<br/>
 <br/>
-You can use channel variables in the greeting override, but if that doesn't evaluate to a number from 0-9, the current greeting will be played instead.<br/>
+You can use channel variables in the greeting override, but if that doesn't evaluate to a number from 1-9, the current greeting will be played instead.<br/>
 <br/>
 When that finishes, execution will resume here
 `
@@ -34,7 +34,7 @@ When that finishes, execution will resume here
 			let json = await fetch( '/voicemails', params )
 				.then( rsp => rsp.json() )
 			//console.log( JSON.stringify( json ) )
-			let options = [ { label: '(Choose One)', value: '' } ]
+			let options = [ { label: '(Checkin)', value: '' } ]
 			for ( let row of json.rows )
 			{
 				options.push({ label: `${row.box} ${row.name || "(Unnamed)"}`, value: row.box })

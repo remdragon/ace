@@ -19,14 +19,16 @@ This command only works for voicemail notify, it does nothing if invoked in a ro
 	message = '' // string
 	
 	fields = [{
-		key: 'name',
+		key: 'name', // TODO FIXME: tooltip
 		label: 'Name:',
 	},{
-		key: 'smsto',
-		label: 'SMS To:',
+		key: 'smsto', // TODO FIXME: tooltip
+		label: 'SMS Number:',
+		placeholder: '(enter phone number here)',
 	},{
 		key: 'message',
 		label: 'Message:',
 		size: 60,
+		placeholder: '(using default SMS body)',
 	}]
 }

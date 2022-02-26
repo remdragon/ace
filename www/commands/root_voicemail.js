@@ -10,8 +10,10 @@ export default class RootVoiceMail extends UINode {
 	
 	help = `This is the configuration node for your Voicemail Box<br/>
 <br/>
-Configuration settings here or right-click on the delivery node to configuration automation on delivery.
-`
+Configuration settings here or right-click on the delivery node to configuration automation on delivery.<br/>
+<br/>
+If user doesn't press any digits, timeout plays a beep and records a message`
+	
 	digit_subtree_help = 'If this digit is pressed during the greeting, do this instead'
 	delivery_subtree_help = 'Use this to send emails and SMS msgs when a message has been created.'
 	
@@ -75,6 +77,18 @@ Configuration settings here or right-click on the delivery node to configuration
 		input: 'textarea',
 		cols: 60,
 		rows: 10,
+	},{
+		key: 'format',
+		label: 'Default Attached Greeting File Format:',
+		input: 'select',
+		async options( self )
+		{
+			return [
+				{ label: 'No attachment', value: '-' },
+				{ label: 'MP3', value: 'mp3' },
+				{ label: 'WAV', value: 'wav' },
+			]
+		},
 	},{
 		key: 'default_sms_message',
 		size: 40,

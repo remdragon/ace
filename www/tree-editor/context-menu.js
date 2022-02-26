@@ -396,9 +396,14 @@ function createNodeFromNodeType( NodeType )
 {
 	return function( treenode )
 	{
-		let node = new NodeType( treenode.uinode )
-		node.createElement({})
+		let parent = treenode.uinode
+		let uinode = new NodeType( parent )
+		uinode.createElement({})
 		treeDidChange()
+		
+		// TODO FIXME: figure out why the following isn't working:
+		//console.log( 'attempting focus to ', uinode.treenode.elementLi )
+		//uinode.treenode.elementLi.focus()
 	}
 }
 

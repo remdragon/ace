@@ -22,17 +22,19 @@ This command only works for voicemail notify, it does nothing if invoked in a ro
 	
 	fields = [{
 		key: 'name',
-		label: 'Name:',
+		label: 'Name:', // TODO FIXME: tooltip
 	},{
 		key: 'mailto',
-		label: 'Email To:',
+		label: 'Email To:', // TODO FIXME: tooltip
 	},{
 		key: 'subject',
-		label: 'Subject:',
+		label: 'Subject:', // TODO FIXME: tooltip
+		placeholder: '(Using default email subject)',
 	},{
 		key: 'body',
 		label: 'Body:',
-		input: 'textarea',
+		input: 'textarea', // TODO FIXME: tooltip
+		placeholder: '(using default email body)',
 		cols: 60,
 		rows: 10,
 	},{
@@ -42,7 +44,8 @@ This command only works for voicemail notify, it does nothing if invoked in a ro
 		async options( self )
 		{
 			return [
-				{ label: 'No attachment', value: '' },
+				{ label: '(Use Voicemail box default)', value: '' },
+				{ label: 'No attachment', value: '-' },
 				{ label: 'MP3', value: 'mp3' },
 				{ label: 'WAV', value: 'wav' },
 			]

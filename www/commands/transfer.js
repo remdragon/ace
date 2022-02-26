@@ -34,7 +34,7 @@ Route exection stops here`
 		},{
 			key: 'dest',
 			label: 'Destination:',
-			tooltip: 'Enter the destination to transfer the call to',
+			tooltip: 'Enter the destination to transfer the call to, include outdial prefix for external destinations',
 		},{
 			key: 'dialplan',
 			label: 'Dialplan:',

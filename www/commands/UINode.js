@@ -161,7 +161,7 @@ export default class UINode
 					fname += event.key
 					//console.log( 'fname=', fname )
 					let f = uinode[fname]
-					if( true && !f )
+					if( false && !f )
 						console.log( `no handler for ${fname} in`, uinode )
 					if( f )
 					{
