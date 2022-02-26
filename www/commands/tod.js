@@ -11,9 +11,11 @@ export default class TOD extends UINode {
 	static command = 'tod'
 	
 	help =
-		'Tests time-of-day conditions and executes different commands depending on the result'
-	hit_help = 'These instructions will execute if the time-of-day conditions match'
-	miss_help = "These instructions will execute if the time-of-day conditions don't match"
+		`Tests time-of-day conditions and executes different commands depending on the result<br/>
+<br/>
+Executes the "hit" node if the TOD matches otherwise the "miss" node`
+	hit_help = 'This executes if the time-of-day conditions match'
+	miss_help = "This executes if the time-of-day conditions don't match"
 	
 	get label()
 	{
@@ -37,10 +39,10 @@ export default class TOD extends UINode {
 		placeholder: `Examples:
 Mon,Wed-Fri 08:00-17:00
 Sat 08:00-12:00
-1/5/2022 08:00-1/7 13:00
+not 1/5/2022 08:00-1/7 13:00
 `,
 		tooltip: `Enter specifics for DOW/TOD that should be considered.
-One range per line.`,
+One range per line. First pattern matched is used`,
 	}]
 	
 	constructor( parent )
