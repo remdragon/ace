@@ -26,7 +26,7 @@ For a list of all voices available, <a href='https://docs.aws.amazon.com/polly/l
 	fields = [{
 		key: 'name',
 		label: 'Name: ',
-		type: 'string',
+		tooltip: 'This is for documentation purposes only',
 	},{
 		key: 'voice',
 		label: 'Speech Voice',

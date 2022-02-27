@@ -21,12 +21,14 @@ Message supports placeholders like \${box} \${ani} \${did}`
 	message = '' // string
 	
 	fields = [{
-		key: 'name', // TODO FIXME: tooltip
+		key: 'name',
 		label: 'Name:',
+		tooltip: 'This is for documentation purposes only',
 	},{
-		key: 'smsto', // TODO FIXME: tooltip
+		key: 'smsto',
 		label: 'SMS Number:',
 		placeholder: '(enter phone number here)',
+		tooltip: 'The phone # to send the SMS to',
 	},{
 		key: 'message',
 		label: 'Message:',

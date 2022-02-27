@@ -22,7 +22,7 @@ Route exection stops here`
 		{
 			key: 'leg',
 			input: 'select',
-			label: 'Leg: ',
+			label: 'Leg:',
 			async options( self ) {
 				return [
 					{ label: 'A Leg (default)', value: '' },

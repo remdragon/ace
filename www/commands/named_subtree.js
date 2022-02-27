@@ -15,12 +15,11 @@ export default class NamedSubtree extends UINode {
 		return label
 	}
 	
-	fields = [
-		{
-			key: 'name',
-			label: 'Name: ',
-		},
-	]
+	fields = [{
+		key: 'name',
+		label: 'Name:',
+		tooltip: 'This is for documentation purposes only',
+	}]
 	
 	constructor(parent /*: UINode*/, label /*: string*/, help)
 	{

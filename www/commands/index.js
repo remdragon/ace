@@ -6,6 +6,7 @@ import Answer from './answer.js'; export{ Answer }
 import Bridge from './bridge.js'; export{ Bridge }
 import Email from './email.js'; export{ Email }
 import GoTo from './goto.js'; export{ GoTo }
+import Greeting from './greeting.js'; export{ Greeting }
 import Hangup from './hangup.js'; export{ Hangup }
 import IfNum from './ifnum.js'; export{ IfNum }
 import IfStr from './ifstr.js'; export{ IfStr }
@@ -45,6 +46,7 @@ let all_commands =
 	, Bridge
 	, Email
 	, GoTo
+	, Greeting
 	, Hangup
 	, IfNum
 	, IfStr

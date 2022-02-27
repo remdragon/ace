@@ -19,17 +19,14 @@ Useful for auto-accepting calls from Google for example
 	dtmf = ''//: string
 	name = ''
 	
-	fields = [
-		{
-			key: 'dtmf',
-			type: 'string',
-			label: 'DTMF: ',
-			tooltip: 'Example: 123*#',
-		},
-		{
-			key: 'name',
-			type: 'string',
-			label: 'Name: ',
-		}
-	]
+	fields = [{
+		key: 'dtmf',
+		type: 'string',
+		label: 'DTMF:',
+		tooltip: 'Example: 123*#',
+	},{
+		key: 'name',
+		label: 'Name:',
+		tooltip: 'This is for documentation purposes only',
+	}]
 }

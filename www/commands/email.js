@@ -25,7 +25,7 @@ Subject/Body support placeholders like \${box} \${ani} \${did}`
 	fields = [{
 		key: 'name',
 		label: 'Name:',
-		tooltip: 'This is cosmetic and only used in the tree',
+		tooltip: 'This is for documentation purposes only',
 	},{
 		key: 'mailto',
 		label: 'Email To:',

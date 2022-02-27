@@ -31,6 +31,7 @@ Otherwise the "${MISS_LABEL}" node will be executed<br/>
 	fields = [{
 		key: 'name',
 		label: 'Name:',
+		tooltip: 'This is for documentation purposes only',
 	},{
 		key: 'table',
 		label: 'Table:',

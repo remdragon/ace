@@ -1,7 +1,7 @@
 import PatternSubtree from '/commands/patternSubtree.js'
 
 import * as commands from '/commands/index.js'
-import UINode from '/commands/UINode.js'
+//import UINode from '/commands/UINode.js'
 import { treeDidChange } from './tree-editor.js'
 import{ moveNodeUp, moveNodeDown } from './util.js'
 
@@ -203,13 +203,40 @@ const newNotifyActionNode = {
 	}
 }
 
-const createPlayNode = {
+const createRoutePlayNode = {
 	text: 'New Play Node',
 	icon: '/aimara/images/add1.png',
 	action: function( treenode ) {},
 	submenu: {
 		elements: [
 			...[
+				commands.PlayDTMF,
+				commands.MOH,
+				commands.Playback,
+				commands.PreAnnounce,
+				commands.Ring,
+				commands.Silence,
+				commands.Tone,
+				commands.PlayTTS
+				//commands.PlayEmerg,
+				//commands.PlayEstHold,
+			].map( NodeType => ({
+				text: NodeType.context_menu_name,
+				icon: NodeType.icon,
+				action: createNodeFromNodeType( NodeType )
+			}))
+		]
+	}
+}
+
+const createVoicemailPlayNode = {
+	text: 'New Play Node',
+	icon: '/aimara/images/add1.png',
+	action: function( treenode ) {},
+	submenu: {
+		elements: [
+			...[
+				commands.Greeting,
 				commands.PlayDTMF,
 				commands.MOH,
 				commands.Playback,
@@ -349,16 +376,19 @@ const selectNodeActions = {
 
 const context_menu = {
 	contextRouteRoot: {
-		elements: [ copyNode, pasteNode, newTelephonyNode, newRouteLogicNode, createPlayNode ]
+		elements: [ copyNode, pasteNode, newTelephonyNode, newRouteLogicNode, createRoutePlayNode ]
 	},
 	contextLeaf: {
 		elements: [ copyNode, cutNode, pasteNode, deleteNode, nodeActions ]
 	},
 	contextSubtree: {
-		elements: [ copyNode, pasteNode, nodeActions, newTelephonyNode, newRouteLogicNode, createPlayNode ]
+		elements: [ copyNode, pasteNode, nodeActions, newTelephonyNode, newRouteLogicNode, createRoutePlayNode ]
 	},
 	contextOptionalSubtree: {
-		elements: [ copyNode, pasteNode, deleteNode, nodeActions, newTelephonyNode, newRouteLogicNode, createPlayNode ]
+		elements: [ copyNode, pasteNode, deleteNode, nodeActions, newTelephonyNode, newRouteLogicNode, createRoutePlayNode ]
+	},
+	contextOptionalSubtreeVoicemail: {
+		elements: [ copyNode, pasteNode, deleteNode, nodeActions, newTelephonyNode, newRouteLogicNode, createVoicemailPlayNode ]
 	},
 	contextOptionalSubtreeVoicemailDelivery: {
 		elements: [ copyNode, pasteNode, deleteNode, nodeActions, newNotifyLogicNode, newNotifyActionNode ]
@@ -370,13 +400,13 @@ const context_menu = {
 		elements: [ copyNode, deleteNode, nodeActions ]
 	},
 	context_GreetingInvalidTimeout: {
-		elements: [ copyNode, pasteNode, createPlayNode ]
+		elements: [ copyNode, pasteNode, createRoutePlayNode ]
 	},
 	contextIVRBranch: {
-		elements: [ copyNode, pasteNode, deleteNode, newTelephonyNode, newRouteLogicNode, createPlayNode ]
+		elements: [ copyNode, pasteNode, deleteNode, newTelephonyNode, newRouteLogicNode, createRoutePlayNode ]
 	},
 	contextIVR_PAGD_SuccessFailure: {
-		elements: [ copyNode, pasteNode, newTelephonyNode, newRouteLogicNode, createPlayNode ]
+		elements: [ copyNode, pasteNode, newTelephonyNode, newRouteLogicNode, createRoutePlayNode ]
 	},
 	contextSelect: {
 		elements: [ deleteNode, nodeActions, selectNodeActions ]
@@ -385,7 +415,7 @@ const context_menu = {
 		elements: [ ivrRootVoicemailActions ]
 	},
 	contextRootVoicemailDigitSubtree: {
-		elements: [ copyNode, pasteNode, deleteNode, newTelephonyNode, newRouteLogicNode, createPlayNode ]
+		elements: [ copyNode, pasteNode, deleteNode, newTelephonyNode, newRouteLogicNode, createVoicemailPlayNode ]
 	},
 	contextRootVoicemailDelivery: {
 		elements: [ copyNode, pasteNode, newNotifyLogicNode, newNotifyActionNode ]

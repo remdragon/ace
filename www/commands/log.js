@@ -17,7 +17,8 @@ export default class Log extends UINode {
 	
 	fields = [{
 		key: 'name',
-		label: 'Name: ',
+		label: 'Name:',
+		tooltip: 'This is for documentation purposes only',
 	},{
 		key: 'level',
 		input: 'select',

@@ -25,15 +25,16 @@ export default class Throttle extends UINode {
 	fields = [{
 		key: 'name',
 		label: 'Name:',
+		tooltip: 'This is for documentation purposes only',
 	}]
 	
 	createElement({
 		isSubtree = false,
-		data = {}
+		data = {},
+		context = this.contextOptionalSubtree(),
 	}) {
 		super.createElement({ isSubtree, data })
 		
-		let context = null
 		this.makeFixedBranch( 'allowedBranch', ALLOWED_LABEL,
 			context,
 			this.allowed_subtree_help,

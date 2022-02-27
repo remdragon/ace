@@ -40,9 +40,8 @@ Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${
 	
 	fields = [{
 		key: 'name',
-		type: 'string',
-		label: 'Name: ',
-		tooltip: 'This is cosmetic and only used in the tree',
+		label: 'Name:',
+		tooltip: 'This is for documentation purposes only',
 	},{
 		key: 'pin',
 		type: 'int',
@@ -52,7 +51,7 @@ Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${
 	},{
 		key: 'greeting',
 		type: 'int',
-		label: 'Greeting: ',
+		label: 'Greeting:',
 		tooltip: 'greeting # to play (1-9) - can be changed from the voicemail admin menu',
 	},{
 		key: 'allow_guest_urgent',
@@ -63,12 +62,12 @@ Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${
 	},{
 		key: 'max_greeting_seconds',
 		type: 'int',
-		label: 'Max greeting seconds: ',
+		label: 'Max greeting seconds:',
 		size: 4,
 	},{
 		key: 'max_message_seconds',
 		type: 'int',
-		label: 'Max message seconds: ',
+		label: 'Max message seconds:',
 		size: 4,
 	},{
 		key: 'default_email_subject',
@@ -146,6 +145,11 @@ Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${
 		let uinode = new NamedSubtree(
 			this, digit, this.digit_subtree_help,
 		)
+		uinode.contextOptionalSubtree = function()
+		{
+			console.log( 'BOOM!' )
+			return 'contextOptionalSubtreeVoicemail'
+		}
 		this.branches[digit] = uinode
 		uinode.createElement({
 			isSubtree: true,

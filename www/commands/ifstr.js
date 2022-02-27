@@ -61,10 +61,10 @@ If the condition is true, execute the "${TRUE_LABEL}" branch, otherwise the "${F
 	createElement({
 		isSubtree = false,
 		data = {},
+		context = this.contextOptionalSubtree(),
 	}) {
 		super.createElement({ isSubtree, data })
 		
-		let context = null // use the default
 		this.makeFixedBranch( 'trueBranch', TRUE_LABEL,
 			context,
 			this.true_subtree_help,

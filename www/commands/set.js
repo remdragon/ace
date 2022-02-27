@@ -22,7 +22,7 @@ export default class Set extends UINode {
 	fields = [{
 		key: 'name',
 		label: 'Name:',
-		tooltip: 'Name the node on the tree, can be left blank',
+		tooltip: 'This is for documentation purposes only',
 	},{
 		key: 'variable',
 		label: 'Variable:',

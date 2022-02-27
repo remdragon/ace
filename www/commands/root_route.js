@@ -21,9 +21,8 @@ Right-click on it to start adding instructions to your route.
 	
 	fields = [{
 		key: 'name',
-		type: 'string',
-		label: 'Name: ',
-		tooltip: 'This is cosmetic and only used in the tree',
+		label: 'Name:',
+		tooltip: 'This is for documentation purposes only',
 	}]
 	
 	constructor( tree, route, data )

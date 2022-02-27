@@ -24,9 +24,8 @@ Does not proceed with route instructions until audio is finished playing
 	
 	fields = [{
 		key: 'name',
-		label: 'Name: ',
-		type: 'string',
-		tooltip: 'This is cosmetic and only used in the tree',
+		label: 'Name:',
+		tooltip: 'This is for documentation purposes only',
 	},{
 		key: 'sound',
 		label: 'Sound:',

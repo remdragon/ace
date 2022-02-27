@@ -24,20 +24,18 @@ export default class GoTo extends UINode {
 	
 	destination//: string
 	
-	fields = [
-		{
-			key: 'destination',
-			input: 'select2',
-			label: 'Destination: ',
-			async options( self ) {
-				var targets = [ { label: '(Select One)', value: '' } ]
-				self.walkTree( function( node )
-				{
-					if( node.uuid )
-						targets.push( { label: node.label, value: node.uuid } )
-				})
-				return targets
-			},
-		}
-	]
+	fields = [{
+		key: 'destination',
+		input: 'select2',
+		label: 'Destination:',
+		async options( self ) {
+			var targets = [ { label: '(Select One)', value: '' } ]
+			self.walkTree( function( node )
+			{
+				if( node.uuid )
+					targets.push( { label: node.label, value: node.uuid } )
+			})
+			return targets
+		},
+	}]
 }

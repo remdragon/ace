@@ -15,7 +15,8 @@ export default class PatternSubtree extends NamedSubtree {
 	
 	fields = [{
 		key: 'name',
-		label: 'Name:'
+		label: 'Name:',
+		tooltip: 'This is for documentation purposes only',
 	},{
 		key: 'pattern',
 		label: 'Pattern:',

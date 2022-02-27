@@ -27,7 +27,7 @@ When that finishes, execution will resume here
 		type: 'string',
 		input: 'select2',
 		or_text: true,
-		label: 'Voicemail: ',
+		label: 'Voicemail:',
 		async options( self )
 		{
 			let params = { headers: { 'Accept': 'application/json' }}

@@ -32,9 +32,8 @@ See <a href='https://freeswitch.org/confluence/display/FREESWITCH/Tone_stream'>F
 	
 	fields = [{
 		key: 'name',
-		label: 'Name: ',
-		type: 'string',
-		tooltip: 'This is cosmetic and only used in the tree',
+		label: 'Name:',
+		tooltip: 'This is for documentation purposes only',
 	},{
 		key: 'tone',
 		label: 'Tone:',
