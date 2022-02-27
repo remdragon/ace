@@ -2597,17 +2597,10 @@ def http_voicemail( box: int ) -> Response:
 def http_audit_list() -> Any:
 	return_type = accept_type()
 	
-	try:
-		limit = int( request.args.get( 'limit', '' ))
-	except ValueError:
-		limit = 20
-	limit = clamp( limit, 1, 1000 )
+	q_limit = qry_int( 'limit', 20, min = 1, max = 1000 )
+	q_offset = qry_int( 'offset', 0, min = 0 )
 	
-	try:
-		offset = int( request.args.get( 'offset', '' ))
-	except ValueError:
-		offset = 0
-	offset = max( 0, offset )
+	q_search = request.args.get( 'search', '' ).strip()
 	
 	try:
 		path = Path( ITAS_AUDIT_DIR )
@@ -2625,7 +2618,22 @@ def http_audit_list() -> Any:
 			500,
 		)
 	logfile_list = sorted( logfile_list, key = lambda d: d['filename'] )[::-1]
-	logfile_list = logfile_list[offset:offset + limit]
+	
+	if q_search:
+		stop = q_offset + q_limit
+		search = q_search.lower()
+		new_list: List[Dict[str,str]] = []
+		for d in logfile_list:
+			file = path / d['filename']
+			with file.open( 'r' ) as f:
+				content = f.read()
+			if search in content.lower():
+				new_list.append( d )
+				if len( new_list ) >= stop: # do we have enough?
+					break # we have enough
+		logfile_list = new_list
+	
+	logfile_list = logfile_list[q_offset:q_offset + q_limit]
 	if return_type == 'application/json':
 		return rest_success( logfile_list )
 	row_html = (
@@ -2637,11 +2645,18 @@ def http_audit_list() -> Any:
 		row_html.format( **d ) for d in logfile_list
 	] )
 	
-	prevpage = urlencode( { 'limit': limit, 'offset': max( 0, offset - limit ) } )
-	nextpage = urlencode( { 'limit': limit, 'offset': offset + limit } )
+	prevpage = urlencode( { 'search': q_search, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit ) } )
+	nextpage = urlencode( { 'search': q_search, 'limit': q_limit, 'offset': q_offset + q_limit } )
 	return html_page(
 		'<table width="100%"><tr>',
 		f'<td align="left"><a href="?{prevpage}">Newer Logs</a></td>',
+		'<td align="center">',
+		'<form method="GET">'
+		f'<span class="tooltipped"><input type="text" name="search" placeholder="Search" value="{html_att(q_search)}"/><span class="tooltip">Performs substring search of all audit logs</span></span>',
+		'<input type="submit" value="Search"/>',
+		'<button id="clear" type="button" onclick="window.location=\'?\'">Clear</button>'
+		'</form>',
+		'</td>',
 		f'<td align="right"><a href="?{nextpage}">Older Logs</a></td>',
 		'</tr></table>',
 		'<table class="fancy">',
