@@ -86,6 +86,14 @@ else:
 #region utilities
 
 
+def logging_formatTime( self: Any, record: Any, datefmt: Opt[str] = None ) -> str:
+	dt = datetime.datetime.fromtimestamp( record.created )
+	datefmt = datefmt or '%b%d %H:%M:%S.%F'
+	if '%F' in datefmt:
+		datefmt = datefmt.replace( '%F', dt.strftime('%f')[:-3] )
+	return dt.strftime( datefmt )
+setattr( logging.Formatter, 'formatTime', logging_formatTime )
+
 AnyNumeric = TypeVar( 'AnyNumeric', int, float )
 def clamp( val: AnyNumeric, minval: AnyNumeric, maxval: AnyNumeric ) -> AnyNumeric:
 	return sorted( [ val, minval, maxval ] )[1]
@@ -2700,7 +2708,10 @@ if __name__ == '__main__':
 		)
 		logger.addHandler( journald_handler )
 	
-	logging.basicConfig( level = logging.DEBUG )
+	logging.basicConfig(
+		level = logging.DEBUG,
+		format = '%(asctime)s:%(levelname)s:%(name)s:%(message)s',
+	)
 	cmd = sys.argv[1] if len( sys.argv ) > 1 else ''
 	if cmd:
 		sys.exit( service_command( cmd ))
