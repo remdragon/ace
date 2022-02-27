@@ -38,7 +38,7 @@ import socket
 import sqlite3
 import sys
 import tempfile
-from threading import Thread
+from threading import RLock, Thread
 from tornado.wsgi import WSGIContainer # pip install tornado
 from tornado.ioloop import IOLoop
 from tornado.httpserver import HTTPServer
@@ -357,6 +357,9 @@ if not cfg_path.is_file():
 		f'PERMANENT_SESSION_LIFETIME = {datetime.timedelta(minutes=5)!r}',
 		f'ITAS_LISTEN_PORT = {443!r}',
 		f'ITAS_CERTIFICATE_PEM = {str(etc_path/"certificate.pem")!r}',
+		f'ITAS_AUTOBAN_BAD_EXPIRE_MINUTES = {0.5!r}',
+		f'ITAS_AUTOBAN_BAD_COUNT_LOCKOUT = {10!r}',
+		f'ITAS_AUTOBAN_DURATION_MINUTES = {10!r}',
 		f'ITAS_AUDIT_DIR = {"/var/log/itas/ace/"!r}',
 		f'ITAS_AUDIT_FILE = {"%Y-%m-%d.log"!r}',
 		f'ITAS_AUDIT_TIME = {"%Y-%m-%d %H:%M:%S.%f %Z%z"!r}',
@@ -401,6 +404,9 @@ SESSION_FILE_DIR: str = ''
 PERMANENT_SESSION_LIFETIME: datetime.timedelta = datetime.timedelta( minutes = 5 )
 ITAS_LISTEN_PORT: int = 443
 ITAS_CERTIFICATE_PEM: str = ''
+ITAS_AUTOBAN_BAD_EXPIRE_MINUTES: float = 0.5
+ITAS_AUTOBAN_BAD_COUNT_LOCKOUT: int = 10
+ITAS_AUTOBAN_DURATION_MINUTES: float = 10
 ITAS_AUDIT_DIR: str = ''
 ITAS_AUDIT_FILE: str = ''
 ITAS_AUDIT_TIME: str = ''
@@ -427,6 +433,57 @@ app.config['APP_NAME'] = 'Automated Call Experience (ACE)'
 
 
 #endregion flask config
+#region autoban
+
+
+class AutoBan:
+	def __init__( self ) -> None:
+		self._lock = RLock()
+		self._fails: Dict[str,List[datetime.datetime]] = {}
+		self._bans: Dict[str,datetime.datetime] = {}
+	
+	def try_auth( self, usernm: str, secret: str ) -> bool:
+		log = logger.getChild( 'AutoBan.try_auth' )
+		auth = authenticate( usernm, secret )
+		with self._lock:
+			ip = request.remote_addr
+			now = datetime.datetime.now()
+			
+			# check if user is already locked out:
+			try:
+				until = self._bans[ip]
+			except KeyError:
+				pass
+			else:
+				if until <= now:
+					del self._bans[ip]
+				else:
+					log.debug( 'user %r is locked out until %r', usernm, str( until ))
+					return False
+			
+			# check for auth success:
+			if auth:
+				self._fails.pop( ip, None ) # successful login - reset failure count
+				return True
+			
+			# update fail count and check if user needs to be locked out:
+			ar = self._fails.get( ip, [] )
+			while ar and ar[0] <= now:
+				ar = ar[1:] # remove expired bad pw attempts
+			ar.append( now + datetime.timedelta( minutes = ITAS_AUTOBAN_BAD_EXPIRE_MINUTES ))
+			if len( ar ) >= ITAS_AUTOBAN_BAD_COUNT_LOCKOUT:
+				until = now + datetime.timedelta( minutes = ITAS_AUTOBAN_DURATION_MINUTES )
+				self._bans[ip] = until
+				self._fails.pop( ip, None )
+				log.debug( 'user %r banned until %r', usernm, str( until ))
+			else:
+				self._fails[ip] = ar
+				log.debug( 'user %r fail count=%r', usernm, len( ar ))
+			return False
+autoban = AutoBan()
+
+
+#endregion autoban
 #region paths and auditing
 
 
@@ -1073,7 +1130,7 @@ login_manager.setup_app( app )
 def try_login( usernm: str, secret: str, remember: bool = False ) -> bool:
 	log = logger.getChild( 'try_login' )
 	log.debug( 'trying usernm=%r', usernm )
-	if usernm and secret and authenticate( usernm, secret ):
+	if usernm and secret and autoban.try_auth( usernm, secret ):
 		log.debug( 'usernm %r auth success', usernm )
 		user = User( usernm )
 		session[SESSION_USERDATA] = user
@@ -1419,11 +1476,11 @@ def try_post_did( did: int, data: Dict[str,str] ) -> int:
 		f'\n\t{k}={v!r}' for k, v in data2.items() if v != ''
 	)
 	if did:
-		audit( f'Changed DID {did}:{auditdata}' )
+		audit( f'Changed DID {did} at {str(path)!r}:{auditdata}' )
 	else:
 		if path.exists():
 			raise ValidationError( f'DID already exists: {did2}' )
-		audit( f'Created DID {did2}:{auditdata}' )
+		audit( f'Created DID {did2} at {str(path)!r}:{auditdata}' )
 	with path.open( 'w' ) as f:
 		print( json_dumps( data2 ), file = f )
 	
@@ -1444,7 +1501,7 @@ def http_did( did: int ) -> Response:
 		except Exception as e1:
 			return _http_failure( return_type, repr( e1 ), 500 )
 		else:
-			audit( f'Deleted DID {did}' )
+			audit( f'Deleted DID {did} at {str(path)!r}' )
 			if return_type == 'application/json':
 				return rest_success( [] )
 			return redirect( '/dids/' )
@@ -1751,11 +1808,11 @@ def try_post_ani( ani: int, data: Dict[str,str] ) -> int:
 		f'\n\t{k}={v!r}' for k, v in data2.items() if v != ''
 	)
 	if ani:
-		audit( f'Changed ANI {ani}:{auditdata}' )
+		audit( f'Changed ANI {ani} at {str(path)!r}:{auditdata}' )
 	else:
 		if path.exists():
 			raise ValidationError( f'ANI already exists: {ani2}' )
-		audit( f'Created ANI {ani2}:{auditdata}' )
+		audit( f'Created ANI {ani2} at {str(path)!r}:{auditdata}' )
 	with path.open( 'w' ) as f:
 		print( json_dumps( data2 ), file = f )
 	
@@ -1776,7 +1833,7 @@ def http_ani( ani: int ) -> Response:
 		except Exception as e1:
 			return _http_failure( return_type, repr( e1 ), 500 )
 		else:
-			audit( f'Deleted ANI {ani}' )
+			audit( f'Deleted ANI {ani} at {str(path)!r}' )
 			if return_type == 'application/json':
 				return rest_success( [] )
 			return redirect( '/anis/' )
@@ -1917,8 +1974,9 @@ def http_flags() -> Response:
 		name = data['name']
 		value = data['value']
 		
-		with flag_file_path( name ).open ( 'w' ) as f:
-			audit( f'Set flag {name}={value!r}' )
+		path = flag_file_path( name )
+		with path.open ( 'w' ) as f:
+			audit( f'Set flag {name}={value!r} at {str(path)!r}' )
 			print( value, file = f )
 		
 		if return_type == 'application/json':
