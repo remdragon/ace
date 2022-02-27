@@ -752,9 +752,17 @@ class Repository( metaclass = ABCMeta ):
 	type = 'Abstract repository'
 	schemas: Dict[str,List[SqlBase]] = {}
 	
-	def __init__( self, tablename: str, ending: str, fields: List[SqlBase] ) -> None:
+	def __init__( self,
+		tablename: str,
+		ending: str,
+		fields: List[SqlBase],
+		auditing: bool = True,
+	) -> None:
 		assert tablename not in Repository.schemas, f'duplicate schema definition for table {tablename!r}'
 		Repository.schemas[tablename] = fields
+		self.tablename = tablename
+		self.ending = ending
+		self.auditing = auditing
 	
 	@abstractmethod
 	def valid_id( self, id: REPOID ) -> REPOID:
@@ -829,7 +837,12 @@ class RepoSqlite( Repository ):
 		#	#	'CREATE TABLE IF NOT EXISTS "audits" (id INTEGER PRIMARY KEY AUTOINCREMENT)' )
 		#	#cur.execute( 'CREATE TABLE IF NOT EXISTS "users" (id INTEGER PRIMARY KEY AUTOINCREMENT)' )
 	
-	def __init__( self, tablename: str, ending: str, fields: List[SqlBase] ) -> None:
+	def __init__( self,
+		tablename: str,
+		ending: str,
+		fields: List[SqlBase],
+		auditing: bool = True,
+	) -> None:
 		assert re.match( r'^[a-z][a-z_0-9]+$', tablename )
 		
 		assert fields, f'no fields defined for table {tablename!r}'
@@ -837,12 +850,10 @@ class RepoSqlite( Repository ):
 		if not hasattr( RepoSqlite, 'database' ):
 			RepoSqlite.setup()
 		
-		super().__init__( tablename, ending, fields )
+		super().__init__( tablename, ending, fields, auditing )
 		if not RepoSqlite.schemas:
 			RepoSqlite.setup()
 		
-		
-		self.tablename = tablename
 		fldsql: List[str] = []
 		fldxtra: List[str] = []
 		fldsupp: List[str] = []
@@ -943,6 +954,12 @@ class RepoSqlite( Repository ):
 		
 		with closing( self.database.cursor() ) as cur:
 			cur.execute( query_string )
+		
+		if self.auditing:
+			auditdata = ''.join (
+				f'\n\t{k}={v!r}' for k, v in resource.items() if v != ''
+			)
+			audit( f'Created {self.tablename} {id!r}:{auditdata}' )
 	
 	def update( self, id: REPOID, resource: Dict[str,Any] ) -> Dict[str,Any]:
 		values = ', '.join( f'{k}={v}' for k, v in resource.items() ) # TODO FIXME: sql injection vulnerability
@@ -956,6 +973,12 @@ class RepoSqlite( Repository ):
 		with closing( self.database.cursor() ) as cur:
 			cur.execute( query_string )
 		
+		if self.auditing:
+			auditdata = ''.join (
+				f'\n\t{k}={v!r}' for k, v in resource.items() if v != ''
+			)
+			audit( f'Updated {self.tablename} {id!r}:{auditdata}' )
+		
 		return resource
 	
 	def delete( self, id: REPOID ) -> Dict[str,Any]:
@@ -967,6 +990,9 @@ class RepoSqlite( Repository ):
 				self.tablename, id
 			) )
 		
+		if self.auditing:
+			audit( f'Deleted {self.tablename} {id!r}' )
+		
 		return data
 
 
@@ -975,19 +1001,24 @@ class RepoSqlite( Repository ):
 
 
 class RepoFs( Repository ):
+	type = 'fs'
 	base_path: Path
 	
 	@classmethod
 	def setup( cls ) -> None:
 		cls.base_path = Path( ITAS_REPOSITORY_FS_PATH )
 	
-	def __init__( self, tablename: str, ending: str, fields: List[Dict[str,Union[int,str]]] ) -> None:
+	def __init__( self,
+		tablename: str,
+		ending: str,
+		fields: List[SqlBase],
+		auditing: bool = True,
+	) -> None:
 		if not hasattr( RepoFs, 'base_path' ):
 			RepoFs.setup()
-		self.type = 'fs'
+		super().__init__( tablename, ending, fields, auditing )
 		self.path = self.base_path / tablename
 		self.path.mkdir( mode = 0o770, parents = True, exist_ok = True )
-		self.ending = ending
 	
 	def valid_id( self, id: REPOID ) -> REPOID:
 		log = logger.getChild( 'RepoFs.valid_id' )
@@ -1049,12 +1080,24 @@ class RepoFs( Repository ):
 			raise HttpFailure( 'resource already exists' )
 		with path.open( 'w' ) as fileContent:
 			fileContent.write( json_dumps( resource ))
+		
+		if self.auditing:
+			auditdata = ''.join (
+				f'\n\t{k}={v!r}' for k, v in resource.items() if v != ''
+			)
+			audit( f'Created {self.tablename} {id!r} at {str(path)!r}:{auditdata}' )
 	
 	def update( self, id: REPOID, resource: Dict[str,Any] = {} ) -> Dict[str,Any]:
 		print( f'updating {resource}' )
 		path = self._path_from_id( id )
 		with path.open( 'w' ) as fileContent:
 			fileContent.write( json_dumps( resource ))
+		
+		if self.auditing:
+			auditdata = ''.join (
+				f'\n\t{k}={v!r}' for k, v in resource.items() if v != ''
+			)
+			audit( f'Changed {self.tablename} {id!r} at {str(path)!r}:{auditdata}' )
 		
 		return resource
 	
@@ -1064,6 +1107,9 @@ class RepoFs( Repository ):
 			resource: Dict[str,Any] = json.loads( fileContent.read() )
 		
 		path.unlink()
+		
+		if self.auditing:
+			audit( f'Deleted {self.tablename} {id!r} at {str(path)!r}' )
 		
 		return resource
 	
@@ -2329,6 +2375,11 @@ def http_voicemails() -> Response:
 		with path.open( 'w' ) as f:
 			f.write( json_dumps( settings ))
 		
+		auditdata = ''.join (
+			f'\n\t{k}={v!r}' for k, v in settings.items() if v != ''
+		)
+		audit( f'Created voicemail {box!r} at {str(path)!r}:{auditdata}' )
+		
 		if return_type == 'application/json':
 			return rest_success( [ { 'box': box } ] )
 		
@@ -2492,6 +2543,12 @@ def http_voicemail( box: int ) -> Response:
 				settings[k] = v
 			with path.open( 'w' ) as f:
 				f.write( json_dumps( settings ))
+			
+			auditdata = ''.join (
+				f'\n\t{k}={v!r}' for k, v in settings.items() if v != ''
+			)
+			audit( f'Updated voicemail {box!r} at {str(path)!r}:{auditdata}' )
+			
 			return rest_success( [ settings ] )
 		elif request.method == 'DELETE':
 			msgs_path = voicemail_box_msgs_path( box )
@@ -2517,6 +2574,9 @@ def http_voicemail( box: int ) -> Response:
 			except OSError as e3:
 				log.exception( 'Could not delete box %r settings file:', box )
 				return rest_failure( f'Could not delete box {box!r} settings file: {e3!r}' )
+			
+			audit( f'Deleted voicemail {box!r} at {str(path)!r}' )
+			
 			return rest_success( [] )
 		else:
 			return rest_failure( f'invalid request method={request.method!r}' )
@@ -2686,7 +2746,7 @@ REPO_JSON_CDR = REPO_FACTORY_NOFS( 'cdr', '.cdr' ,[
 	SqlDateTime( 'answered_stamp', null = True ),
 	SqlDateTime( 'end_stamp', null = False ),
 	SqlJson('json', null = False)
-])
+], auditing = False )
 
 def _uepoch_to_timestamp(uepoch: Union[int, str]) -> str:
 	uepoch_float = float(uepoch) / 1000000
