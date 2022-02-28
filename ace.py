@@ -2323,7 +2323,6 @@ def http_voicemails() -> Response:
 	if request.method == 'POST':
 		# BEGIN voicemail box creation
 		inp = inputs()
-		log.debug( f'{inp=}' )
 		try:
 			box = int( inp.get( 'box', '' ).strip() )
 		except ValueError as e:
@@ -2344,23 +2343,23 @@ def http_voicemails() -> Response:
 		if settings:
 			if not isinstance( settings, dict ):
 				return _http_failure( return_type,
-					f'invalid type: {settings=}',
+					f'invalid type: settings={settings!r}',
 				)
 			if not settings.get( 'pin', '' ).isnumeric():
 				return _http_failure( return_type,
-					f'missing pin: {settings=}',
+					f'missing pin: settings={settings!r}',
 				)
 			if not isinstance( settings.get( 'max_greeting_seconds', None ), int ):
 				return _http_failure( return_type,
-					f'missing max_greeting_seconds: {settings=}',
+					f'missing max_greeting_seconds: settings={settings!r}',
 				)
 			if not isinstance( settings.get( 'max_message_seconds', None ), int ):
 				return _http_failure( return_type,
-					f'missing max_message_seconds: {settings=}',
+					f'missing max_message_seconds: settings={settings!r}',
 				)
 			if not isinstance( settings.get( 'allow_guest_urgent', None ), bool ):
 				return _http_failure( return_type,
-					f'missing allow_guest_urgent: {settings=}',
+					f'missing allow_guest_urgent: settings={settings!r}',
 				)
 		else:
 			digits = list( '1234567890' )
