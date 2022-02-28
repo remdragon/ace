@@ -206,7 +206,7 @@ def html_page( *lines: str, stylesheets: Opt[List[str]] = None, status_code: Opt
 			f'	<li><a href="{url_for("http_flags")}">Flags</a></li>',
 			f'	<li><a href="{url_for("http_routes")}">Routes</a></li>',
 			f'	<li><a href="{url_for("http_voicemails")}">Voicemail</a></li>',
-			f'	<li><a href="{url_for("http_audit_list")}">Audit</a></li>',
+			f'	<li><a href="{url_for("http_audits")}">Audit</a></li>',
 			f'	<li><a href="{url_for("http_logout")}">Log Out</a></li>',
 			'</ul>',
 		] )
@@ -957,7 +957,8 @@ class RepoSqlite( Repository ):
 		
 		if self.auditing:
 			auditdata = ''.join (
-				f'\n\t{k}={v!r}' for k, v in resource.items() if v != ''
+				f'\n\t{k}={v!r}' for k, v in resource.items()
+				if v not in ( None, '' )
 			)
 			audit( f'Created {self.tablename} {id!r}:{auditdata}' )
 	
@@ -975,7 +976,8 @@ class RepoSqlite( Repository ):
 		
 		if self.auditing:
 			auditdata = ''.join (
-				f'\n\t{k}={v!r}' for k, v in resource.items() if v != ''
+				f'\n\t{k}={v!r}' for k, v in resource.items()
+				if v not in ( None, '' )
 			)
 			audit( f'Updated {self.tablename} {id!r}:{auditdata}' )
 		
@@ -1083,7 +1085,8 @@ class RepoFs( Repository ):
 		
 		if self.auditing:
 			auditdata = ''.join (
-				f'\n\t{k}={v!r}' for k, v in resource.items() if v != ''
+				f'\n\t{k}={v!r}' for k, v in resource.items()
+				if v not in ( None, '' )
 			)
 			audit( f'Created {self.tablename} {id!r} at {str(path)!r}:{auditdata}' )
 	
@@ -1095,7 +1098,8 @@ class RepoFs( Repository ):
 		
 		if self.auditing:
 			auditdata = ''.join (
-				f'\n\t{k}={v!r}' for k, v in resource.items() if v != ''
+				f'\n\t{k}={v!r}' for k, v in resource.items()
+				if v not in ( None, '' )
 			)
 			audit( f'Changed {self.tablename} {id!r} at {str(path)!r}:{auditdata}' )
 		
@@ -1519,7 +1523,8 @@ def try_post_did( did: int, data: Dict[str,str] ) -> int:
 	
 	path = did_file_path( did2 )
 	auditdata = ''.join (
-		f'\n\t{k}={v!r}' for k, v in data2.items() if v != ''
+		f'\n\t{k}={v!r}' for k, v in data2.items()
+		if v not in ( None, '' )
 	)
 	if did:
 		audit( f'Changed DID {did} at {str(path)!r}:{auditdata}' )
@@ -1851,7 +1856,8 @@ def try_post_ani( ani: int, data: Dict[str,str] ) -> int:
 	
 	path = ani_file_path( ani2 )
 	auditdata = ''.join (
-		f'\n\t{k}={v!r}' for k, v in data2.items() if v != ''
+		f'\n\t{k}={v!r}' for k, v in data2.items()
+		if v not in ( None, '' )
 	)
 	if ani:
 		audit( f'Changed ANI {ani} at {str(path)!r}:{auditdata}' )
@@ -2365,17 +2371,19 @@ def http_voicemails() -> Response:
 			digits = list( '1234567890' )
 			random.shuffle( digits )
 			settings = {
-				'pin': digits[:8],
+				'pin': ''.join( digits[:8] ),
 				'max_greeting_seconds': 120, # TODO FIXME: system default?
 				'max_message_seconds': 120, # TODO FIXME: system default?
 				'allow_guest_urgent': True,
+				'format': 'mp3',
 			}
 		
 		with path.open( 'w' ) as f:
 			f.write( json_dumps( settings ))
 		
 		auditdata = ''.join (
-			f'\n\t{k}={v!r}' for k, v in settings.items() if v != ''
+			f'\n\t{k}={v!r}' for k, v in settings.items()
+			if k != 'pin' and v not in ( None, '' )
 		)
 		audit( f'Created voicemail {box!r} at {str(path)!r}:{auditdata}' )
 		
@@ -2544,7 +2552,8 @@ def http_voicemail( box: int ) -> Response:
 				f.write( json_dumps( settings ))
 			
 			auditdata = ''.join (
-				f'\n\t{k}={v!r}' for k, v in settings.items() if v != ''
+				f'\n\t{k}={v!r}' for k, v in settings.items()
+				if k != 'pin' and v not in ( None, '' )
 			)
 			audit( f'Updated voicemail {box!r} at {str(path)!r}:{auditdata}' )
 			
@@ -2593,7 +2602,7 @@ def http_voicemail( box: int ) -> Response:
 
 @app.route( '/audit' )
 @login_required # type: ignore
-def http_audit_list() -> Any:
+def http_audits() -> Any:
 	return_type = accept_type()
 	
 	q_limit = qry_int( 'limit', 20, min = 1, max = 1000 )
