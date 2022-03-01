@@ -201,8 +201,15 @@ export default class UINode
 		if( !this.canPaste )
 			return alert( "Sorry, you can't paste here - try it from a parent node?" )
 			
-		let json = await navigator.clipboard.readText()
-		let nodeData = JSON.parse( json )
+		let text = await navigator.clipboard.readText()
+		try
+		{
+			var nodeData = JSON.parse( text )
+		}
+		catch( e )
+		{
+			return alert( `clipboard text not valid json:\n\n${text}` )
+		}
 		let nodes = [ nodeData ]
 		let nodeDataType = nodeData.type ?? ''
 		let is_multi = {
