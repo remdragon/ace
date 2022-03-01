@@ -7,11 +7,13 @@ export default class Repeat extends UINode {
 	
 	canPaste = true
 	help =
-		'This node runs all its commands in a loop until the repeat count is met or forever if count is 0'
+		`This node runs all its commands in a loop<br/>
+<br/>
+Repeats forever is count is 0, otherwise stops after count is met`
 	
 	get label()
 	{
-		return 'Repeat ' + ( this.count || 'forever' )
+		return 'Repeat ' + ( this.name || this.count || 'forever' )
 	}
 	
 	count = 1//: number = 1
@@ -27,12 +29,14 @@ export default class Repeat extends UINode {
 		this.createChildren( data.nodes ?? [] )
 	}
 	
-	fields = [
-		{
-			key: 'count',
-			type: 'int'
-		}
-	]
+	fields = [{
+		key: 'name',
+		label: 'Name:',
+		tooltip: 'This is for documentation purposes only',
+	},{
+		key: 'count',
+		type: 'int'
+	}]
 	
 	getJson()
 	{

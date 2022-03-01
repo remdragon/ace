@@ -1,5 +1,4 @@
 import{ UINode, walkChild } from './UINode.js'
-import NamedSubtree from './named_subtree.js'
 
 const TRUE_LABEL = 'True'
 const FALSE_LABEL = 'False'

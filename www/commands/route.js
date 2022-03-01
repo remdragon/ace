@@ -12,30 +12,33 @@ When that route finishes, execution will resume here in this route
 	
 	get label()
 	{
-		return 'Route ' + ( this.route || '(Undefined)' )
+		return 'Route ' + ( this.name || this.route || '(Undefined)' )
 	}
 	
+	name = ''
 	route = ''//: string
 	
-	fields = [
+	fields = [{
+		key: 'name',
+		label: 'Name:',
+		tooltip: 'This is for documentation purposes only',
+	},{
+		key: 'route',
+		type: 'int', // TODO FIXME: change to string and call expand() from lua?
+		input: 'select',
+		label: 'Route:',
+		async options( self )
 		{
-			key: 'route',
-			type: 'int', // TODO FIXME: change to string and call expand() from lua?
-			input: 'select',
-			label: 'Route:',
-			async options( self )
+			let params = { headers: { 'Accept': 'application/json' }}
+			let json = await fetch( '/routes', params )
+				.then( rsp => rsp.json() )
+			//console.log( JSON.stringify( json ) )
+			let options = [{ label: '(Undefined)', value: '' }]
+			for ( let row of json.rows )
 			{
-				let params = { headers: { 'Accept': 'application/json' }}
-				let json = await fetch( '/routes', params )
-					.then( rsp => rsp.json() )
-				//console.log( JSON.stringify( json ) )
-				let options = [{ label: '(Undefined)', value: '' }]
-				for ( let row of json.rows )
-				{
-					options.push({ label: `${row.route} ${row.name || "(Unnamed)"}`, value: row.route })
-				}
-				return options
+				options.push({ label: `${row.route} ${row.name || "(Unnamed)"}`, value: row.route })
 			}
+			return options
 		}
-	]
+	}]
 }

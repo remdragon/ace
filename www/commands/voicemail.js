@@ -16,13 +16,18 @@ When that finishes, execution will resume here
 	
 	get label()
 	{
-		return 'Voicemail ' + this.box
+		return 'Voicemail ' + ( this.name || this.box )
 	}
 	
+	name = ''
 	box = ''//: string
 	greeting_override//: string
 	
 	fields = [{
+		key: 'name',
+		label: 'Name:',
+		tooltip: 'This is for documentation purposes only',
+	},{
 		key: 'box',
 		type: 'string',
 		input: 'select2',

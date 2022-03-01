@@ -204,12 +204,13 @@ export default class UINode
 		let json = await navigator.clipboard.readText()
 		let nodeData = JSON.parse( json )
 		let nodes = [ nodeData ]
+		let nodeDataType = nodeData.type ?? ''
 		let is_multi = {
 			'': true,
 			'root_route': true,
 			'root_voicemail': true,
 		}
-		if( is_multi[nodeData.type] && nodeData.hasOwnProperty( 'nodes' ))
+		if( is_multi[nodeDataType] && nodeData.hasOwnProperty( 'nodes' ))
 			nodes = nodeData.nodes
 		let changed = this.createChildren( nodes ?? [] )
 		if( changed )
