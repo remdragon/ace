@@ -28,8 +28,12 @@ IMPORTANT: If the bridge succeeds and gets answered, execution stops here and do
 			return 'Bridge ' + ( this.dial_string || '' )
 	}
 	
-	name//: string
-	dial_string//: string
+	name = ''//: string
+	dial_string = ''//: string
+	dialplan = ''
+	context = ''
+	cid_name = ''
+	cid_num = ''
 	timeout//: int
 	failBranch = null
 	timeoutBranch = null
@@ -43,6 +47,22 @@ IMPORTANT: If the bridge succeeds and gets answered, execution stops here and do
 		size: 50,
 		label: 'Dial String:',
 		tooltip: 'See the link above for FreeSWITCH documentation about this command',
+	},{
+		key: 'dialplan',
+		label: 'Dial Plan:',
+		tooltip: 'An advanced setting, leave blank for default of "xml"',
+	},{
+		key: 'context',
+		label: 'Context:',
+		tooltip: 'An advanced setting, leave blank for "default"',
+	},{
+		key: 'cid_name',
+		label: 'Caller Name:',
+		tooltip: 'leave blank to inherit',
+	},{
+		key: 'cid_num',
+		label: 'Caller ID Number:',
+		tooltip: 'leave blank to inherit',
 	},{
 		key: 'timeout',
 		size: 4,
