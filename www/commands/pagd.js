@@ -93,7 +93,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		maxlength: 12,
 		size: 13,
 		label: 'Terminators:',
-		tooltip: 'allows you define a dtmf that the caller can use to terminate digit input (default is #)',
+		tooltip: 'allows you define a dtmf that the caller can use to terminate digit input (default is no terminator)',
 	},{
 		key: 'variable_name',
 		type: 'string',
