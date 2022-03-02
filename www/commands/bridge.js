@@ -12,7 +12,8 @@ export default class Bridge extends UINode {
 <br/>
 This is an advanced feature that uses the FreeSWITCH's <a href="https://freeswitch.org/confluence/display/FREESWITCH/mod_dptools%3A+bridge">"bridge" dialplan application</a><br/>
 <br/>
-Timeouts execute the timeout branch before continuing on past the bridge. Failures will execute the fail branch before continuing<br/>
+Timeouts execute the timeout branch before continuing on past the bridge.<br/>
+Failures will execute the fail branch before continuing<br/>
 <br/>
 IMPORTANT: If the bridge succeeds and gets answered, execution stops here and does not continue`
 	
@@ -29,7 +30,7 @@ IMPORTANT: If the bridge succeeds and gets answered, execution stops here and do
 	
 	name//: string
 	dial_string//: string
-	call_timeout//: int
+	timeout//: int
 	failBranch = null
 	timeoutBranch = null
 	
@@ -43,7 +44,7 @@ IMPORTANT: If the bridge succeeds and gets answered, execution stops here and do
 		label: 'Dial String:',
 		tooltip: 'See the link above for FreeSWITCH documentation about this command',
 	},{
-		key: 'call_timeout',
+		key: 'timeout',
 		size: 4,
 		label: 'Call Timeout (seconds):',
 		tooltip: 'Time to wait for bridge to be answered before timing out (blank or 0 = wait forever)',

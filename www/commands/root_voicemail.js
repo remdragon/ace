@@ -147,7 +147,6 @@ Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${
 		)
 		uinode.contextOptionalSubtree = function()
 		{
-			console.log( 'BOOM!' )
 			return 'contextOptionalSubtreeVoicemail'
 		}
 		this.branches[digit] = uinode
