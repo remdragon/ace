@@ -21,15 +21,18 @@ Offset is a much softer way to prioritize a call instead of the Priority value.`
 	
 	fields = [{
 		key: 'gates',
+		label: 'Gates:',
 		type: 'string',
 		placeholder: 'Example: 1,2,3',
 		tooltip: 'Comma-separted list of gates to put the call in (1-99)',
 	},{
 		key: 'priority',
+		label: 'Priority:',
 		type: 'int',
 		tooltip: 'A value from 1-99, higher values get answered first. Completely overrides queue time: use sparingly'
 	},{
 		key: 'offset',
+		label: 'Offset (seconds):',
 		type: 'int',
 		tooltip: "The number of seconds to artificially add to the caller's queue time",
 	}]

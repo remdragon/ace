@@ -106,7 +106,7 @@ def to_optional_int( s: Opt[str] ) -> Opt[int]:
 def is_safe_url( url: str ) -> bool:
 	log = logger.getChild( 'is_safe_url' )
 	unsafe = bool( urlparse( url ).netloc )
-	log.debug( f'url={url!r} -> unsafe={unsafe!r}' )
+	log.debug( 'url=%r -> unsafe=%r', url, unsafe )
 	return not unsafe
 
 def is_root() -> bool:
@@ -363,7 +363,7 @@ if not cfg_path.is_file():
 		f'ITAS_AUDIT_DIR = {"/var/log/itas/ace/"!r}',
 		f'ITAS_AUDIT_FILE = {"%Y-%m-%d.log"!r}',
 		f'ITAS_AUDIT_TIME = {"%Y-%m-%d %H:%M:%S.%f %Z%z"!r}',
-		f'ITAS_FREESWITCH_JSON_CDR_PATH = {["/var/log/freeswitch/json_cdr"]!r}',
+		f'ITAS_FREESWITCH_JSON_CDR_PATH = {"/var/log/freeswitch/json_cdr"!r}',
 		f'ITAS_FREESWITCH_SOUNDS = {["/usr/share/freeswitch/sounds/en/us/callie"]!r}',
 		f'ITAS_REPOSITORY_TYPE = {"fs"!r}',
 		f'ITAS_REPOSITORY_FS_PATH = {"/usr/share/itas/ace/"!r}',
@@ -1172,7 +1172,7 @@ login_manager.refresh_view = 'http_reauth'
 def load_user( user_id: str ) -> UserMixin:
 	#log = logger.getChild( 'load_user' )
 	user = session.get( SESSION_USERDATA, None )
-	#log.debug( 'user_id {!r} -> {!r}'.format( user_id, user ))
+	#log.debug( 'user_id %r -> %r', user_id, user )
 	return user
 
 login_manager.setup_app( app )
@@ -1206,6 +1206,7 @@ def try_logout() -> None:
 def http_login() -> Response:
 	log = logger.getChild( 'http_login' )
 	return_type = accept_type()
+	usernm: str = ''
 	errmsg = ''
 	
 	if request.method == 'POST':
@@ -1242,7 +1243,7 @@ def http_login() -> Response:
 		'<p>',
 		'	<form method="POST">',
 		'		User Name:<br/>',
-		'		<input type="text" name="usernm" autofocus/><br/>',
+		f'		<input type="text" name="usernm" value="{html_att(usernm)}" autofocus/><br/>',
 		'		<br/>',
 		'		Secret:<br/>',
 		'		<input type="password" name="secret"/><br/>',

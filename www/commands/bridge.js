@@ -44,8 +44,8 @@ IMPORTANT: If the bridge succeeds and gets answered, execution stops here and do
 		tooltip: 'This is for documentation purposes only',
 	},{
 		key: 'dial_string',
-		size: 50,
 		label: 'Dial String:',
+		size: 50,
 		tooltip: 'See the link above for FreeSWITCH documentation about this command',
 	},{
 		key: 'dialplan',
@@ -65,8 +65,8 @@ IMPORTANT: If the bridge succeeds and gets answered, execution stops here and do
 		tooltip: 'leave blank to inherit',
 	},{
 		key: 'timeout',
-		size: 4,
 		label: 'Call Timeout (seconds):',
+		size: 4,
 		tooltip: 'Time to wait for bridge to be answered before timing out (blank or 0 = wait forever)',
 	}]
 	

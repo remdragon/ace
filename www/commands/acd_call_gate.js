@@ -17,10 +17,12 @@ export default class AcdCallGate extends UINode {
 	
 	fields = [{
 		key: 'gate',
+		label: 'Gate:',
 		type: 'int',
 		tooltip: 'The new gate number (1-99) for this call, does not remove call from any existing gates',
 	},{
 		key: 'priority',
+		label: 'Priority:',
 		type: 'int',
 		tooltip: "Priority value (1-99) of the call's membership in this gate.",
 	}]

@@ -16,6 +16,7 @@ Does not check to see if the call is still in any other gates.`
 	
 	fields = [{
 		key: 'gate',
+		label: 'Gate:',
 		type: 'int',
 		tooltip: 'The gate number (1-99) being removed',
 	}]
