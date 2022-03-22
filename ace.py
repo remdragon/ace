@@ -57,11 +57,11 @@ else:
 	from flask import redirect # flask.wrappers.Response vs werkzeug.wrappers.Response
 
 # OS specific:
-if os.name == 'posix': # Linux or cygwin
+if sys.platform != 'win32':
 	import grp
-	import pam # type: ignore # pip install python-pam
+	import pam # pip install python-pam
 	import pwd
-	from systemd.journal import JournaldLogHandler # type: ignore # pip install systemd
+	from systemd.journal import JournaldLogHandler # pip install systemd
 
 
 #endregion imports
@@ -74,7 +74,7 @@ default_data_path = Path( '/usr/share/itas/ace/' )
 
 logger = logging.getLogger( __name__ )
 
-if os.name == 'posix':
+if sys.platform != 'win32':
 	auth = pam.pam()
 else:
 	logger.critical(
@@ -114,30 +114,36 @@ def is_root() -> bool:
 	uid: int = os.getuid() # type: ignore
 	return uid == 0
 
-def drop_root( uid_name: str = 'nobody', gid_name: str = 'nogroup' ) -> None:
-	if os.name != 'posix' or not is_root():
-		return # we're already not root, nothing to do
-	
-	# Get the uid/gid from the name
-	running_uid = pwd.getpwnam( uid_name ).pw_uid
-	running_gid = grp.getgrnam( gid_name ).gr_gid
-	
-	# Remove group privileges
-	os.setgroups( [] ) # type: ignore
-	
-	# Try setting the new uid/gid
-	os.setgid( running_gid ) # type: ignore
-	os.setuid( running_uid ) # type: ignore
-	
-	# Ensure a very conservative umask
-	_ = os.umask( 0o077 ) # returns old_umask
+if sys.platform != 'win32':
+	def drop_root( uid_name: str = 'nobody', gid_name: str = 'nogroup' ) -> None:
+		if not is_root():
+			return # we're already not root, nothing to do
+		
+		# Get the uid/gid from the name
+		running_uid = pwd.getpwnam( uid_name ).pw_uid
+		running_gid = grp.getgrnam( gid_name ).gr_gid
+		
+		# Remove group privileges
+		os.setgroups( [] )
+		
+		# Try setting the new uid/gid
+		os.setgid( running_gid )
+		os.setuid( running_uid )
+		
+		# Ensure a very conservative umask
+		_ = os.umask( 0o077 ) # returns old_umask
+else:
+	def drop_root( uid_name: str = 'nobody', gid_name: str = 'nogroup' ) -> None:
+		pass
 
-def chown( path: str, uid_name: str, gid_name: str ) -> None:
-	if os.name == 'nt':
-		return
-	uid = pwd.getpwnam( uid_name ).pw_uid
-	gid = grp.getgrnam( gid_name ).gr_gid
-	os.chown( path, uid, gid ) # type: ignore
+if sys.platform != 'win32':
+	def chown( path: str, uid_name: str, gid_name: str ) -> None:
+		uid = pwd.getpwnam( uid_name ).pw_uid
+		gid = grp.getgrnam( gid_name ).gr_gid
+		os.chown( path, uid, gid )
+else:
+	def chown( path: str, uid_name: str, gid_name: str ) -> None:
+		pass
 
 def os_execute( cmd: str ) -> None:
 	log = logger.getChild( 'os_execute' )
@@ -261,11 +267,12 @@ def inputs() -> Dict[str,Any]:
 
 
 # NOTE: you can override this function in flask.cfg if you want to implement alternative auth method
-def authenticate( usernm: str, secret: str ) -> bool:
-	log = logger.getChild( 'authenticate' )
-	if os.name == 'posix':
+if sys.platform != 'win32':
+	def authenticate( usernm: str, secret: str ) -> bool:
 		return bool( auth.authenticate( usernm, secret ))
-	else:
+else:
+	def authenticate( usernm: str, secret: str ) -> bool:
+		log = logger.getChild( 'authenticate' )
 		log.critical(
 			'NON-POSIX IMPLEMENTATION ONLY SUPPORTS A SINGLE HARD-CODED USER FOR NOW'
 		)
@@ -2320,6 +2327,28 @@ def route_delete( route: int ) -> Response:
 #endregion http - routes
 #region http - voicemail
 
+def validate_voicemail_settings( settings: Any ) -> None:
+	if not isinstance( settings, dict ):
+		raise ValidationError(
+			f'invalid type: settings={settings!r}',
+		)
+	pin = settings.get( 'pin', None )
+	if not isinstance( pin, str ) or not pin.isnumeric():
+		raise ValidationError(
+			f'missing/invalid pin: settings={settings!r}',
+		)
+	if not isinstance( settings.get( 'max_greeting_seconds', None ), int ):
+		raise ValidationError(
+			f'missing/invalid max_greeting_seconds: settings={settings!r}',
+		)
+	if not isinstance( settings.get( 'max_message_seconds', None ), int ):
+		raise ValidationError(
+			f'missing/invalid max_message_seconds: settings={settings!r}',
+		)
+	if not isinstance( settings.get( 'allow_guest_urgent', None ), bool ):
+		raise ValidationError(
+			f'missing/invalid allow_guest_urgent: settings={settings!r}',
+		)
 
 @app.route( '/voicemails', methods = [ 'GET', 'POST' ] )
 @login_required # type: ignore
@@ -2348,26 +2377,10 @@ def http_voicemails() -> Response:
 		
 		settings = inp.get( 'settings', None )
 		if settings:
-			if not isinstance( settings, dict ):
-				return _http_failure( return_type,
-					f'invalid type: settings={settings!r}',
-				)
-			if not settings.get( 'pin', '' ).isnumeric():
-				return _http_failure( return_type,
-					f'missing pin: settings={settings!r}',
-				)
-			if not isinstance( settings.get( 'max_greeting_seconds', None ), int ):
-				return _http_failure( return_type,
-					f'missing max_greeting_seconds: settings={settings!r}',
-				)
-			if not isinstance( settings.get( 'max_message_seconds', None ), int ):
-				return _http_failure( return_type,
-					f'missing max_message_seconds: settings={settings!r}',
-				)
-			if not isinstance( settings.get( 'allow_guest_urgent', None ), bool ):
-				return _http_failure( return_type,
-					f'missing allow_guest_urgent: settings={settings!r}',
-				)
+			try:
+				validate_voicemail_settings( settings )
+			except ValidationError as e:
+				return _http_failure( return_type, e.args[0] )
 		else:
 			digits = list( '1234567890' )
 			random.shuffle( digits )
@@ -2549,6 +2562,10 @@ def http_voicemail( box: int ) -> Response:
 				settings = json.loads( f.read() )
 			for k, v in data.items():
 				settings[k] = v
+			try:
+				validate_voicemail_settings( settings )
+			except ValidationError as e:
+				raise HttpFailure( e.args[0] ) from None
 			with path.open( 'w' ) as f:
 				f.write( json_dumps( settings ))
 			
@@ -2843,7 +2860,7 @@ def spawn ( target: Callable[...,Any], *args: Any, **kwargs: Any ) -> Thread:
 
 
 if __name__ == '__main__':
-	if os.name == 'posix':
+	if sys.platform != 'win32':
 		journald_handler = JournaldLogHandler()
 		journald_handler.setFormatter(
 			logging.Formatter( '[%(levelname)s] %(message)s' )
