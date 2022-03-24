@@ -314,11 +314,8 @@ export default class UINode
 			let inputParent = label
 			if( field.tooltip )
 			{
-				tooltipped = newChild( label, 'span', { class: 'tooltipped' })
+				tooltipped = newChild( label, 'span', { tooltip: field.tooltip })
 				inputParent = tooltipped
-				
-				tooltip = newChild( tooltipped, 'span', { class: 'tooltip' })
-				tooltip.innerText = field.tooltip
 			}
 			else if ( field.input == 'checkbox' )
 				inputParent = inputGroup
@@ -336,11 +333,9 @@ export default class UINode
 						text.setAttribute( 'size', field.size )
 					if( field.placeholder )
 						text.setAttribute( 'placeholder', field.placeholder )
-					let ttd = newChild( label, 'span', { class: 'tooltipped' })
+					let ttd = newChild( label, 'span', { tooltip: 'Toggles between the select box and a text box' })
 					toggle = newChild( ttd, 'button' )
 					toggle.innerText = '...'
-					let tt = newChild( ttd, 'span', { class: 'tooltip' })
-					tt.innerText = 'Toggles between the select box and a text box'
 					
 					inputParent = textable_span
 				}

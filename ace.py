@@ -1424,6 +1424,14 @@ def http_dids() -> Response:
 	body = '\n'.join( [
 		row_html.format( **d ) for d in dids
 	] )
+	
+	did_tip = 'Performs substring search of all DIDs'
+	tf_tip = 'Performs substring search of all TF #s'
+	acct_tip = 'Performs substring search of all Account #s'
+	name_tip = 'Performs substring search of all Account Names'
+	route_tip = 'Performs substring search of all Routes'
+	notes_tip = 'Performs substring search of all Notes'
+	
 	prevpage = urlencode( { 'did': q_did, 'tf': q_tf, 'acct': q_acct, 'name': q_name, 'route': q_route, 'notes': q_notes, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit ) } )
 	nextpage = urlencode( { 'did': q_did, 'tf': q_tf, 'acct': q_acct, 'name': q_name, 'route': q_route, 'notes': q_notes, 'limit': q_limit, 'offset': q_offset + q_limit } )
 	return html_page(
@@ -1434,12 +1442,12 @@ def http_dids() -> Response:
 		'</td>',
 		'<td align="center">'
 		'<form method="GET">'
-		f'<span class="tooltipped"><input type="text" name="did" placeholder="DID" value="{html_att(q_did)}" maxlength="10" size="10"/><span class="tooltip">Performs substring search of all DIDs</span></span>',
-		f'<span class="tooltipped"><input type="text" name="tf" placeholder="TF#" value="{html_att(q_tf)}" maxlength="10" size="10"/><span class="tooltip">Performs substring search of all TF #s</span></span>',
-		f'<span class="tooltipped"><input type="text" name="acct" placeholder="Acct#" value="{html_att(q_acct)}" maxlength="4" size="4"/><span class="tooltip">Performs substring search of all Account #s</span></span>',
-		f'<span class="tooltipped"><input type="text" name="name" placeholder="Name" value="{html_att(q_name)}" size="10"/><span class="tooltip">Performs substring search of all Account Names</span></span>',
-		f'<span class="tooltipped"><input type="text" name="route" placeholder="Route" value="{html_att(q_route)}" size="4"/><span class="tooltip">Performs substring search of all Routes</span></span>',
-		f'<span class="tooltipped"><input type="text" name="notes" placeholder="Notes" value="{html_att(q_notes)}" size="10"/><span class="tooltip">Performs substring search of all Account Names</span></span>',
+		f'<span tooltip="{html_att(did_tip)}"><input type="text" name="did" placeholder="DID" value="{html_att(q_did)}" maxlength="10" size="10" /></span>',
+		f'<span tooltip="{html_att(tf_tip)}"><input type="text" name="tf" placeholder="TF#" value="{html_att(q_tf)}" maxlength="10" size="10" /></span>',
+		f'<span tooltip="{html_att(acct_tip)}"><input type="text" name="acct" placeholder="Acct#" value="{html_att(q_acct)}" maxlength="4" size="4" /></span>',
+		f'<span tooltip="{html_att(name_tip)}"><input type="text" name="name" placeholder="Name" value="{html_att(q_name)}" size="10" /></span>',
+		f'<span tooltip="{html_att(route_tip)}"><input type="text" name="route" placeholder="Route" value="{html_att(q_route)}" size="4" /></span>',
+		f'<span tooltip="{html_att(notes_tip)}"><input type="text" name="notes" placeholder="Notes" value="{html_att(q_notes)}" size="10" /></span>',
 		'<input type="submit" value="Search"/>',
 		'<button id="clear" type="button" onclick="window.location=\'?\'">Clear</button>'
 		'</form>',
@@ -1636,6 +1644,9 @@ def http_did( did: int ) -> Response:
 	if not found:
 		route_options.insert( 0, f'<option value="{route}" selected>{route} DOES NOT EXIST</option>' )
 	
+	category_tip = 'All DIDs assigned to the same category will look for a preannounce of "category_{category_name}_{category_flag}.wav"'
+	flag_tip = 'Causes preannounce calculation to look for "{DID}_{didflag}.wav"'
+	
 	html_rows.extend( [
 		
 		'<table class="unpadded"><tr><td valign="top">',
@@ -1650,18 +1661,14 @@ def http_did( did: int ) -> Response:
 		f'<b>Client Name:</b><br/><input type="text" name="name" value="{html_att(name)}" size="31" maxlength="30"/><br/><br/>',
 		'</td><td>&nbsp;</td><td valign="top">',
 		'<b>Category:</b><br/>',
-		f'<span class="tooltipped"><select name="category">{"".join(category_options)}</select>',
-		'	<span class="tooltip">All DIDs assigned to the same category will look for a preannounce of "category_{category_name}_{category_flag}.wav"</span>',
-		'</span>',
+		f'<span tooltip="{category_tip}"><select name="category">{"".join(category_options)}</select></span>',
 		'</td></tr></table>',
 		
 		'<table class="unpadded"><tr><td valign="top">',
 		f'<b>Route:</b><br/><select name="route">{"".join(route_options)}</select>',
 		'</td><td>&nbsp;</td><td valign="top">',
 		'<b>DID Flag:</b><br/>',
-		f'<span class="tooltipped"><input type="text" name="flag" value="{html_att(str(flag))}" size="31" maxlength="30"/>',
-		'	<span class="tooltip">Causes preannounce calculation to look for "{DID}_{didflag}.wav"</span>',
-		'</span>',
+		f'<span tooltip="{flag_tip}"><input type="text" name="flag" value="{html_att(str(flag))}" size="31" maxlength="30"/></span>',
 		'</td></tr></table>',
 		'<br/>',
 	])
@@ -1669,7 +1676,7 @@ def http_did( did: int ) -> Response:
 	for field in ITAS_DID_FIELDS:
 		x = f'<b>{field.label}</b><br/>'
 		if field.tooltip:
-			x += '<span class="tooltipped">'
+			x += f'<span tooltip="{html_att(field.tooltip)}">'
 		atts = ''
 		if field.max_length:
 			atts += f' size="{field.max_length+1!r}" maxlength="{field.max_length!r}"'
@@ -1677,7 +1684,7 @@ def http_did( did: int ) -> Response:
 		value = str( value ) if value is not None else ''
 		x += f'<input type="text" name="{field.field}" value="{html_att(value)}"{atts}/>'
 		if field.tooltip:
-			x += f'<span class="tooltip">{field.tooltip}</span></span>'
+			x += '</span>'
 		x += '<br/><br/>'
 		html_rows.append( x )
 	
@@ -1753,6 +1760,9 @@ def http_anis() -> Response:
 	body = '\n'.join( [
 		row_html.format( **d ) for d in anis
 	] )
+	
+	search_tip = 'Performs substring search of all ANIs'
+	
 	prevpage = urlencode( { 'search': search, 'limit': limit, 'offset': max( 0, offset - limit ) } )
 	nextpage = urlencode( { 'search': search, 'limit': limit, 'offset': offset + limit } )
 	return html_page(
@@ -1763,7 +1773,7 @@ def http_anis() -> Response:
 		'</td>',
 		'<td align="center">'
 		'<form method="GET">'
-		f'<span class="tooltipped"><input type="text" name="search" placeholder="ANI" value="{html_att(search)}"/><span class="tooltip">Performs substring search of all ANIs</span></span>',
+		f'<span tooltip="{html_att(search_tip)}"><input type="text" name="search" placeholder="ANI" value="{html_att(search)}"/></span>',
 		'<input type="submit" value="Search"/>',
 		'<button id="clear" type="button" onclick="window.location=\'?\'">Clear</button>'
 		'</form>',
@@ -1953,18 +1963,21 @@ def http_ani( ani: int ) -> Response:
 		lbl = data.get( 'name', '(Unnamed)' )
 		route_options.append( f'<option value="{r}"{att}>{r} {lbl}</option>' )
 	
+	route_tip = 'Selecting a Route here will reroute this ANI no matter what DID is called'
+	
 	html_rows.extend( [
 		f'<b>ANI:</b><br/>{ani_html}<br/><br/>',
 		
-		f'<b>Route:</b><br/><span class="tooltipped"><select name="route">{"".join(route_options)}</select><span class="tooltip">Selecting a Route here will reroute this ANI no matter what DID is called</span></span><br/><br/>',
+		f'<b>Route:</b><br/><span tooltip="{html_att(route_tip)}"><select name="route">{"".join(route_options)}</select></span><br/><br/>',
 	])
 	
+	overrides_tip = 'Use this section to block/redirect this ANI for specific DIDs'
 	overrides_examples = '\n'.join ( ITAS_ANI_OVERRIDES_EXAMPLES )
 	
 	html_rows.extend( [
 		'<table class="unpadded"><tr><td valign="top">',
 		'<b>DID Overrides:</b><br/>',
-		f'<span class="tooltipped"><textarea name="overrides" cols="80" rows="4">{html_text(overrides)}</textarea><span class="tooltip">Use this section to block/redirect this ANI for specific DIDs</span></span><br/><br/>',
+		f'<span tooltip="{html_att(overrides_tip)}"><textarea name="overrides" cols="80" rows="4">{html_text(overrides)}</textarea></span><br/><br/>',
 		'</td><td>&nbsp;</td><td valign="top">',
 		f'<b>Examples:</b><pre class="no_top_margin">{html_text(overrides_examples)}</pre>',
 		'</td></tr></table>',
@@ -2161,6 +2174,10 @@ def http_routes() -> Response:
 		)
 		for route, data in routes
 	] )
+	
+	route_tip = 'Performs substring search of all Route numbers'
+	name_tip = 'Performs substring search of all Route Names'
+	
 	prevpage = urlencode( { 'route': q_route, 'name': q_name, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit ) } )
 	nextpage = urlencode( { 'route': q_route, 'name': q_name, 'limit': q_limit, 'offset': q_offset + q_limit } )
 	return html_page(
@@ -2171,8 +2188,8 @@ def http_routes() -> Response:
 		'</td>',
 		'<td align="center">'
 		'<form method="GET">'
-		f'<span class="tooltipped"><input type="text" name="route" placeholder="Route" value="{html_att(q_route)}" size="10"/><span class="tooltip">Performs substring search of all Route numbers</span></span>',
-		f'<span class="tooltipped"><input type="text" name="name" placeholder="Name" value="{html_att(q_name)}" size="10"/><span class="tooltip">Performs substring search of all Route Names</span></span>',
+		f'<span tooltip="{html_att(route_tip)}"><input type="text" name="route" placeholder="Route" value="{html_att(q_route)}" size="10"/></span>',
+		f'<span tooltip="{html_att(name_tip)}"><input type="text" name="name" placeholder="Name" value="{html_att(q_name)}" size="10"/></span>',
 		'<input type="submit" value="Search"/>',
 		'<button id="clear" type="button" onclick="window.location=\'?\'">Clear</button>'
 		'</form>',
@@ -2463,6 +2480,10 @@ def http_voicemails() -> Response:
 			url = url_for( 'http_voicemail', box = box['box'] ),
 		) for box in boxes
 	] )
+	
+	box_tip = 'Performs substring search of all Box numbers'
+	name_tip = 'Performs substring search of all Box Names'
+	
 	prevpage = urlencode( { 'box': q_box, 'name': q_name, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit ) } )
 	nextpage = urlencode( { 'box': q_box, 'name': q_name, 'limit': q_limit, 'offset': q_offset + q_limit } )
 	return html_page(
@@ -2473,8 +2494,8 @@ def http_voicemails() -> Response:
 		'</td>',
 		'<td align="center">'
 		'<form method="GET">'
-		f'<span class="tooltipped"><input type="text" name="box" placeholder="Box" value="{html_att(q_box)}" size="10"/><span class="tooltip">Performs substring search of all Box numbers</span></span>',
-		f'<span class="tooltipped"><input type="text" name="name" placeholder="Name" value="{html_att(q_name)}" size="10"/><span class="tooltip">Performs substring search of all Box Names</span></span>',
+		f'<span tooltip="{html_att(box_tip)}"><input type="text" name="box" placeholder="Box" value="{html_att(q_box)}" size="10"/></span>',
+		f'<span tooltip="{html_att(name_tip)}"><input type="text" name="name" placeholder="Name" value="{html_att(q_name)}" size="10"/></span>',
 		'<input type="submit" value="Search"/>',
 		'<button id="clear" type="button" onclick="window.location=\'?\'">Clear</button>'
 		'</form>',
@@ -2671,6 +2692,8 @@ def http_audits() -> Any:
 		row_html.format( **d ) for d in logfile_list
 	] )
 	
+	search_tip = 'Performs substring search of all audit logs'
+	
 	prevpage = urlencode( { 'search': q_search, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit ) } )
 	nextpage = urlencode( { 'search': q_search, 'limit': q_limit, 'offset': q_offset + q_limit } )
 	return html_page(
@@ -2678,7 +2701,7 @@ def http_audits() -> Any:
 		f'<td align="left"><a href="?{prevpage}">Newer Logs</a></td>',
 		'<td align="center">',
 		'<form method="GET">'
-		f'<span class="tooltipped"><input type="text" name="search" placeholder="Search" value="{html_att(q_search)}"/><span class="tooltip">Performs substring search of all audit logs</span></span>',
+		f'<span tooltip="{html_att(search_tip)}"><input type="text" name="search" placeholder="Search" value="{html_att(q_search)}"/></span>',
 		'<input type="submit" value="Search"/>',
 		'<button id="clear" type="button" onclick="window.location=\'?\'">Clear</button>'
 		'</form>',
