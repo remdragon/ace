@@ -498,7 +498,7 @@ export default class UINode
 			{
 				input = newChild( inputParent, 'input', { id: id, type: field.input ?? 'text' } )
 				
-				let pattern = PATTERNS[field.type]
+				let pattern = field.pattern ?? PATTERNS[field.type]
 				if( field.maxlength )
 					input.setAttribute( 'maxlength', field.maxlength )
 				if( field.size )

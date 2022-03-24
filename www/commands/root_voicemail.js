@@ -44,7 +44,8 @@ Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${
 		tooltip: 'This is for documentation purposes only',
 	},{
 		key: 'pin',
-		type: 'int',
+		type: 'string',
+		pattern: '\\d+',
 		input: 'password',
 		label: 'PIN:',
 		tooltip: 'numeric password to admin the box',

@@ -97,7 +97,7 @@ for( let el of clone_links )
 				let jdata = await rsp.json()
 				if( !jdata.success )
 				{
-					alert( `Error creatig new box ${new_box}: ${jdata.error}` )
+					alert( `Error creating new box ${new_box}: ${jdata.error}` )
 					return
 				}
 			}
