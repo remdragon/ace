@@ -115,6 +115,7 @@ const newTelephonyNode = {
 				commands.IVR,
 				commands.PAGD,
 				commands.PreAnswer,
+				commands.RxFax,
 				//commands.SetMOH,
 				commands.Transfer,
 				commands.Voicemail,

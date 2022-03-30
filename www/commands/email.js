@@ -33,13 +33,13 @@ Subject/Body support placeholders like \${box} \${ani} \${did}`
 		tooltip: 'Enter the recipient email address here, multiple recipients not supported',
 	},{
 		key: 'subject',
-		label: 'Subject:', // TODO FIXME: tooltip
+		label: 'Subject:',
 		placeholder: '(Using default email subject)',
 		tooltip: 'If left blank, the box default is used',
 	},{
 		key: 'body',
 		label: 'Body:',
-		input: 'textarea', // TODO FIXME: tooltip
+		input: 'textarea',
 		cols: 60,
 		rows: 10,
 		placeholder: '(using default email body)',

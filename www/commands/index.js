@@ -25,6 +25,7 @@ import PreAnswer from './preanswer.js'; export{ PreAnswer }
 import Repeat from './repeat.js'; export{ Repeat }
 import Ring from './ring.js'; export{ Ring }
 import Route from './route.js'; export{ Route }
+import RxFax from './rxfax.js'; export{ RxFax }
 import Select from './select.js'; export{ Select }
 import SetMOH from './setmoh.js'; export{ SetMOH }
 import SetNode from './set.js'; export{ SetNode }
@@ -65,6 +66,7 @@ let all_commands =
 	, Repeat
 	, Ring
 	, Route
+	, RxFax
 	, Select
 	, SetNode
 	, SetMOH
