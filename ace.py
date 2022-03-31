@@ -1604,7 +1604,14 @@ def http_did( did: int ) -> Response:
 	acct = data.get( 'acct', '' ) or ''
 	name = data.get( 'name', '' )
 	category = data.get( 'category', '' )
-	route = to_optional_int( data.get( 'route', '' ) or None )
+	try:
+		route = to_optional_int( data.get( 'route', '' ) or None )
+	except ValueError as e:
+		return _http_failure(
+			return_type,
+			f'Bad route: {e!r}',
+			400,
+		)
 	variables = data.get( 'variables', '' )
 	flag = data.get( 'flag', '' )
 	notes = data.get( 'notes', '' )
