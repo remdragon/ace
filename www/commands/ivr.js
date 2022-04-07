@@ -2,8 +2,8 @@ import{ UINode, walkChild } from './UINode.js'
 import NamedSubtree from './named_subtree.js'
 
 const GREETING_LABEL = 'Greeting'
-const INVALID_LABEL = 'Invalid'
-const TIMEOUT_LABEL = 'Timeout'
+const INVALID_LABEL = 'Invalid Input'
+const TIMEOUT_LABEL = 'No Input'
 const FAILURE_LABEL = 'Failure'
 
 export default class IVR extends UINode {
@@ -86,7 +86,7 @@ Note that this branch does not execute after the last attempt. Instead the failu
 		maxlength: 12,
 		size: 13,
 		label: 'Terminators:',
-		tooltip: 'allows you define a dtmf that the caller can use to terminate digit input (default is no terminator)',
+		tooltip: 'allows you define a dtmf that the caller can use to bypass the digit timeout and end digit input (default is no terminator)',
 	},{
 		key: 'variable_name',
 		type: 'string',

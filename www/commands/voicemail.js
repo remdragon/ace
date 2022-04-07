@@ -36,7 +36,7 @@ When that finishes, execution will resume here
 		async options( self )
 		{
 			let params = { headers: { 'Accept': 'application/json' }}
-			let json = await fetch( '/voicemails', params )
+			let json = await fetch( '/voicemails?limit=1000', params )
 				.then( rsp => rsp.json() )
 			//console.log( JSON.stringify( json ) )
 			let options = [ { label: '(Checkin)', value: '' } ]

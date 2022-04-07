@@ -1737,17 +1737,8 @@ def http_anis() -> Response:
 	#log = logger.getChild( 'http_anis' )
 	return_type = accept_type()
 	
-	try:
-		limit = int( request.args.get( 'limit', '' ))
-	except ValueError:
-		limit = 20
-	limit = clamp( limit, 1, 1000 )
-	
-	try:
-		offset = int( request.args.get( 'offset', '' ))
-	except ValueError:
-		offset = 0
-	offset = max( 0, offset )
+	q_limit = qry_int( 'limit', 20, min = 1, max = 1000 )
+	q_offset = qry_int( 'offset', 0, min = 0 )
 	
 	search = request.args.get( 'search', '' )
 	path = Path( ITAS_ANIS_PATH )
@@ -1756,7 +1747,7 @@ def http_anis() -> Response:
 	for f in path.glob( pattern ):
 		anis.append( { 'ani': int( f.stem ) } )
 	anis.sort ( key = lambda d: d['ani'] )
-	anis = anis[offset:offset + limit]
+	anis = anis[q_offset:q_offset + q_limit]
 	if return_type == 'application/json':
 		return rest_success( anis )
 	row_html = (
@@ -1770,8 +1761,8 @@ def http_anis() -> Response:
 	
 	search_tip = 'Performs substring search of all ANIs'
 	
-	prevpage = urlencode( { 'search': search, 'limit': limit, 'offset': max( 0, offset - limit ) } )
-	nextpage = urlencode( { 'search': search, 'limit': limit, 'offset': offset + limit } )
+	prevpage = urlencode( { 'search': search, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit ) } )
+	nextpage = urlencode( { 'search': search, 'limit': q_limit, 'offset': q_offset + q_limit } )
 	return html_page(
 		'<table width="100%"><tr>',
 		f'<td align="left"><a href="?{prevpage}">Prev Page</a></td>',
