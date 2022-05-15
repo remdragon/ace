@@ -195,6 +195,7 @@ const newNotifyActionNode = {
 			...[
 				commands.Email,
 				commands.SMS,
+				commands.VoiceDeliver,
 			].map( NodeType => ({
 				text: NodeType.context_menu_name,
 				icon: NodeType.icon,

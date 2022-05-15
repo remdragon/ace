@@ -36,6 +36,7 @@ import TOD from './tod.js'; export{ TOD }
 import Tone from './tone.js'; export{ Tone }
 import Transfer from './transfer.js'; export{ Transfer }
 import Translate from './translate.js'; export{ Translate }
+import VoiceDeliver from './voice_deliver.js'; export{ VoiceDeliver }
 import Voicemail from './voicemail.js'; export{ Voicemail }
 import Wait from './wait.js'; export{ Wait }
 
@@ -77,6 +78,7 @@ let all_commands =
 	, Tone
 	, Transfer
 	, Translate
+	, VoiceDeliver
 	, Voicemail
 	, Wait
 	]
