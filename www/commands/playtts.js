@@ -33,6 +33,7 @@ For a list of all voices available, <a href='https://docs.aws.amazon.com/polly/l
 		input: 'select2',
 		or_text: true,
 		async options( self ) { return [
+			{ label: '(System Default)', value: '' },
 			{ label: 'en-AU Nicole (English Australian Female Adult)', value: 'Nicole' },
 			{ label: 'en-AU Russell (English Australian Male Adult)', value: 'Russell' },
 			{ label: 'es-ES Conchita (Spanish European Female Adult)', value: 'Conchita' },

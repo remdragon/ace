@@ -54,7 +54,7 @@ IMPORTANT: If the bridge succeeds and gets answered, execution stops here and do
 	},{
 		key: 'context',
 		label: 'Context:',
-		tooltip: 'An advanced setting, leave blank for "default"',
+		tooltip: 'An advanced setting, leave blank for default of "default"',
 	},{
 		key: 'cid_name',
 		label: 'Caller Name:',
