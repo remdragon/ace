@@ -480,14 +480,14 @@ export default class UINode
 			}
 			else if( field.input == 'textarea' )
 			{
-				input = newChild( inputParent, 'textarea', { id: id } )
+				input = newChild( inputParent, 'textarea', { id: id, style: 'white-space: pre-wrap;' } )
 				if( field.rows )
 					input.setAttribute( 'rows', field.rows )
 				if( field.cols )
 					input.setAttribute( 'cols', field.cols )
 				if( field.placeholder )
 					input.setAttribute( 'placeholder', field.placeholder )
-				input.innerText = this[field.key] ?? ''
+				input.value = this[field.key] ?? ''
 			}
 			else
 			{

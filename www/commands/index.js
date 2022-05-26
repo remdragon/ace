@@ -13,6 +13,7 @@ import IfStr from './ifstr.js'; export{ IfStr }
 import IVR from './ivr.js'; export{ IVR }
 import Label from './label.js'; export{ Label }
 import Log from './log.js'; export{ Log }
+import Lua from './lua.js'; export{ Lua }
 import MOH from './moh.js'; export{ MOH }
 import PAGD from './pagd.js'; export{ PAGD }
 import Playback from './playback.js'; export{ Playback }
@@ -55,6 +56,7 @@ let all_commands =
 	, IVR
 	, Label
 	, Log
+	, Lua
 	, MOH
 	, PAGD
 	, Playback

@@ -82,19 +82,17 @@ export default class Hangup extends UINode {
 	
 	cause/*: string*/ = 'NORMAL_CLEARING'
 	
-	fields = [
-		{
-			key: 'cause',
-			input: 'select',
-			or_text: true,
-			label: 'Cause:',
-			async options( self ) { return [
-				{ label: 'normal', value: 'NORMAL_CLEARING' },
-				{ label: 'user busy', value: 'USER_BUSY' },
-				{ label: 'unallocated number', value: 'UNALLOCATED_NUMBER' },
-				{ label: 'call rejected', value: 'CALL_REJECTED' },
-				{ label: 'switch congestion', value: 'SWITCH_CONJESTION' }
-			]}
-		}
-	]
+	fields = [{
+		key: 'cause',
+		input: 'select',
+		or_text: true,
+		label: 'Cause:',
+		async options( self ) { return [
+			{ label: 'normal', value: 'NORMAL_CLEARING' },
+			{ label: 'user busy', value: 'USER_BUSY' },
+			{ label: 'unallocated number', value: 'UNALLOCATED_NUMBER' },
+			{ label: 'call rejected', value: 'CALL_REJECTED' },
+			{ label: 'switch congestion', value: 'SWITCH_CONJESTION' }
+		]}
+	}]
 }
