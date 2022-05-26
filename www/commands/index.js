@@ -14,6 +14,7 @@ import IVR from './ivr.js'; export{ IVR }
 import Label from './label.js'; export{ Label }
 import Log from './log.js'; export{ Log }
 import Lua from './lua.js'; export{ Lua }
+import LuaFile from './luafile.js'; export{ LuaFile }
 import MOH from './moh.js'; export{ MOH }
 import PAGD from './pagd.js'; export{ PAGD }
 import Playback from './playback.js'; export{ Playback }
@@ -23,6 +24,7 @@ import PlayEstHold from './playesthold.js'; export{ PlayEstHold }
 import PreAnnounce from './preannounce.js'; export{ PreAnnounce }
 import PlayTTS from './playtts.js'; export{ PlayTTS }
 import PreAnswer from './preanswer.js'; export{ PreAnswer }
+import Python from './python.js'; export{ Python }
 import Repeat from './repeat.js'; export{ Repeat }
 import Ring from './ring.js'; export{ Ring }
 import Route from './route.js'; export{ Route }
@@ -57,6 +59,7 @@ let all_commands =
 	, Label
 	, Log
 	, Lua
+	, LuaFile
 	, MOH
 	, PAGD
 	, Playback
@@ -66,6 +69,7 @@ let all_commands =
 	, PreAnnounce
 	, PlayTTS
 	, PreAnswer
+	, Python
 	, Repeat
 	, Ring
 	, Route
