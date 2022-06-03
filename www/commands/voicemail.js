@@ -39,7 +39,7 @@ When that finishes, execution will resume here
 			let json = await fetch( '/voicemails?limit=1000', params )
 				.then( rsp => rsp.json() )
 			//console.log( JSON.stringify( json ) )
-			let options = [ { label: '(Checkin)', value: '' } ]
+			let options = [ { label: '(Checkin)', value: '0' } ]
 			for ( let row of json.rows )
 			{
 				options.push({ label: `${row.box} ${row.name || "(Unnamed)"}`, value: row.box })
