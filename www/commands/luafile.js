@@ -30,6 +30,6 @@ log_console( 'state=%s', repr( state ))
 	},{
 		key: 'file',
 		label: 'File Name:',
-		tooltip: 'The name of the lua file to run, the question is: do we need to include the .lua extension or not?',
+		tooltip: 'The name of the lua file in the scripts folder to run, ex: foobar.lua',
 	}]
 }
