@@ -21,12 +21,13 @@ export default class NamedSubtree extends UINode {
 		tooltip: 'This is for documentation purposes only',
 	}]
 	
-	constructor(parent /*: UINode*/, label /*: string*/, help)
+	constructor(parent /*: UINode*/, label /*: string*/, help, childrenContext)
 	{
 		super(parent)
 		
 		this._label = label
 		this.help = help || 'This is a named subtree node, click on the parent node for more information'
+		this.childrenContext = childrenContext
 	}
 	
 	createElement({
@@ -42,7 +43,12 @@ export default class NamedSubtree extends UINode {
 		
 		this.createChildren( data.nodes ?? [] )
 	}
-
+	
+	contextOptionalSubtree()
+	{
+		return this.childrenContext ?? super.contextOptionalSubtree()
+	}
+	
 	getJson()/*: object*/ {
 		const sup = super.getJson()
 		delete sup.type

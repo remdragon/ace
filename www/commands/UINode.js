@@ -116,9 +116,9 @@ export default class UINode
 		return changed
 	}
 	
-	makeFixedBranch( key, label, context, help, data )
+	makeFixedBranch( key, label, context, help, data, childrenContext )
 	{
-		this[key] = new UINode.NamedSubtree( this, label, help )
+		this[key] = new UINode.NamedSubtree( this, label, help, childrenContext )
 		this[key].canDelete = false
 		this[key].createElement({
 			isSubtree: true,

@@ -160,6 +160,38 @@ const newRouteLogicNode = {
 	}
 }
 
+const newGreetingInvalidTimeoutLogicNode = {
+	text: 'New Logic',
+	icon: '/aimara/images/add1.png',
+	action: function( treenode ) {},
+	submenu: {
+		elements: [
+			...[
+				//commands.GoTo,
+				commands.IfNum,
+				commands.IfStr,
+				//commands.Label,
+				commands.Log,
+				commands.Lua,
+				commands.LuaFile,
+				commands.Python,
+				commands.Repeat,
+				//commands.Route,
+				//commands.Select,
+				commands.SetNode,
+				//commands.Throttle,
+				commands.TOD,
+				//commands.Translate,
+				commands.Wait,
+			].map( NodeType => ({
+				text: NodeType.context_menu_name,
+				icon: NodeType.icon,
+				action: createNodeFromNodeType( NodeType ),
+			}))
+		]
+	}
+}
+
 const newNotifyLogicNode = {
 	text: 'New Logic',
 	icon: '/aimara/images/add1.png',
@@ -408,7 +440,10 @@ const context_menu = {
 		elements: [ copyNode, deleteNode, nodeActions ]
 	},
 	context_GreetingInvalidTimeout: {
-		elements: [ copyNode, pasteNode, createRoutePlayNode ]
+		elements: [ copyNode, pasteNode, newGreetingInvalidTimeoutLogicNode, createRoutePlayNode ]
+	},
+	context_GreetingInvalidTimeoutChildren: {
+		elements: [ copyNode, pasteNode, deleteNode, newGreetingInvalidTimeoutLogicNode, createRoutePlayNode ]
 	},
 	contextIVRBranch: {
 		elements: [ copyNode, pasteNode, deleteNode, newTelephonyNode, newRouteLogicNode, createRoutePlayNode ]
@@ -436,6 +471,7 @@ function createNodeFromNodeType( NodeType )
 	{
 		let parent = treenode.uinode
 		let uinode = new NodeType( parent )
+		console.log( 'context-menu.js.createNodeFromNodeType: ', uinode )
 		uinode.createElement({})
 		treeDidChange()
 		
