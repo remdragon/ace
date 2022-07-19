@@ -250,6 +250,7 @@ const createRoutePlayNode = {
 	submenu: {
 		elements: [
 			...[
+				commands.Greeting2,
 				commands.PlayDTMF,
 				commands.MOH,
 				commands.Playback,

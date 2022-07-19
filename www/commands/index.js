@@ -7,6 +7,7 @@ import Bridge from './bridge.js'; export{ Bridge }
 import Email from './email.js'; export{ Email }
 import GoTo from './goto.js'; export{ GoTo }
 import Greeting from './greeting.js'; export{ Greeting }
+import Greeting2 from './greeting2.js'; export{ Greeting2 }
 import Hangup from './hangup.js'; export{ Hangup }
 import IfNum from './ifnum.js'; export{ IfNum }
 import IfStr from './ifstr.js'; export{ IfStr }
@@ -52,6 +53,7 @@ let all_commands =
 	, Email
 	, GoTo
 	, Greeting
+	, Greeting2
 	, Hangup
 	, IfNum
 	, IfStr
