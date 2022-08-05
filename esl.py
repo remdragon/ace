@@ -10,9 +10,9 @@ import logging
 from pathlib import Path
 import ssl
 from typing import (
-	Dict, Iterator, List, Literal, Optional as Opt, overload, Tuple, TypeVar, Union,
+	Dict, Iterator, List, Optional as Opt, overload, Tuple, TypeVar, Union,
 )
-from typing_extensions import AsyncIterator
+from typing_extensions import AsyncIterator, Literal
 from urllib.parse import unquote as urllib_unquote
 
 logger = logging.getLogger( __name__ )
@@ -605,7 +605,7 @@ class ESL:
 			self._assert_alive()
 			try:
 				event = await asyncio.wait_for( self._event_queue.get(), timeout = timeout )
-			except asyncio.exceptions.TimeoutError: # queue.Empty:
+			except asyncio.TimeoutError: # queue.Empty:
 				return
 			else:
 				event.on_yield()

@@ -9,9 +9,10 @@ from multiprocessing import Process
 from pathlib import Path
 import re
 from typing import (
-	Any, Awaitable, Callable, Dict, Final, List, Literal, Optional as Opt,
+	Any, Awaitable, Callable, Dict, List, Optional as Opt,
 	Tuple, Type, TypeVar, Union,
 )
+from typing_extensions import Final, Literal # Python 3.7
 
 # local imports:
 from esl import ESL
@@ -295,7 +296,7 @@ async def action_silence( state: State, params: PARAMS, pagd: Opt[PAGD] ) -> RES
 	log.info( '%s', stream )
 	return await _playback( to_callstate( state ), stream, pagd )
 
-async def exec_actions( state: State, actions: list[PARAMS], pagd: Opt[PAGD] = None ) -> RESULT3:
+async def exec_actions( state: State, actions: List[PARAMS], pagd: Opt[PAGD] = None ) -> RESULT3:
 	for action in actions or []:
 		r, digits, valid = await exec_action( state, action, pagd )
 		if r != CONTINUE: return r, None, None
@@ -432,7 +433,7 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 		await esl.close()
 
 async def _server() -> None:
-	server = await asyncio.start_server( _handler, 'localhost', 8022 )
+	server = await asyncio.start_server( _handler, '127.0.0.1', 8022 )
 	async with server:
 		await server.serve_forever()
 
