@@ -9,12 +9,12 @@
 #endregion copyright
 #region imports
 
+from __future__ import annotations
 
 from abc import ABCMeta, abstractmethod
-from time import sleep
 import accept_types # type: ignore # pip install accept-types
-from contextlib import closing
 import datetime
+from enum import Enum
 from flask import( # pip install flask
 	Flask, jsonify, render_template, request, Response,
 	send_from_directory, session, url_for,
@@ -25,28 +25,28 @@ from flask_login import( # type: ignore # pip install flask-login
 )
 from flask_session import Session # type: ignore # pip install flask-session
 import html
+import itertools
 import json
 import logging
 import mimetypes
 import os
 from pathlib import Path
-#import platform
+import queue
 import random
 import re
 import shutil
 import socket
-import sqlite3
 import sys
 import tempfile
 from threading import RLock, Thread
+from time import sleep
 from tornado.wsgi import WSGIContainer # pip install tornado
 from tornado.ioloop import IOLoop
 from tornado.httpserver import HTTPServer
 from typing import(
-	Any, Callable, cast, Dict, Iterator, List, Optional as Opt, Sequence as Seq,
-	Tuple, Type, TypeVar, TYPE_CHECKING, Union,
+	Any, Callable, cast, Dict, Iterator, List, Optional as Opt,
+	Sequence as Seq, Tuple, Type, TypeVar, TYPE_CHECKING, Union,
 )
-import tzlocal # pip install tzlocal
 from urllib.parse import urlencode, urlparse
 import uuid
 from werkzeug.serving import make_ssl_devcert
@@ -63,10 +63,16 @@ if sys.platform != 'win32':
 	import pwd
 	from systemd.journal import JournaldLogHandler # pip install systemd
 
+# local imports:
+import ace_eso
+import auditing
+import repo
 
 #endregion imports
 #region globals
 
+
+DEBUG9 = 9
 
 SESSION_USERDATA = 'userdata'
 etc_path = Path( '/etc/itas/ace/' )
@@ -85,6 +91,13 @@ else:
 #endregion globals
 #region utilities
 
+
+def new_audit() -> auditing.Audit:
+	assert request.remote_addr is not None
+	return auditing.Audit(
+		user = current_user.name,
+		remote_addr = request.remote_addr,
+	)
 
 def logging_formatTime( self: Any, record: Any, datefmt: Opt[str] = None ) -> str:
 	dt = datetime.datetime.fromtimestamp( record.created )
@@ -149,9 +162,6 @@ def os_execute( cmd: str ) -> None:
 	log = logger.getChild( 'os_execute' )
 	log.debug( cmd )
 	os.system( cmd )
-
-def json_dumps( data: Any ) -> str:
-	return json.dumps( data, indent = '\t', separators = ( ',', ': ' ))
 
 def walk_json_dicts( json_data: Any, callback: Callable[[Any],Opt[Any]] ) -> Opt[Any]:
 	if isinstance( json_data, dict ):
@@ -242,10 +252,10 @@ class HttpFailure( Exception ):
 		return f'{cls.__module__}.{cls.__name__}(error={self.error!r}, status_code={self.status_code!r})'
 
 def rest_success( rows: Opt[List[Dict[str,Any]]] = None ) -> Response:
-	return cast( Response, jsonify( success = True, rows = rows or [] ))
+	return jsonify( success = True, rows = rows or [] )
 
 def rest_failure( error: str, status_code: Opt[int] = None ) -> Response:
-	r = cast( Response, jsonify( success = False, error = error ))
+	r = jsonify( success = False, error = error )
 	r.status_code = status_code or 400
 	return r
 
@@ -374,7 +384,7 @@ if not cfg_path.is_file():
 		f'ITAS_FREESWITCH_SOUNDS = {["/usr/share/freeswitch/sounds/en/us/callie"]!r}',
 		f'ITAS_REPOSITORY_TYPE = {"fs"!r}',
 		f'ITAS_REPOSITORY_FS_PATH = {"/usr/share/itas/ace/"!r}',
-		f'ITAS_REPOSITORY_SQLITE_PATH = {"/usr/share/itas/ace/database.db"!r}',
+		f'ITAS_REPOSITORY_SQLITE_PATH = {"/usr/share/itas/ace/ace.sqlite"!r}',
 		f'ITAS_FLAGS_PATH = {str(default_data_path)!r}',
 		f'ITAS_DIDS_PATH = {str(default_data_path/"did")!r}',
 		f'ITAS_ANIS_PATH = {str(default_data_path/"ani")!r}',
@@ -456,6 +466,10 @@ class AutoBan:
 			ip = request.remote_addr
 			now = datetime.datetime.now()
 			
+			if ip is None:
+				log.debug( 'user %r has ip=%r', usernm, ip )
+				return False
+			
 			# check if user is already locked out:
 			try:
 				until = self._bans[ip]
@@ -494,8 +508,11 @@ autoban = AutoBan()
 #region paths and auditing
 
 
-audit_path = Path( ITAS_AUDIT_DIR )
-audit_path.mkdir( mode = 0o770, parents = True, exist_ok = True )
+auditing.init(
+	path = Path( ITAS_AUDIT_DIR ),
+	file = ITAS_AUDIT_FILE,
+	time_format = ITAS_AUDIT_TIME,
+)
 
 if __name__ == '__main__' and SESSION_TYPE == 'filesystem':
 	session_path = Path( SESSION_FILE_DIR )
@@ -507,19 +524,6 @@ if __name__ == '__main__' and SESSION_TYPE == 'filesystem':
 r_valid_audit_filename = re.compile( r'^[a-zA-Z0-9_\.-]+$', re.I )
 def valid_audit_filename( filename: str ) -> bool:
 	return bool( r_valid_audit_filename.match( filename ))
-
-def audit( msg: str ) -> None:
-	tzinfo = tzlocal.get_localzone()
-	now = datetime.datetime.now( tz = tzinfo )
-	line = ' '.join( [
-		now.strftime( ITAS_AUDIT_TIME ),
-		current_user.name,
-		request.remote_addr,
-		msg,
-	] )
-	path = audit_path / now.strftime( ITAS_AUDIT_FILE )
-	with path.open( 'a', encoding = 'utf-8', errors = 'backslashreplace' ) as f:
-		print( line, file = f )
 
 flags_path = Path( ITAS_FLAGS_PATH )
 flags_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
@@ -560,590 +564,47 @@ def voicemail_box_msgs_path( box: int ) -> Path:
 
 
 #endregion paths and auditing
-#region repo base
-
-
-REPOID = Union[int,str]
-
-
-class SqlBase( metaclass = ABCMeta ):
-	def __init__( self, name: str, *,
-		null: bool,
-		primary: bool = False,
-		unique: bool = False,
-		index: bool = False,
-	) -> None:
-		assert not name.lower().startswith( 'idx_' ), '"idx_" prefix is not allowed for field names, it is reserved for indexes'
-		self.name = name
-		self.null = null
-		
-		# only one of the following 3 should be set to true
-		self.primary = primary
-		self.unique = unique and not self.primary
-		self.index = index and not self.unique
-	
-	@abstractmethod
-	def validate( self ) -> None:
-		cls = type( self )
-		raise NotImplementedError( f'{cls.__module__}.{cls.__qualname__}.validate()' )
-	
-	@abstractmethod
-	def to_sqlite( self ) -> str:
-		cls = type( self )
-		raise NotImplementedError( f'{cls.__module__}.{cls.__qualname__}.to_sqlite()' )
-	
-	def to_sqlite_extra( self ) -> List[str]:
-		# this is used to create extra entries inside the create table statement
-		return []
-	
-	def to_sqlite_after( self, table: str ) -> List[str]:
-		# this is used to create supplemental entries after the create table statement
-		sql: List[str] = []
-		if self.index:
-			sql.append( 'CREATE INDEX "idx_{table}_{self.name}" ON "{table}" ({self.name})' )
-		return sql
-
-
-class SqlVarChar( SqlBase ):
-	def __init__( self, name: str, *,
-		size: int,
-		null: bool,
-		primary: bool = False,
-		unique: bool = False,
-		index: bool = False,
-	) -> None:
-		super().__init__( name,
-			null = null,
-			primary = primary,
-			unique = unique,
-			index = index,
-		)
-		assert isinstance( size, int ) and 1 <= size <= 255, f'invalid size={size!r}'
-		self.size = size
-	
-	def validate( self ) -> None:
-		assert self.size > 0
-	
-	def to_sqlite( self ) -> str:
-		sql: List[str] = [
-			self.name,
-			f'VARCHAR({self.size})',
-			'NULL' if self.null else 'NOT NULL',
-			'PRIMARY KEY' if self.primary else '',
-			'UNIQUE' if self.unique else '',
-			'COLLATE NOCASE',
-		]
-		return ' '.join( filter( None, sql ))
-
-
-class SqlDateTime( SqlBase ):
-	def __init__( self, name: str, *,
-		null: bool,
-		index: bool = False,
-	) -> None:
-		super().__init__( name,
-			null = null,
-			primary = False,
-			unique = False,
-			index = index,
-		)
-	
-	def validate( self ) -> None:
-		pass
-	
-	def to_sqlite( self ) -> str:
-		sql: List[str] = [
-			self.name,
-			'TEXT', # sqlite doesn't have a DATETIME type
-			'NULL' if self.null else 'NOT NULL',
-		]
-		return ' '.join( filter( None, sql ))
-
-
-class SqlInteger( SqlBase ):
-	def __init__( self, name: str, *,
-		size: int,
-		null: bool,
-		auto: bool = False,
-		primary: bool = False,
-		unique: bool = False,
-		index: bool = False,
-	) -> None:
-		super().__init__( name,
-			null = null,
-			primary = primary,
-			unique = unique,
-			index = index,
-		)
-		assert isinstance( size, int ) and 1 <= size <= 20, f'invalid size={size!r}'
-		self.size = size
-		self.auto = auto
-	
-	def validate( self ) -> None:
-		assert self.size > 0
-	
-	def to_sqlite( self ) -> str:
-		sql: List[str] = [
-			self.name,
-			f'INTEGER({self.size})',
-			'NULL' if self.null else 'NOT NULL',
-			'PRIMARY KEY' if self.primary else '',
-			'UNIQUE' if self.unique else '',
-			'AUTOINCREMENT' if self.auto else '',
-		]
-		return ' '.join( filter( None, sql ))
-
-
-class SqlText( SqlBase ):
-	def __init__( self, name: str, *,
-		null: bool,
-		primary: bool = False,
-		unique: bool = False,
-		index: bool = False,
-	) -> None:
-		assert not unique, 'text fields cannot be unique'
-		assert not primary, 'text fields cannot be primary keys'
-		super().__init__( name,
-			null = null,
-			primary = primary,
-			unique = unique,
-			index = index,
-		)
-	
-	def validate( self ) -> None:
-		pass
-	
-	def to_sqlite( self ) -> str:
-		sql: List[str] = [
-			self.name,
-			'TEXT',
-			'NULL' if self.null else 'NOT NULL',
-			#'PRIMARY KEY' if self.primary else '',
-			#'UNIQUE' if self.unique else '',
-			'COLLATE NOCASE',
-		]
-		return ' '.join( filter( None, sql ))
-
-
-class SqlJson( SqlBase ):
-	def __init__( self, name: str, *,
-		null: bool,
-		primary: bool = False,
-		unique: bool = False,
-		index: bool = False,
-	) -> None:
-		assert not unique, 'json fields cannot be unique'
-		assert not primary, 'json fields cannot be primary keys'
-		super().__init__( name,
-			null = null,
-			primary = primary,
-			unique = unique,
-			index = index,
-		)
-	
-	def validate( self ) -> None:
-		pass
-	
-	def to_sqlite( self ) -> str:
-		sql: List[str] = [
-			self.name,
-			'TEXT',
-			'NULL' if self.null else 'NOT NULL',
-			#'PRIMARY KEY' if self.primary else '',
-			#'UNIQUE' if self.unique else '',
-		]
-		return ' '.join( filter( None, sql ))
-
-
-class Repository( metaclass = ABCMeta ):
-	type = 'Abstract repository'
-	schemas: Dict[str,List[SqlBase]] = {}
-	
-	def __init__( self,
-		tablename: str,
-		ending: str,
-		fields: List[SqlBase],
-		auditing: bool = True,
-	) -> None:
-		assert tablename not in Repository.schemas, f'duplicate schema definition for table {tablename!r}'
-		Repository.schemas[tablename] = fields
-		self.tablename = tablename
-		self.ending = ending
-		self.auditing = auditing
-	
-	@abstractmethod
-	def valid_id( self, id: REPOID ) -> REPOID:
-		cls = type( self )
-		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.valid_id' )
-	
-	@abstractmethod
-	def exists( self, id: REPOID ) -> bool:
-		# does the indicated id exist?
-		cls = type( self )
-		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.exists' )
-	
-	@abstractmethod
-	def get_by_id( self, id: REPOID ) -> Dict[str, Any]:
-		# Return single dictionary by id
-		cls = type( self )
-		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.get_by_id' )
-	
-	@abstractmethod
-	def list( self,
-		filters: Dict[str,str] = {},
-		*,
-		limit: Opt[int] = None,
-		offset: int = 0,
-	) -> Seq[Tuple[REPOID, Dict[str, Any]]]:
-		# Return all dictionaries of type
-		cls = type( self )
-		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.list' )
-	
-	@abstractmethod
-	def create( self, id: REPOID, resource: Dict[str,Any] ) -> None:
-		# Persist new dictionary and return it
-		cls = type( self )
-		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.create' )
-	
-	@abstractmethod
-	def update( self, id: REPOID, resource: Dict[str,Any] ) -> Dict[str,Any]:
-		# Update by id and return updated dict
-		cls = type( self )
-		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.update' )
-	
-	@abstractmethod
-	def delete( self, id: REPOID ) -> Dict[str,Any]:
-		# delete by id and return deleted dict
-		cls = type( self )
-		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.delete' )
-
-
-#endregion repo base
-#region repo sqlite
-
-
-def dict_factory( cursor: Any, row: Seq[Any] ) -> Dict[str,Any]:
-	d: Dict[str,Any] = {}
-	for idx, col in enumerate( cursor.description ):
-		d[col[0]] = row[idx]
-	return d
-
-class RepoSqlite( Repository ):
-	type = 'sqlite'
-	database: sqlite3.Connection
-	
-	@classmethod
-	def setup( cls ) -> None:
-		sqlite_path = Path( ITAS_REPOSITORY_SQLITE_PATH )
-		if not sqlite_path.exists():
-			sqlite_path.touch()
-		cls.database = sqlite3.connect( str( sqlite_path ))
-		setattr( cls.database, 'row_factory', dict_factory )
-		#with closing( cls.database.cursor() ) as cur:
-		#	#cur.execute(
-		#	#	'CREATE TABLE IF NOT EXISTS "audits" (id INTEGER PRIMARY KEY AUTOINCREMENT)' )
-		#	#cur.execute( 'CREATE TABLE IF NOT EXISTS "users" (id INTEGER PRIMARY KEY AUTOINCREMENT)' )
-	
-	def __init__( self,
-		tablename: str,
-		ending: str,
-		fields: List[SqlBase],
-		auditing: bool = True,
-	) -> None:
-		assert re.match( r'^[a-z][a-z_0-9]+$', tablename )
-		
-		assert fields, f'no fields defined for table {tablename!r}'
-		
-		if not hasattr( RepoSqlite, 'database' ):
-			RepoSqlite.setup()
-		
-		super().__init__( tablename, ending, fields, auditing )
-		if not RepoSqlite.schemas:
-			RepoSqlite.setup()
-		
-		fldsql: List[str] = []
-		fldxtra: List[str] = []
-		fldsupp: List[str] = []
-		for fld in fields:
-			fldsql.append( fld.to_sqlite() )
-			fldxtra.extend( fld.to_sqlite_extra() )
-			fldsupp.extend( fld.to_sqlite_after( tablename ))
-		
-		_flds_ = ',\n'.join( fldsql + fldxtra )
-		sql: List[str] = [ f'CREATE TABLE IF NOT EXISTS "{tablename}" (_flds_);' ]
-		sql.extend( fldsupp )
-		
-		with closing( self.database.cursor() ) as cur:
-			for sql_ in sql:
-				cur.execute( sql_ )
-	
-	def valid_id( self, id: REPOID ) -> REPOID:
-		log = logger.getChild( 'RepoFs.valid_id' )
-		log.debug( f'id={id!r}' )
-		try:
-			id_ = int( id )
-		except ValueError as e:
-			raise HttpFailure( f'Invalid uuid {id!r}: {e!r}', 400 )
-		return id_
-	
-	def exists( self, id: REPOID ) -> bool:
-		assert isinstance( id, int )
-		with closing( self.database.cursor() ) as cur:
-			cur.execute( f'select count(*) as "qty" from "{self.tablename}" WHERE id = ?', ( id, ) )
-			row: Dict[str,int] = cur.fetchone()
-		return row['qty'] > 0
-	
-	def get_by_id( self, id: REPOID ) -> Dict[str,Any]:
-		assert isinstance( id, int )
-		with closing( self.database.cursor() ) as cur:
-			cur.execute( f'select * from "{self.tablename}" WHERE id = ?', ( id, ) )
-			item: Dict[str,Any] = cur.fetchone() # TODO FIXME: EOF?
-		
-		return item
-	
-	def list( self,
-		filters: Dict[str,str] = {},
-		*,
-		limit: Opt[int] = None,
-		offset: int = 0,
-	) -> Seq[Tuple[REPOID, Dict[str, Any]]]:
-		items: Seq[Tuple[REPOID, Dict[str, Any]]]
-		
-		params: List[str] = []
-		if filters:
-			wheres: List[str] = []
-			for k, v in filters.items():
-				wheres.append( f'"{k}" like ?' )
-				params.append( f'%{v}%' )
-			_where_ = f'where {" and ".join(wheres)}'
-		else:
-			_where_ = ''
-		
-		paging: List[str] = []
-		if limit or offset:
-			paging.append( f'limit {int(limit or -1)!r}' )
-			if offset:
-				paging.append( f'offset {int(offset or 0)!r}' )
-		_paging_ = ' '.join( paging )
-		
-		sql = f'select * from "{self.tablename}" {_where_} order by id {_paging_}'
-		with closing( self.database.cursor() ) as cur:
-			cur.execute( sql, params )
-			items = cur.fetchall()
-		
-		if not limit:
-			limit = len( items )
-		return items[offset:offset+limit]
-	
-	def create( self, id: REPOID, resource: Dict[str,Any] ) -> None:
-		keys = []
-		values = []
-		for key, val in resource.items():
-			keys.append( key )
-			values.append( val )
-		
-		sql1 = f'SELECT COUNT(*) AS "qty" FROM "{self.tablename}" WHERE "id"=?'
-		with closing( self.database.cursor() ) as cur:
-			cur.execute( sql1 )
-			row = cur.fetchone()
-			qty = cast( int, row['qty'] )
-			if qty > 0:
-				raise HttpFailure( 'resource already exists' )
-		
-		keys_string = '", "'.join( keys )
-		values_string = '", "'.join( values )
-		
-		query_string = 'INSERT INTO "{}" ("{}") VALUES ("{}")'.format(
-			self.tablename,
-			keys_string,
-			values_string, # <<< TODO FIXME: sql injection attack potential here...
-		)
-		
-		with closing( self.database.cursor() ) as cur:
-			cur.execute( query_string )
-		
-		if self.auditing:
-			auditdata = ''.join (
-				f'\n\t{k}={v!r}' for k, v in resource.items()
-				if v not in ( None, '' )
-			)
-			audit( f'Created {self.tablename} {id!r}:{auditdata}' )
-	
-	def update( self, id: REPOID, resource: Dict[str,Any] ) -> Dict[str,Any]:
-		values = ', '.join( f'{k}={v}' for k, v in resource.items() ) # TODO FIXME: sql injection vulnerability
-		
-		query_string = 'UPDATE "{}" SET {} WHERE id="{}"'.format(
-			self.tablename,
-			values, # <<< TODO FIXME: sql injection attack potential here...
-			id,
-		)
-		
-		with closing( self.database.cursor() ) as cur:
-			cur.execute( query_string )
-		
-		if self.auditing:
-			auditdata = ''.join (
-				f'\n\t{k}={v!r}' for k, v in resource.items()
-				if v not in ( None, '' )
-			)
-			audit( f'Updated {self.tablename} {id!r}:{auditdata}' )
-		
-		return resource
-	
-	def delete( self, id: REPOID ) -> Dict[str,Any]:
-		# delete by id and return deleted dict
-		data = self.get_by_id( id )
-		
-		with closing( self.database.cursor() ) as cur:
-			cur.execute( 'DELETE FROM "{}" WHERE id="{}"'.format(
-				self.tablename, id
-			) )
-		
-		if self.auditing:
-			audit( f'Deleted {self.tablename} {id!r}' )
-		
-		return data
-
-
-#endregion repo sqlite
-#region repo filesystem
-
-
-class RepoFs( Repository ):
-	type = 'fs'
-	base_path: Path
-	
-	@classmethod
-	def setup( cls ) -> None:
-		cls.base_path = Path( ITAS_REPOSITORY_FS_PATH )
-	
-	def __init__( self,
-		tablename: str,
-		ending: str,
-		fields: List[SqlBase],
-		auditing: bool = True,
-	) -> None:
-		if not hasattr( RepoFs, 'base_path' ):
-			RepoFs.setup()
-		super().__init__( tablename, ending, fields, auditing )
-		self.path = self.base_path / tablename
-		self.path.mkdir( mode = 0o770, parents = True, exist_ok = True )
-	
-	def valid_id( self, id: REPOID ) -> REPOID:
-		log = logger.getChild( 'RepoFs.valid_id' )
-		log.debug( f'id={id!r}' )
-		#try:
-		#	_ = uuid.UUID( id )  # TODO FIXME: invalid uuid?
-		#except ValueError as e:
-		#	raise HttpFailure( f'Invalid uuid {id!r}: {e!r}', 400 )
-		return id
-	
-	def exists( self, id: REPOID ) -> bool:
-		itemFile = self._path_from_id( id )
-		return itemFile.is_file()
-	
-	def get_by_id( self, id: REPOID ) -> Dict[str,Any]:
-		itemFile = self._path_from_id( id )
-		with itemFile.open( 'r' ) as fileContent: # TODO FIXME: this can raise FileNotFoundError
-			item: Dict[str,Any] = json.loads( fileContent.read() )
-		
-		return item
-	
-	def list( self,
-		filters: Dict[str,str] = {},
-		*,
-		limit: Opt[int] = None,
-		offset: int = 0,
-	) -> Seq[Tuple[REPOID, Dict[str, Any]]]:
-		items: List[Tuple[REPOID, Dict[str, Any]]] = []
-		
-		def _filter( id: int, data: Dict[str,Any] ) -> bool:
-			for k, v in filters.items():
-				if k == 'id':
-					if v not in str( id ):
-						return True
-				else:
-					if v.lower() not in data.get( k, '' ).lower():
-						return True
-			return False
-		
-		for itemFile in self.path.iterdir():
-			name = itemFile.name.lower()
-			if name.endswith( self.ending ):
-				with itemFile.open( 'r' ) as fileContent:
-					id = int( itemFile.stem )
-					data = json.loads( fileContent.read() )
-					if not _filter( id, data ):
-						items.append( ( id, data ) )
-		
-		items = sorted( items, key = lambda kv: kv[0] )
-		if offset:
-			items = items[offset:]
-		if limit:
-			items = items[:limit]
-		return items
-	
-	def create( self, id: REPOID, resource: Dict[str,Any] ) -> None:
-		path = self._path_from_id( id )
-		if path.is_file():
-			raise HttpFailure( 'resource already exists' )
-		with path.open( 'w' ) as fileContent:
-			fileContent.write( json_dumps( resource ))
-		
-		if self.auditing:
-			auditdata = ''.join (
-				f'\n\t{k}={v!r}' for k, v in resource.items()
-				if v not in ( None, '' )
-			)
-			audit( f'Created {self.tablename} {id!r} at {str(path)!r}:{auditdata}' )
-	
-	def update( self, id: REPOID, resource: Dict[str,Any] = {} ) -> Dict[str,Any]:
-		print( f'updating {resource}' )
-		path = self._path_from_id( id )
-		with path.open( 'w' ) as fileContent:
-			fileContent.write( json_dumps( resource ))
-		
-		if self.auditing:
-			auditdata = ''.join (
-				f'\n\t{k}={v!r}' for k, v in resource.items()
-				if v not in ( None, '' )
-			)
-			audit( f'Changed {self.tablename} {id!r} at {str(path)!r}:{auditdata}' )
-		
-		return resource
-	
-	def delete( self, id: REPOID ) -> Dict[str,Any]:
-		path = self._path_from_id( id )
-		with path.open( 'r' ) as fileContent:
-			resource: Dict[str,Any] = json.loads( fileContent.read() )
-		
-		path.unlink()
-		
-		if self.auditing:
-			audit( f'Deleted {self.tablename} {id!r} at {str(path)!r}' )
-		
-		return resource
-	
-	def _path_from_id( self, id: REPOID ) -> Path:
-		return self.path / f'{id}{self.ending}'
-
-
-#endregion repo filesystem
 #region repo config
 
-REPO_FACTORY: Type[Repository]
+repo_config = repo.Config(
+	fs_path = Path( ITAS_REPOSITORY_FS_PATH ),
+	sqlite_path = Path( ITAS_REPOSITORY_SQLITE_PATH ),
+)
+
+REPO_FACTORY: Type[repo.Repository]
 
 # Setup repositories based on config
 if ITAS_REPOSITORY_TYPE == 'sqlite':
-	REPO_FACTORY = RepoSqlite
+	REPO_FACTORY = repo.RepoSqlite
 elif ITAS_REPOSITORY_TYPE == 'fs':
-	REPO_FACTORY = RepoFs
+	REPO_FACTORY = repo.RepoFs
 else:
 	raise Exception( f'invalid ITAS_REPOSITORY_TYPE={ITAS_REPOSITORY_TYPE!r}' )
 
-REPO_FACTORY_NOFS: Type[Repository] = REPO_FACTORY
-if REPO_FACTORY == RepoFs:
-	REPO_FACTORY_NOFS = RepoSqlite
+REPO_FACTORY_NOFS: Type[repo.Repository] = REPO_FACTORY
+if REPO_FACTORY == repo.RepoFs:
+	REPO_FACTORY_NOFS = repo.RepoSqlite
+
+#REPO_DIDS = REPO_FACTORY( 'dids', '.did', [
+#	repo.SqlInteger( 'id', null = False, size = 10, auto = True, primary = True ),
+#	repo.SqlText( 'name', null = True ),
+#	
+#])
+
+REPO_ROUTES = REPO_FACTORY( repo_config, 'routes', '.route', [
+	repo.SqlInteger( 'id', null = False, size = 10, auto = True, primary = True ),
+	repo.SqlText( 'name', null = True ),
+	repo.SqlJson( 'json', null = False ),
+])
+
+REPO_JSON_CDR = REPO_FACTORY_NOFS( repo_config, 'cdr', '.cdr', [
+	repo.SqlInteger( 'id', null = False, size = 16, auto = True, primary = True ),
+	repo.SqlVarChar( 'call_uuid', size = 36, null = False ),
+	repo.SqlDateTime( 'start_stamp', null = False ),
+	repo.SqlDateTime( 'answered_stamp', null = True ),
+	repo.SqlDateTime( 'end_stamp', null = False ),
+	repo.SqlJson( 'json', null = False )
+], auditing = False )
 
 #endregion repo config
 #region session management
@@ -1522,7 +983,7 @@ def try_post_did( did: int, data: Dict[str,str] ) -> int:
 		value = field.validate( rawvalue )
 		if value is not None and value != '':
 			data2[field.field] = value
-	
+
 	try:
 		variables = data.get( 'variables', '' )
 	except Exception as e7:
@@ -1542,14 +1003,17 @@ def try_post_did( did: int, data: Dict[str,str] ) -> int:
 		f'\n\t{k}={v!r}' for k, v in data2.items()
 		if v not in ( None, '' )
 	)
+	
+	audit = new_audit()
+	
 	if did:
-		audit( f'Changed DID {did} at {str(path)!r}:{auditdata}' )
+		audit.audit( f'Changed DID {did} at {str(path)!r}:{auditdata}' )
 	else:
 		if path.exists():
 			raise ValidationError( f'DID already exists: {did2}' )
-		audit( f'Created DID {did2} at {str(path)!r}:{auditdata}' )
+		audit.audit( f'Created DID {did2} at {str(path)!r}:{auditdata}' )
 	with path.open( 'w' ) as f:
-		print( json_dumps( data2 ), file = f )
+		print( repo.json_dumps( data2 ), file = f )
 	
 	return did2
 
@@ -1559,6 +1023,7 @@ def http_did( did: int ) -> Response:
 	log = logger.getChild( 'http_did' )
 	return_type = accept_type()
 	path = did_file_path( did )
+	audit = new_audit()
 	
 	if request.method == 'DELETE':
 		if not path.is_file():
@@ -1568,7 +1033,7 @@ def http_did( did: int ) -> Response:
 		except Exception as e1:
 			return _http_failure( return_type, repr( e1 ), 500 )
 		else:
-			audit( f'Deleted DID {did} at {str(path)!r}' )
+			audit.audit( f'Deleted DID {did} at {str(path)!r}' )
 			if return_type == 'application/json':
 				return rest_success( [] )
 			return redirect( '/dids/' )
@@ -1875,14 +1340,15 @@ def try_post_ani( ani: int, data: Dict[str,str] ) -> int:
 		f'\n\t{k}={v!r}' for k, v in data2.items()
 		if v not in ( None, '' )
 	)
+	audit = new_audit()
 	if ani:
-		audit( f'Changed ANI {ani} at {str(path)!r}:{auditdata}' )
+		audit.audit( f'Changed ANI {ani} at {str(path)!r}:{auditdata}' )
 	else:
 		if path.exists():
 			raise ValidationError( f'ANI already exists: {ani2}' )
-		audit( f'Created ANI {ani2} at {str(path)!r}:{auditdata}' )
+		audit.audit( f'Created ANI {ani2} at {str(path)!r}:{auditdata}' )
 	with path.open( 'w' ) as f:
-		print( json_dumps( data2 ), file = f )
+		print( repo.json_dumps( data2 ), file = f )
 	
 	return ani2
 
@@ -1901,7 +1367,7 @@ def http_ani( ani: int ) -> Response:
 		except Exception as e1:
 			return _http_failure( return_type, repr( e1 ), 500 )
 		else:
-			audit( f'Deleted ANI {ani} at {str(path)!r}' )
+			new_audit().audit( f'Deleted ANI {ani} at {str(path)!r}' )
 			if return_type == 'application/json':
 				return rest_success( [] )
 			return redirect( '/anis/' )
@@ -2047,7 +1513,7 @@ def http_flags() -> Response:
 		
 		path = flag_file_path( name )
 		with path.open ( 'w' ) as f:
-			audit( f'Set flag {name}={value!r} at {str(path)!r}' )
+			new_audit().audit( f'Set flag {name}={value!r} at {str(path)!r}' )
 			print( value, file = f )
 		
 		if return_type == 'application/json':
@@ -2090,12 +1556,6 @@ def http_flags() -> Response:
 #endregion http - flags
 #region http - routes
 
-REPO_ROUTES = REPO_FACTORY( 'routes', '.route', [
-	SqlInteger( 'id', null = False, size = 10, auto = True, primary = True ),
-	SqlText( 'name', null = True ),
-	SqlJson( 'json', null = False ),
-])
-
 @app.route( '/routes', methods = [ 'GET', 'POST', 'DELETE' ] )
 @login_required # type: ignore
 def http_routes() -> Response:
@@ -2115,7 +1575,13 @@ def http_routes() -> Response:
 			)
 		
 		try:
-			REPO_ROUTES.create( route, { 'name': '', 'nodes': [] } )
+			REPO_ROUTES.create( route, { 'name': '', 'nodes': [] }, audit = new_audit() )
+		except repo.ResourceAlreadyExists:
+			return _http_failure(
+				return_type,
+				'resource already exists',
+				400,
+			)
 		except HttpFailure as e:
 			return _http_failure(
 				return_type,
@@ -2257,7 +1723,10 @@ def http_route( route: int ) -> Response:
 					405,
 				)
 		
-		id_ = REPO_ROUTES.valid_id( route )
+		try:
+			id_ = REPO_ROUTES.valid_id( route )
+		except ValueError as e1:
+			raise HttpFailure( f'invalid route={route!r}: {e1!r}' ).with_traceback( e1.__traceback__ ) from None
 		
 		if request.method == 'GET':
 			data = REPO_ROUTES.get_by_id( id_ )
@@ -2265,17 +1734,17 @@ def http_route( route: int ) -> Response:
 		elif request.method == 'PATCH':
 			data = inputs()
 			log.debug( data )
-			REPO_ROUTES.update( route, data )
+			REPO_ROUTES.update( route, data, audit = new_audit() )
 			return rest_success( [ data ] )
 		elif request.method == 'DELETE':
 			return route_delete( route )
 		else:
 			return rest_failure( f'request method {request.method} not implemented yet', 405 )
-	except HttpFailure as e:
+	except HttpFailure as e2:
 		return _http_failure(
 			return_type,
-			e.error,
-			e.status_code,
+			e2.error,
+			e2.status_code,
 		)
 
 def route_delete( route: int ) -> Response:
@@ -2336,7 +1805,7 @@ def route_delete( route: int ) -> Response:
 		if walk_json_dicts( box_settings, json_dict_route_check ):
 			raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by voicemail box {file.stem}' )
 	
-	REPO_ROUTES.delete( route )
+	REPO_ROUTES.delete( route, audit = new_audit() )
 	return rest_success( [] )
 
 #endregion http - routes
@@ -2408,13 +1877,13 @@ def http_voicemails() -> Response:
 			}
 		
 		with path.open( 'w' ) as f:
-			f.write( json_dumps( settings ))
+			f.write( repo.json_dumps( settings ))
 		
 		auditdata = ''.join (
 			f'\n\t{k}={v!r}' for k, v in settings.items()
 			if k != 'pin' and v not in ( None, '' )
 		)
-		audit( f'Created voicemail {box!r} at {str(path)!r}:{auditdata}' )
+		new_audit().audit( f'Created voicemail {box!r} at {str(path)!r}:{auditdata}' )
 		
 		if return_type == 'application/json':
 			return rest_success( [ { 'box': box } ] )
@@ -2586,13 +2055,13 @@ def http_voicemail( box: int ) -> Response:
 			except ValidationError as e:
 				raise HttpFailure( e.args[0] ) from None
 			with path.open( 'w' ) as f:
-				f.write( json_dumps( settings ))
+				f.write( repo.json_dumps( settings ))
 			
 			auditdata = ''.join (
 				f'\n\t{k}={v!r}' for k, v in settings.items()
 				if k != 'pin' and v not in ( None, '' )
 			)
-			audit( f'Updated voicemail {box!r} at {str(path)!r}:{auditdata}' )
+			new_audit().audit( f'Updated voicemail {box!r} at {str(path)!r}:{auditdata}' )
 			
 			return rest_success( [ settings ] )
 		elif request.method == 'DELETE':
@@ -2620,7 +2089,7 @@ def http_voicemail( box: int ) -> Response:
 				log.exception( 'Could not delete box %r settings file:', box )
 				return rest_failure( f'Could not delete box {box!r} settings file: {e3!r}' )
 			
-			audit( f'Deleted voicemail {box!r} at {str(path)!r}' )
+			new_audit().audit( f'Deleted voicemail {box!r} at {str(path)!r}' )
 			
 			return rest_success( [] )
 		else:
@@ -2801,19 +2270,10 @@ def service_command( cmd: str ) -> int:
 #endregion service management
 #region CDR Vacuum
 
-REPO_JSON_CDR = REPO_FACTORY_NOFS( 'cdr', '.cdr' ,[
-	SqlInteger( 'id', null = False, size = 16, auto = True, primary = True ),
-	SqlVarChar( 'call_uuid', size = 36, null = False ),
-	SqlDateTime( 'start_stamp', null = False ),
-	SqlDateTime( 'answered_stamp', null = True ),
-	SqlDateTime( 'end_stamp', null = False ),
-	SqlJson('json', null = False)
-], auditing = False )
-
-def _uepoch_to_timestamp(uepoch: Union[int, str]) -> str:
-	uepoch_float = float(uepoch) / 1000000
-	float_datetime = datetime.datetime.fromtimestamp(uepoch_float)
-	return float_datetime.strftime('%Y-%m-%d %H:%M:%S.%f')
+def _uepoch_to_timestamp( uepoch: Union[int,str] ) -> str:
+	uepoch_float = float( uepoch ) / 1_000_000
+	float_datetime = datetime.datetime.fromtimestamp( uepoch_float )
+	return float_datetime.strftime( '%Y-%m-%d %H:%M:%S.%f' )
 
 
 def _cdr_vacuum() -> None:
@@ -2841,13 +2301,15 @@ def _cdr_vacuum() -> None:
 						'answered_stamp': answered_stamp,
 						'end_stamp': end_stamp,
 						'json': data
-					})
-					os.remove(item)
+					}, audit = new_audit() )
+					os.remove( item )
+				except repo.ResourceAlreadyExists:
+					raise HttpFailure( 'resource already exists' )
 				except Exception:
-					log.exception(f'Unable to create CDR database entry for file {item!r}:')
+					log.exception( 'Unable to create CDR database entry for file %r:', str( item ))
 			
 			except Exception:
-				log.exception( f'Unable to import JSON file {item!r}:')
+				log.exception( 'Unable to import JSON file %r:', str( item ))
 
 def cdr_processor() -> None:
 	running = True
@@ -2856,8 +2318,8 @@ def cdr_processor() -> None:
 		try:
 			_cdr_vacuum()
 		except Exception:
-			log.exception('CDR processor exception:')
-		sleep(60)
+			log.exception( 'CDR processor exception:' )
+		sleep( 60 )
 
 def spawn ( target: Callable[...,Any], *args: Any, **kwargs: Any ) -> Thread:
 	def _target ( *args: Any, **kwargs: Any ) -> Any:
@@ -2890,12 +2352,21 @@ if __name__ == '__main__':
 	
 	logging.basicConfig(
 		level = logging.DEBUG,
+		#level = DEBUG9,
 		format = '%(asctime)s:%(levelname)s:%(name)s:%(message)s',
 	)
 	cmd = sys.argv[1] if len( sys.argv ) > 1 else ''
 	if cmd:
 		sys.exit( service_command( cmd ))
 	login_manager.init_app( app )
+	
+	ace_eso.start(
+		dids_path,
+		anis_path,
+		REPO_ROUTES,
+		voicemail_meta_path,
+		voicemail_msgs_path,
+	)
 	
 	cert_path = Path( ITAS_CERTIFICATE_PEM )
 	if cert_path.exists():
