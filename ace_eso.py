@@ -75,7 +75,7 @@ class PAGD:
 	digit_timeout: datetime.timedelta
 
 def to_callstate( state: State ) -> CallState:
-	assert isinstance( state, CallState ), f'invalid {state=}'
+	assert isinstance( state, CallState ), f'invalid state={state!r}'
 	return state
 
 T = TypeVar( 'T' )
@@ -123,7 +123,7 @@ async def expand( state: State, s: str ) -> str:
 			for i in range( 1, len( ar ), 2 ):
 				ar[i] = state.msg.get( ar[i] ) or ''
 		else:
-			assert False, f'invalid {state=}'
+			assert False, f'invalid state={state!r}'
 		s = ''.join( ar )
 	log.debug( 'output=%r', s )
 	return s
@@ -320,8 +320,8 @@ async def exec_action( state: State, action: PARAMS, pagd: Opt[PAGD] ) -> RESULT
 		log.error( '%s returned %r but should have returned %r or %r',
 			fname, r, CONTINUE, STOP,
 		)
-		r1 = CONTINUE # assume CONTINUE for now..
-	if r1 == CONTINUE:
+		r = CONTINUE # assume CONTINUE for now..
+	if r == CONTINUE:
 		if not await state.can_continue():
 			return STOP, None, None
 	return r, digits, valid
@@ -339,7 +339,7 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 		uuid = headers['Unique-ID']
 		did = headers['Caller-Destination-Number']
 		ani = headers['Caller-ANI']
-		print( f'{did=} {ani=} {uuid=}' )
+		log.debug( 'did=%r ani=%r uuid=%r', did, ani, uuid )
 		
 		#await esl.linger()
 		
@@ -448,8 +448,7 @@ def _main(
 		#level = DEBUG9,
 		format = '%(asctime)s:%(levelname)s:%(name)s:%(message)s',
 	)
-	print( f'{repo_routes=}' )
-	assert False
+	#print( 'repo_routes=}' )
 	asyncio.run( _server() )
 
 def start(
