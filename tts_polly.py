@@ -50,6 +50,6 @@ class TTS:
 		
 		loop = asyncio.get_running_loop()
 		path = await loop.run_in_executor( None,
-			lambda: x.genspeech( text, self.voice, self.tts_location )
+			lambda: x.genspeech( ssml_text, self.voice, self.tts_location )
 		)
 		return path
