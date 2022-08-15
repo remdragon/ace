@@ -39,7 +39,7 @@ from urllib.parse import urlencode, urlparse
 import uuid
 
 if __name__ == '__main__' and sys.argv[1:] == [ 'requirements' ]:
-	cmd = f'{sys.executable} -m pip install accept-types aiofiles aiohttp aioshutil boto3 flask Flask-Login Flask-Session pydub PyOpenSSL service_identity tornado tzlocal'
+	cmd = f'{sys.executable} -m pip install accept-types aiofiles aiohttp aioshutil boto3 flask Flask-Login Flask-Session mypy-extensions pydub PyOpenSSL service_identity tornado tzlocal'
 	print ( cmd )
 	os.system ( cmd )
 	sys.exit ( -1 )
