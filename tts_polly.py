@@ -25,7 +25,7 @@ class TTS:
 	tts_default_voice: AWS_POLLY_VOICES
 	
 	def __init__( self, voice: Opt[str] = None ) -> None:
-		assert voice is None or voice in aws_polly_voices
+		assert voice is None or voice in aws_polly_voices, f'invalid or unrecognized voice={voice!r}'
 		self.voice: AWS_POLLY_VOICES = cast( AWS_POLLY_VOICES, voice or self.tts_default_voice )
 		
 		self.text: List[str] = []
