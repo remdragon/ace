@@ -376,8 +376,6 @@ if not cfg_path.is_file():
 		f'ITAS_REPOSITORY_FS_PATH = {"/usr/share/itas/ace/"!r}',
 		f'ITAS_REPOSITORY_SQLITE_PATH = {"/usr/share/itas/ace/ace.sqlite"!r}',
 		f'ITAS_FLAGS_PATH = {str(default_data_path)!r}',
-		f'ITAS_DIDS_PATH = {str(default_data_path/"did")!r}',
-		f'ITAS_ANIS_PATH = {str(default_data_path/"ani")!r}',
 		'ITAS_DID_CATEGORIES = {!r}'.format( [
 			'general',
 			'medical',
@@ -452,8 +450,6 @@ ITAS_REPOSITORY_TYPE: str = ''
 ITAS_REPOSITORY_FS_PATH: str = ''
 ITAS_REPOSITORY_SQLITE_PATH: str = ''
 ITAS_FLAGS_PATH: str = ''
-ITAS_DIDS_PATH: str = ''
-ITAS_ANIS_PATH: str = ''
 ITAS_DID_CATEGORIES: List[str] = []
 ITAS_DID_FIELDS: List[Field] = []
 ITAS_DID_VARIABLES_EXAMPLES: List[str] = []
@@ -578,14 +574,18 @@ os.chmod( str( flags_path ), 0o775 )
 def flag_file_path( flag: str ) -> Path:
 	return flags_path / f'{flag}.flag'
 
-dids_path = Path( ITAS_DIDS_PATH )
+# TODO FIXME: replace this with REPO_DIDS...
+DIDS = 'dids'
+dids_path = Path( ITAS_REPOSITORY_FS_PATH ) / DIDS
 dids_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
 chown( str( dids_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
 os.chmod( str( dids_path ), 0o775 )
 def did_file_path( did: int ) -> Path:
 	return dids_path / f'{did}.did'
 
-anis_path = Path( ITAS_ANIS_PATH )
+# TODO FIXME: replace this with REPO_ANIS...
+ANIS = 'anis'
+anis_path = Path( ITAS_REPOSITORY_FS_PATH ) / ANIS
 anis_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
 chown( str( anis_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
 os.chmod( str( anis_path ), 0o775 )
@@ -631,12 +631,12 @@ REPO_FACTORY_NOFS: Type[repo.Repository] = REPO_FACTORY
 if REPO_FACTORY == repo.RepoFs:
 	REPO_FACTORY_NOFS = repo.RepoSqlite
 
-REPO_DIDS = REPO_FACTORY( repo_config, 'dids', '.did', [
+REPO_DIDS = REPO_FACTORY( repo_config, DIDS, '.did', [
 	#repo.SqlInteger( 'id', null = False, size = 10, auto = True, primary = True ),
 	#repo.SqlText( 'name', null = True ),
 ])
 
-REPO_ANIS = REPO_FACTORY( repo_config, 'anis', '.ani', [] )
+REPO_ANIS = REPO_FACTORY( repo_config, ANIS, '.ani', [] )
 
 REPO_ROUTES = REPO_FACTORY( repo_config, 'routes', '.route', [
 	repo.SqlInteger( 'id', null = False, size = 10, auto = True, primary = True ),
@@ -871,10 +871,9 @@ def http_dids() -> Response:
 	q_route = request.args.get( 'route', '' ).strip()
 	q_notes = request.args.get( 'notes', '' ).strip()
 	
-	path = Path( ITAS_DIDS_PATH )
 	dids: List[Dict[str,Any]] = []
 	pattern = f'*{q_did}*.did' if q_did else '*.did'
-	files = list( path.glob( pattern ))
+	files = list( dids_path.glob( pattern ))
 	files.sort ( key = lambda file: file.stem )
 	skipped = 0
 	datadefs: Dict[str,Any] = {
@@ -1253,10 +1252,9 @@ def http_anis() -> Response:
 	q_offset = qry_int( 'offset', 0, min = 0 )
 	
 	search = request.args.get( 'search', '' )
-	path = Path( ITAS_ANIS_PATH )
 	anis: List[Dict[str,int]] = []
 	pattern = f'*{search}*.ani' if search else '*.ani'
-	for f in path.glob( pattern ):
+	for f in anis_path.glob( pattern ):
 		anis.append( { 'ani': int( f.stem ) } )
 	anis.sort ( key = lambda d: d['ani'] )
 	anis = anis[q_offset:q_offset + q_limit]
@@ -1800,7 +1798,7 @@ def route_delete( route: int ) -> Response:
 		raise HttpFailure( f'Route {route!r} does not exist', 404 )
 	
 	# check if route is referenced by any DID
-	for file in Path( ITAS_DIDS_PATH ).glob( '*.did' ):
+	for file in dids_path.glob( '*.did' ):
 		with file.open( 'r' ) as f:
 			raw = f.read()
 		did = json.loads( raw ) if raw else {}
@@ -1808,7 +1806,7 @@ def route_delete( route: int ) -> Response:
 			raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by DID {file.stem}' )
 	
 	# check if route is referenced by ani ANI
-	for file in Path( ITAS_ANIS_PATH ).glob( '*.ani' ):
+	for file in anis_path.glob( '*.ani' ):
 		with file.open( 'r' ) as f:
 			raw = f.read()
 		ani = json.loads( raw ) if raw else {}
