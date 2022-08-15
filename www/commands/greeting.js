@@ -26,6 +26,7 @@ export default class Greeting extends UINode {
 	}
 	
 	name//: string
+	box//: integer
 	greeting//: integer
 	
 	fields = [{

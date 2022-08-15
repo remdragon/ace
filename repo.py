@@ -2,6 +2,7 @@
 
 # stdlib imports:
 from abc import ABCMeta, abstractmethod
+import asyncio
 from contextlib import closing
 from dataclasses import dataclass
 import json
@@ -33,10 +34,12 @@ def json_dumps( data: Any ) -> str:
 
 REPOID = Union[int,str]
 
+
 @dataclass
 class Config:
-	fs_path: Path
-	sqlite_path: Path
+	fs_path: Opt[Path] = None
+	sqlite_path: Opt[Path] = None
+
 
 class SqlBase( metaclass = ABCMeta ):
 	def __init__( self, name: str, *,
@@ -307,6 +310,7 @@ class RepoSqlite( Repository ):
 	
 	@classmethod
 	def setup( cls, config: Config ) -> None:
+		assert config.sqlite_path is not None, 'repo.Config.sqlite_path not set'
 		sqlite_path = Path( config.sqlite_path )
 		if not sqlite_path.exists():
 			sqlite_path.touch()
@@ -489,6 +493,7 @@ class RepoFs( Repository ):
 	
 	@classmethod
 	def setup( cls, config: Config ) -> None:
+		assert config.fs_path is not None, 'repo.Config.fs_path not set'
 		cls.base_path = Path( config.fs_path )
 	
 	def __init__( self,
@@ -604,3 +609,52 @@ class RepoFs( Repository ):
 
 
 #endregion repo filesystem
+#region async support
+
+class AsyncRepository:
+	def __init__( self, repo: Repository ) -> None:
+		self.repo = repo
+	
+	async def exists( self, id: REPOID ) -> bool:
+		loop = asyncio.get_running_loop()
+		return await loop.run_in_executor( None, lambda:
+			self.repo.exists( id )
+		)
+	
+	async def get_by_id( self, id: REPOID ) -> Dict[str, Any]:
+		loop = asyncio.get_running_loop()
+		return await loop.run_in_executor( None, lambda:
+			self.repo.get_by_id( id )
+		)
+	
+	async def list( self,
+		filters: Dict[str,str] = {},
+		*,
+		limit: Opt[int] = None,
+		offset: int = 0,
+	) -> Seq[Tuple[REPOID, Dict[str, Any]]]:
+		loop = asyncio.get_running_loop()
+		return await loop.run_in_executor( None, lambda:
+			self.repo.list( filters, limit = limit, offset = offset )
+		)
+	
+	async def create( self, id: REPOID, resource: Dict[str,Any], *, audit: auditing.Audit ) -> None:
+		loop = asyncio.get_running_loop()
+		return await loop.run_in_executor( None, lambda:
+			self.repo.create( id, resource, audit = audit )
+		)
+	
+	async def update( self, id: REPOID, resource: Dict[str,Any], *, audit: auditing.Audit ) -> Dict[str,Any]:
+		loop = asyncio.get_running_loop()
+		return await loop.run_in_executor( None, lambda:
+			self.repo.update( id, resource, audit = audit )
+		)
+	
+	async def delete( self, id: REPOID, *, audit: auditing.Audit ) -> Dict[str,Any]:
+		loop = asyncio.get_running_loop()
+		return await loop.run_in_executor( None, lambda:
+			self.repo.delete( id, audit = audit )
+		)
+
+
+#endregion async support

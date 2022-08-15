@@ -8,9 +8,11 @@ from enum import Enum
 import itertools
 import logging
 from pathlib import Path
+import re
 import ssl
 from typing import (
-	Dict, Iterator, List, Optional as Opt, overload, Tuple, TypeVar, Union,
+	Any, AsyncIterator, Dict, Iterator, List, Optional as Opt, overload, Tuple,
+	TypeVar, Union,
 )
 from typing_extensions import AsyncIterator, Literal
 from urllib.parse import unquote as urllib_unquote
@@ -23,6 +25,16 @@ idgen = itertools.count()
 g_last_id: int = 0
 
 UUID_BROADCAST_LEG = Literal['aleg','bleg','holdb','both']
+
+CAUSE = Literal['NORMAL_CLEARING','USER_BUSY','ORIGINATOR_CANCEL'] # TODO FIXME: there are other causes...
+
+def is_valid_uuid( uuid: Any ) -> bool:
+	# 8437cb01-2fbf-42e4-bbe5-a32c265f44b3
+	return bool(
+		isinstance( uuid, str )
+		and re.match( r'[0-9A-Fa-f]{8}(-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}', uuid )
+	)
+	#assert isinstance( other_uuid, str ) and len( other_uuid ) == 36, f'invalid uuid={uuid!r}'
 
 class ESL:
 	_reader: asyncio.StreamReader
@@ -141,7 +153,6 @@ class ESL:
 	class ErrorEvent( Message ):
 		def __init__( self, exc: Exception ) -> None:
 			self.exc = exc
-		
 		def on_yield( self ) -> None:
 			raise self.exc from None
 	
@@ -150,6 +161,7 @@ class ESL:
 		raw: Opt[bytes] = None
 		err: Opt[Exception] = None
 		command_required = True
+		reply: Opt[ESL.Message] = None
 		
 		def __init__( self,
 			cli: ESL,
@@ -159,7 +171,6 @@ class ESL:
 			*,
 			event_lock: bool = False,
 		) -> None:
-			self.reply: Opt[ESL.Message] = None
 			if command:
 				_body_ = body.encode() if body else b''
 				if _body_:
@@ -344,21 +355,23 @@ class ESL:
 	
 	# BEGIN requests:
 	
-	async def answer( self ) -> ESL.Request:
-		return await self._send( ESL.Request( self, 'sendmsg', {
-			'call-command': 'execute',
-			'execute-app-name': 'answer',
-		}))
+	async def answer( self ) -> AsyncIterator[ESL.Message]:
+		log = logger.getChild( 'ESL.answer' )
+		async for event in self.execute( 'answer' ):
+			try:
+				yield event
+			except Exception:
+				log.exception( 'Unexpected error processing event:' )
 	
 	async def auth( self, pwd: str ) -> ESL.Request:
 		r = ESL.AuthRequest( self, f'auth {pwd}' )
 		return await r.wait()
 	
-	#async def linger( self ) -> None:
-	#	log = logger.getChild( 'ESO.linger' )
-	#	await self._write( b'linger\n\n' )
-	#	packet = await self._waitfor( b'\n\n' )
-	#	log.warn( f'packet={packet!r}' )
+	async def eval( self, *args: str ) -> Opt[str]:
+		_args_ = ' '.join( map( self.escape, args ))
+		r = ESL.ValueRequest( self, f'api eval {_args_}' )
+		await r.wait()
+		return r.value
 	
 	async def event( self,
 		event_name: str,
@@ -383,15 +396,18 @@ class ESL:
 			'execute-app-arg': args_,
 		}))
 		log.debug( 'r=%r', r )
-		while True:
+		while True: # TODO FIXME: what if we never get CHANNEL_EXECUTE_COMPLETE?
 			async for event in self.events():
+				try:
+					yield event
+				except Exception:
+					log.exception( 'Unexpected error processing event:' )
 				event_name = event.event_name
 				if event_name == 'CHANNEL_EXECUTE_COMPLETE':
 					app2 = event.header( 'Application' )
 					appdata = event.header( 'Application-Data' )
 					if app == app2 and appdata == args_:
 						return
-				yield event
 	
 	async def filter( self,
 		key: str,
@@ -425,16 +441,54 @@ class ESL:
 			f'api global_setvar {key} {val}'
 		))
 	
-	async def hangup( self, reason: str = 'USER_BUSY' ) -> ESL.Request:
-		# TODO FIXME: this seems like it will only work on an Event Socket Outbound
-		return await self._send( ESL.Request( self, 'sendmsg', {
-			'call-command': 'execute',
-			'execute-app-name': 'hangup',
-			'execute-app-arg': reason,
-		}))
+	async def hangup( self, cause: CAUSE = 'NORMAL_CLEARING' ) -> AsyncIterator[ESL.Message]:
+		log = logger.getChild( 'ESL.hangup' )
+		async for event in self.execute( 'hangup', cause ):
+			try:
+				yield event
+			except Exception:
+				log.exception( 'Unexpected error processing event:' )
 	
 	async def hostname( self ) -> ESL.ValueRequest:
 		return await self._send( ESL.ValueRequest( self, 'api hostname' ))
+	
+	async def limit( self,
+		backend: str,
+		realm: str,
+		resource: str,
+		max: Opt[int] = None,
+		transfer_destination_number: Opt[str] = None,
+		dialplan: Opt[str] = None,
+		context: Opt[str] = None,
+	) -> AsyncIterator[ESL.Message]:
+		log = logger.getChild( 'ESL.limit' )
+		if transfer_destination_number:
+			assert max is not None, 'max is required if transfer_destination_number is set'
+		if dialplan:
+			assert transfer_destination_number is not None, 'transfer_destination_number is required if dialplan is set'
+		if context:
+			assert dialplan is not None, 'dialplan is required if context is set'
+		
+		args: List[str] = list( filter( None, [
+			backend,
+			realm,
+			resource,
+			str( max or '' ),
+			transfer_destination_number,
+			dialplan,
+			context,
+		]))
+		async for event in self.execute( 'limit', *args ):
+			try:
+				yield event
+			except Exception:
+				log.exception( 'Unexpected error processing event:' )
+	
+	#async def linger( self ) -> None:
+	#	log = logger.getChild( 'ESO.linger' )
+	#	await self._write( b'linger\n\n' )
+	#	packet = await self._waitfor( b'\n\n' )
+	#	log.warn( f'packet={packet!r}' )
 	
 	async def lua( self,
 		script: str, # freeswitch lua interface can't handle this being quoted...
@@ -453,6 +507,38 @@ class ESL:
 		#log = logger.getChild( 'ESL.myevents' )
 		return await self._send( ESL.Request( self, 'myevents' ))
 	
+	async def originate( self, dest: str, *,
+		origin: str,
+		dialplan: str = '',
+		context: str = '',
+		cid_name: str = '',
+		cid_num: str = '',
+		timeout: Opt[datetime.timedelta] = None,
+		chanvars: Opt[Dict[str,str]] = None,
+		expand: bool = False,
+		bgapi: bool = False,
+	) -> ESL.Request:
+		parts: List[str] = []
+		if bgapi:
+			parts.append( 'bgapi' )
+		if expand:
+			parts.append( 'expand' )
+		parts.append( 'originate' )
+		if chanvars:
+			_chanvars_ = ','.join( f'{k}={v}' for k, v in chanvars.items() )
+			dest = f'{_chanvars_}{dest}'
+		args = list( map( self.escape, [
+			dest,
+			origin,
+			dialplan,
+			context,
+			cid_name,
+			cid_num,
+			str( timeout.total_seconds() ) if timeout else '',
+		]))
+		cmd = ' '.join( itertools.chain( parts, args ))
+		return await self._send( ESL.Request( self, cmd ))
+	
 	async def play_and_get_digits( self,
 		min_digits: int,
 		max_digits: int,
@@ -465,17 +551,22 @@ class ESL:
 		regexp: Opt[str] = None,
 		digit_timeout: Opt[datetime.timedelta] = None,
 		transfer_on_failure: Opt[str] = None,
+		digits: Opt[list[str]] = None,
 	) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.play_and_get_digits' )
 		assert min_digits >= 0, f'invalid min_digits={min_digits!r}'
 		assert max_digits <= 128, f'invalid max_digits={max_digits!r}'
 		assert min_digits <= max_digits, f'invalid min_digits={min_digits!r} vs max_digits={max_digits!r}'
 		assert tries > 0, f'invalid tries={tries!r}'
-		timeout_milliseconds = timeout.total_seconds() * 1000
+		timeout_milliseconds = int( timeout.total_seconds() * 1000 )
 		assert timeout_milliseconds >= 0, f'invalid timeout={timeout!r}'
 		assert isinstance( terminators, str ), f'invalid terminators={terminators!r}'
 		assert isinstance( file, str ) and len( file ), f'invalid file={file!r}'
-		digit_timeout_ms = digit_timeout.total_seconds() * 1000 if digit_timeout else timeout_milliseconds
+		digit_timeout_ms: int = (
+			int( digit_timeout.total_seconds() * 1000 )
+			if digit_timeout else
+			timeout_milliseconds
+		)
 		
 		async for event in self.execute( 'play_and_get_digits',
 			str( min_digits ),
@@ -490,16 +581,38 @@ class ESL:
 			str( digit_timeout_ms ),
 			transfer_on_failure or '',
 		):
-			yield event
+			try:
+				event_name = event.event_name
+				if event_name == 'DTMF':
+					dtmf_digit = event.header( 'DTMF-Digit' )
+					log.debug( 'event %s: dtmf_digit=%r', event_name, dtmf_digit )
+					assert dtmf_digit
+					if digits:
+						digits.append( dtmf_digit )
+				else:
+					log.debug( 'ignoring event_name=%r', event_name )
+				yield event
+			except Exception:
+				log.exception( 'Unexpected error processing event:' )
 	
 	async def playback( self, stream: str, *,
 		event_lock: bool = False,
 	) -> AsyncIterator[ESL.Message]:
-		#log = logger.getChild( 'ESL.playback' )
-		# TODO FIXME: this seems like it will only work on an Event Socket Outbound
+		log = logger.getChild( 'ESL.playback' )
 		assert isinstance( stream, str ) and len( stream ), f'invalid stream={stream!r}'
 		async for event in self.execute( 'playback', stream ):
-			yield event
+			try:
+				yield event
+			except Exception:
+				log.exception( 'Unexpected error processing event:' )
+	
+	async def pre_answer( self ) -> AsyncIterator[ESL.Message]:
+		log = logger.getChild( 'ESL.pre_answer' )
+		async for event in self.execute( 'pre_answer' ):
+			try:
+				yield event
+			except Exception:
+				log.exception( 'Unexpected error processing event:' )
 	
 	async def record( self,
 		path: Path,
@@ -520,7 +633,10 @@ class ESL:
 			str( silence_threshold ),
 			str( silence_hits ),
 		):
-			yield event
+			try:
+				yield event
+			except Exception:
+				log.exception( 'Unexpected error processing event:' )
 	
 	async def regex( self, needle: str, haystack: str ) -> bool:
 		assert ' ' not in needle, f'invalid needle={needle!r}'
@@ -537,14 +653,38 @@ class ESL:
 	async def strftime( self ) -> ESL.ValueRequest:
 		return await self._send( ESL.ValueRequest( self, 'api strftime' ))
 	
+	async def uuid_answer( self,
+		uuid: str,
+	) -> ESL.Request:
+		assert is_valid_uuid( uuid ), f'invalid uuid={uuid!r}'
+		return await self._send( ESL.Request( self, f'api uuid_answer {uuid}' ))
+	
 	async def uuid_break( self,
 		uuid: str,
 		all: Literal['','all'],
 	) -> ESL.Request:
-		assert isinstance( uuid, str ) and len( uuid ) == 36, f'invalid uuid={uuid!r}'
+		assert is_valid_uuid( uuid ), f'invalid uuid={uuid!r}'
 		assert all in ( '', 'all' ), f'invalid all={all!r}'
 		return await self._send( ESL.Request( self,
 			f'api uuid_break {uuid} {all}'
+		))
+	
+	async def uuid_bridge( self,
+		uuid: str,
+		other_uuid: str,
+	) -> str:
+		r = await self._uuid_bridge( uuid, other_uuid )
+		assert r.reply is not None
+		return r.reply.body
+	
+	async def _uuid_bridge( self,
+		uuid: str,
+		other_uuid: str,
+	) -> ESL.Request:
+		assert is_valid_uuid( uuid ), f'invalid uuid={uuid!r}'
+		assert is_valid_uuid( other_uuid ), f'invalid other_uuid={other_uuid!r}'
+		return await self._send( ESL.Request( self,
+			f'api uuid_bridge {uuid} {other_uuid}'
 		))
 	
 	async def uuid_broadcast( self,
@@ -552,7 +692,7 @@ class ESL:
 		path: str,
 		leg: UUID_BROADCAST_LEG,
 	) -> ESL.Request:
-		assert isinstance( uuid, str ) and len( uuid ) == 36, f'invalid uuid={uuid!r}'
+		assert is_valid_uuid( uuid ), f'invalid uuid={uuid!r}'
 		assert isinstance( path, str ) and len( path ) > 0, f'invalid path={path!r}'
 		return await self._send( ESL.Request( self,
 			f'api uuid_broadcast {uuid} {self.escape(path)} {leg}'
@@ -560,34 +700,95 @@ class ESL:
 	
 	async def uuid_exists( self,
 		uuid: str,
-	) -> ESL.BoolRequest:
-		assert isinstance( uuid, str ) and len( uuid ) == 36, f'invalid uuid={uuid!r}'
-		return await self._send( ESL.BoolRequest( self, f'api uuid_exists {uuid}' ))
+	) -> bool:
+		assert is_valid_uuid( uuid ), f'invalid uuid={uuid!r}'
+		r = await self._send( ESL.BoolRequest( self, f'api uuid_exists {uuid}' ))
+		return r.value
 	
 	async def uuid_getvar( self,
 		uuid: str,
 		key: str,
-	) -> ESL.ValueRequest:
-		assert isinstance( uuid, str ) and len( uuid ) == 36, f'invalid uuid={uuid!r}'
+	) -> Opt[str]:
+		assert is_valid_uuid( uuid ), f'invalid uuid={uuid!r}'
 		assert isinstance( key, str ) and ' ' not in key, f'invalid key={key!r}'
-		return await self._send( ESL.ValueRequest( self, f'api uuid_getvar {uuid} {key}' ))
+		r = await self._send( ESL.ValueRequest( self, f'api uuid_getvar {uuid} {key}' ))
+		return r.value
+	
+	async def uuid_getchanvar( self,
+		uuid: str,
+		key: str,
+	) -> Opt[str]:
+		# this allows you to query for all channel variables visible in uuid_dump which uuid_getvar does not
+		assert is_valid_uuid( uuid ), f'invalid uuid={uuid!r}'
+		assert isinstance( key, str ) and ' ' not in key, f'invalid key={key!r}'
+		return await self.eval( f'uuid:{uuid} ${{{key}}}' )
 	
 	async def uuid_kill( self,
 		uuid: str,
+		cause: CAUSE = 'NORMAL_CLEARING',
 	) -> ESL.Request:
-		assert isinstance( uuid, str ) and len( uuid ) == 36, f'invalid uuid={uuid!r}'
-		return await self._send( ESL.Request( self, f'api uuid_kill {uuid}' ))
+		assert is_valid_uuid( uuid ), f'invalid uuid={uuid!r}'
+		assert isinstance( cause, str ), f'invalid cause={cause!r}'
+		return await self._send( ESL.Request( self, f'api uuid_kill {uuid} {cause}' ))
+	
+	async def uuid_limit_release( self,
+		uuid: str,
+		backend: str,
+		realm: str,
+		resource: str,
+	) -> ESL.Request:
+		assert is_valid_uuid( uuid ), f'invalid uuid={uuid!r}'
+		assert isinstance( backend, str ) and backend, f'invalid backend={backend!r}'
+		assert isinstance( realm, str ) and realm, f'invalid realm={realm!r}'
+		assert isinstance( resource, str ) and resource, f'invalid resource={resource!r}'
+		_args_ = ' '.join( map( self.escape, [
+			backend,
+			realm,
+			resource,
+		]))
+		return await self._send( ESL.Request( self, f'api uuid_limit_release {uuid} {_args_}' ))
+	
+	async def uuid_pre_answer( self,
+		uuid: str,
+	) -> ESL.Request:
+		assert is_valid_uuid( uuid ), f'invalid uuid={uuid!r}'
+		return await self._send( ESL.Request( self, f'api uuid_pre_answer {uuid}' ))
+	
+	async def uuid_send_dtmf( self,
+		uuid: str,
+		dtmf: str,
+	) -> ESL.Request:
+		assert is_valid_uuid( uuid ), f'invalid uuid={uuid!r}'
+		assert isinstance( dtmf, str ), f'invalid dtmf={dtmf!r}'
+		return await self._send( ESL.Request( self,
+			f'api uuid_send_dtmf {uuid} {self.escape(dtmf)}'
+		))
 	
 	async def uuid_setvar( self,
 		uuid: str,
 		key: str,
 		val: str,
 	) -> ESL.Request:
-		assert isinstance( uuid, str ) and len( uuid ) == 36, f'invalid uuid={uuid!r}'
+		assert is_valid_uuid( uuid ), f'invalid uuid={uuid!r}'
 		assert isinstance( key, str ) and ' ' not in key, f'invalid key={key!r}'
 		assert isinstance( val, str ) and ' ' not in val, f'invalid val={val!r}'
 		return await self._send( ESL.Request( self,
 			f'api uuid_setvar {uuid} {key} {val}'
+		))
+	
+	async def uuid_transfer( self,
+		uuid: str,
+		leg: Literal['','-bleg','-both'],
+		dest: str,
+		dialplan: Literal['','xml','inline'],
+		context: str,
+	) -> ESL.Request:
+		assert is_valid_uuid( uuid ), f'invalid uuid={uuid!r}'
+		assert leg in ( '', '-bleg', '-both' ), f'invalid leg={leg!r}'
+		assert dest.strip(), f'invalid dest={dest!r}'
+		assert dialplan in ( '', 'xml', 'inline' ), f'invalid dialplan={dialplan!r}'
+		return await self._send( ESL.Request( self,
+			f'uuid_transfer {uuid} {leg} {self.escape(dest)} {self.escape(dialplan)} {self.escape(context)}',
 		))
 	
 	# END requests ^^^^

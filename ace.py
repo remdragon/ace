@@ -9,21 +9,11 @@
 #endregion copyright
 #region imports
 
+# stdlib imports:
 from __future__ import annotations
-
 from abc import ABCMeta, abstractmethod
-import accept_types # type: ignore # pip install accept-types
 import datetime
 from enum import Enum
-from flask import( # pip install flask
-	Flask, jsonify, render_template, request, Response,
-	send_from_directory, session, url_for,
-)
-from flask_login import( # type: ignore # pip install flask-login
-	LoginManager, UserMixin, AnonymousUserMixin,
-	login_required, current_user, confirm_login, login_user, logout_user,
-)
-from flask_session import Session # type: ignore # pip install flask-session
 import html
 import itertools
 import json
@@ -40,15 +30,34 @@ import sys
 import tempfile
 from threading import RLock, Thread
 from time import sleep
-from tornado.wsgi import WSGIContainer # pip install tornado
-from tornado.ioloop import IOLoop
-from tornado.httpserver import HTTPServer
 from typing import(
 	Any, Callable, cast, Dict, Iterator, List, Optional as Opt,
 	Sequence as Seq, Tuple, Type, TypeVar, TYPE_CHECKING, Union,
 )
+from typing_extensions import Literal # Python 3.7
 from urllib.parse import urlencode, urlparse
 import uuid
+
+if __name__ == '__main__' and sys.argv[1:] == [ 'requirements' ]:
+	cmd = f'{sys.executable} -m pip install accept-types aiofiles aiohttp aioshutil boto3 flask Flask-Login Flask-Session pydub PyOpenSSL service_identity tornado tzlocal'
+	print ( cmd )
+	os.system ( cmd )
+	sys.exit ( -1 )
+
+# 3rd-party imports:
+import accept_types # type: ignore # pip install accept-types
+from flask import( # pip install flask
+	Flask, jsonify, render_template, request, Response,
+	send_from_directory, session, url_for,
+)
+from flask_login import( # type: ignore # pip install flask-login
+	LoginManager, UserMixin, AnonymousUserMixin,
+	login_required, current_user, confirm_login, login_user, logout_user,
+)
+from flask_session import Session # type: ignore # pip install flask-session
+from tornado.wsgi import WSGIContainer # pip install tornado
+from tornado.ioloop import IOLoop
+from tornado.httpserver import HTTPServer
 from werkzeug.serving import make_ssl_devcert
 
 if TYPE_CHECKING:
@@ -63,10 +72,14 @@ if sys.platform != 'win32':
 	import pwd
 	from systemd.journal import JournaldLogHandler # pip install systemd
 
+if __name__ == '__main__':
+	sys.path.append( 'incpy' )
+
 # local imports:
-import ace_eso
+import ace_engine
 import auditing
 import repo
+from tts import TTS_VOICES, tts_voices
 
 #endregion imports
 #region globals
@@ -380,6 +393,9 @@ if not cfg_path.is_file():
 		f'ITAS_AUDIT_DIR = {"/var/log/itas/ace/"!r}',
 		f'ITAS_AUDIT_FILE = {"%Y-%m-%d.log"!r}',
 		f'ITAS_AUDIT_TIME = {"%Y-%m-%d %H:%M:%S.%f %Z%z"!r}',
+		f'ITAS_OWNER_USER = {"www-data"!r}',
+		f'ITAS_OWNER_GROUP = {"www-data"!r}',
+		f'ITAS_VOICE_DELIVER_ANI = {""!r}',
 		f'ITAS_FREESWITCH_JSON_CDR_PATH = {"/var/log/freeswitch/json_cdr"!r}',
 		f'ITAS_FREESWITCH_SOUNDS = {["/usr/share/freeswitch/sounds/en/us/callie"]!r}',
 		f'ITAS_REPOSITORY_TYPE = {"fs"!r}',
@@ -401,8 +417,32 @@ if not cfg_path.is_file():
 			'8005551213 6999 1999-12-31 # send calls with this ANI and DID 8005551213 to route 6999 until Dec 31, 1999 12:00:00 AM',
 			'8005551214 6999 1999-12-31 08:00:00 # send calls with this ANI and DID 8005551214 to route 6999 until Dec 31, 1999 8:00 AM (local time)',
 		] ),
-		f'ITAS_VOICEMAIL_META_PATH = {"/usr/share/itas/ace/voicemail/meta/"!r}',
-		f'ITAS_VOICEMAIL_MSGS_PATH = {"/usr/share/itas/ace/voicemail/msgs/"!r}',
+		f'ITAS_VOICEMAIL_MIN_PIN_LENGTH = {4!r}',
+		f'ITAS_VOICEMAIL_BOXES_PATH = {"/usr/share/itas/ace/boxes/"!r}',
+		f'ITAS_VOICEMAIL_MSGS_PATH = {"/usr/share/itas/ace/msgs/"!r}',
+		f'ITAS_VOICEMAIL_USE_TTS = {False!r}',
+		f'ITAS_SMTP_SECURE = {"yes"!r}',
+		f'ITAS_SMTP_HOST = {""!r}',
+		f'ITAS_SMTP_PORT = {465!r}',
+		f'ITAS_SMTP_TIMEOUT_SECONDS = {60!r}',
+		f'ITAS_SMTP_USERNAME = {""!r}',
+		f'ITAS_SMTP_PASSWORD = {""!r}',
+		f'ITAS_SMTP_EMAIL_FROM = {""!r}',
+		f'ITAS_SMS_CARRIER = {""!r}',
+		f'ITAS_SMS_EMULATOR = {False!r}',
+		f'ITAS_SMS_THINQ_ACCOUNT = {""!r}',
+		f'ITAS_SMS_THINQ_USERNAME = {""!r}',
+		f'ITAS_SMS_THINQ_API_TOKEN = {""!r}',
+		f'ITAS_SMS_THINQ_FROM = {""!r}',
+		f'ITAS_SMS_TWILIO_ACCOUNT = {""!r}',
+		f'ITAS_SMS_TWILIO_SID = {""!r}',
+		f'ITAS_SMS_TWILIO_TOKEN = {""!r}',
+		f'ITAS_SMS_TWILIO_FROM = {""!r}',
+		f'ITAS_TTS_ACCESS_KEY = {""!r}',
+		f'ITAS_TTS_SECRET_KEY = {""!r}',
+		f'ITAS_TTS_REGION_NAME = {""!r}',
+		f'ITAS_TTS_LOCATION = {"/var/lib/freeswitch/tts/"!r}',
+		f'ITAS_TTS_DEFAULT_VOICE = {"Joanna"!r}',
 		'ITAS_MOTD = {!r}'.format( "Don't Panic!" ),
 	] )
 	with cfg_path.open( 'w' ) as f:
@@ -411,6 +451,7 @@ else:
 	with cfg_path.open( 'r' ) as f:
 		cfg_raw = f.read()
 
+# begin flask.cfg variables:
 app = Flask( __name__ )
 ENV: str = ''
 DEBUG: bool = False
@@ -427,6 +468,9 @@ ITAS_AUTOBAN_DURATION_MINUTES: float = 10
 ITAS_AUDIT_DIR: str = ''
 ITAS_AUDIT_FILE: str = ''
 ITAS_AUDIT_TIME: str = ''
+ITAS_OWNER_USER: str = ''
+ITAS_OWNER_GROUP: str = ''
+ITAS_VOICE_DELIVER_ANI: str = ''
 ITAS_FREESWITCH_JSON_CDR_PATH: str = ''
 ITAS_FREESWITCH_SOUNDS: List[str] = []
 ITAS_REPOSITORY_TYPE: str = ''
@@ -439,10 +483,37 @@ ITAS_DID_CATEGORIES: List[str] = []
 ITAS_DID_FIELDS: List[Field] = []
 ITAS_DID_VARIABLES_EXAMPLES: List[str] = []
 ITAS_ANI_OVERRIDES_EXAMPLES: List[str] = []
-ITAS_VOICEMAIL_META_PATH: str
+ITAS_VOICEMAIL_MIN_PIN_LENGTH: int
+ITAS_VOICEMAIL_BOXES_PATH: str
 ITAS_VOICEMAIL_MSGS_PATH: str
+ITAS_VOICEMAIL_USE_TTS: bool
+ITAS_SMTP_SECURE: Literal['yes','no','starttls']
+ITAS_SMTP_HOST: str
+ITAS_SMTP_PORT: Opt[int]
+ITAS_SMTP_TIMEOUT_SECONDS: int = 60
+ITAS_SMTP_USERNAME: str
+ITAS_SMTP_PASSWORD: str
+ITAS_SMTP_EMAIL_FROM: str = ''
+ITAS_SMS_CARRIER: Literal['','thinq','twilio'] = ''
+ITAS_SMS_EMULATOR: bool = False
+ITAS_SMS_THINQ_ACCOUNT: str = ''
+ITAS_SMS_THINQ_USERNAME: str = ''
+ITAS_SMS_THINQ_API_TOKEN: str = ''
+ITAS_SMS_THINQ_FROM: str = ''
+ITAS_SMS_TWILIO_ACCOUNT: str = ''
+ITAS_SMS_TWILIO_SID: str = ''
+ITAS_SMS_TWILIO_TOKEN: str = ''
+ITAS_SMS_TWILIO_FROM: str = ''
+ITAS_TTS_ACCESS_KEY: str = ''
+ITAS_TTS_SECRET_KEY: str = ''
+ITAS_TTS_REGION_NAME: str = ''
+ITAS_TTS_LOCATION: str = ''
+ITAS_TTS_DEFAULT_VOICE: TTS_VOICES = 'Joanna'
 ITAS_MOTD: str = ''
-exec( cfg_raw + '\n' ) # begin flask.cfg variables created by this exec:
+exec( cfg_raw + '\n' ) # this exec overrides the variables from flask.cfg
+assert ITAS_SMTP_EMAIL_FROM, f'flask.cfg missing ITAS_SMTP_EMAIL_FROM'
+assert ITAS_SMTP_SECURE in ( 'yes', 'no', 'starttls' ), f'flask.cfg has invalid ITAS_SMTP_SECURE={ITAS_SMTP_SECURE!r}'
+assert ITAS_SMS_CARRIER in ( '', 'thinq', 'twilio' ), f'flask.cfg has invalid ITAS_SMS_CARRIER={ITAS_SMS_CARRIER!r}'
 # end of flask.cfg variables
 
 app.config.from_object( __name__ )
@@ -518,7 +589,7 @@ if __name__ == '__main__' and SESSION_TYPE == 'filesystem':
 	session_path = Path( SESSION_FILE_DIR )
 	session_path.mkdir( mode = 0o770, parents = True, exist_ok = True )
 	if os.name == 'posix':
-		chown( str( session_path ), 'www-data', 'www-data' )
+		chown( str( session_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
 		os.chmod( SESSION_FILE_DIR, 0o770 )
 
 r_valid_audit_filename = re.compile( r'^[a-zA-Z0-9_\.-]+$', re.I )
@@ -527,28 +598,28 @@ def valid_audit_filename( filename: str ) -> bool:
 
 flags_path = Path( ITAS_FLAGS_PATH )
 flags_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
-chown( str( flags_path ), 'www-data', 'www-data' )
+chown( str( flags_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
 os.chmod( str( flags_path ), 0o775 )
 def flag_file_path( flag: str ) -> Path:
 	return flags_path / f'{flag}.flag'
 
 dids_path = Path( ITAS_DIDS_PATH )
 dids_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
-chown( str( dids_path ), 'www-data', 'www-data' )
+chown( str( dids_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
 os.chmod( str( dids_path ), 0o775 )
 def did_file_path( did: int ) -> Path:
 	return dids_path / f'{did}.did'
 
 anis_path = Path( ITAS_ANIS_PATH )
 anis_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
-chown( str( anis_path ), 'www-data', 'www-data' )
+chown( str( anis_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
 os.chmod( str( anis_path ), 0o775 )
 def ani_file_path( ani: int ) -> Path:
 	return anis_path / f'{ani}.ani'
 
-voicemail_meta_path = Path( ITAS_VOICEMAIL_META_PATH )
+voicemail_meta_path = Path( ITAS_VOICEMAIL_BOXES_PATH )
 voicemail_meta_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
-chown( str( voicemail_meta_path ), 'www-data', 'www-data' )
+chown( str( voicemail_meta_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
 os.chmod( str( anis_path ), 0o775 )
 def voicemail_settings_path( box: Union[int,str] ) -> Path:
 	return voicemail_meta_path / f'{box}.box'
@@ -557,7 +628,7 @@ def voicemail_greeting_path( box: int, greeting: int ) -> Path:
 
 voicemail_msgs_path = Path( ITAS_VOICEMAIL_MSGS_PATH )
 voicemail_msgs_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
-chown( str( voicemail_msgs_path ), 'www-data', 'www-data' )
+chown( str( voicemail_msgs_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
 os.chmod( str( anis_path ), 0o775 )
 def voicemail_box_msgs_path( box: int ) -> Path:
 	return voicemail_msgs_path / str( box )
@@ -2360,13 +2431,44 @@ if __name__ == '__main__':
 		sys.exit( service_command( cmd ))
 	login_manager.init_app( app )
 	
-	ace_eso.start(
-		dids_path,
-		anis_path,
-		REPO_ROUTES,
-		voicemail_meta_path,
-		voicemail_msgs_path,
-	)
+	assert ITAS_TTS_DEFAULT_VOICE in tts_voices, f'invalid ITAS_TTS_DEFAULT_VOICE={ITAS_TTS_DEFAULT_VOICE!r}'
+	ace_engine.start( ace_engine.Config(
+		did_path = dids_path,
+		ani_path = anis_path,
+		repo_routes = REPO_ROUTES,
+		vm_min_pin_length = ITAS_VOICEMAIL_MIN_PIN_LENGTH,
+		vm_box_path = voicemail_meta_path,
+		vm_msgs_path = voicemail_msgs_path,
+		owner_user = ITAS_OWNER_USER,
+		owner_group = ITAS_OWNER_GROUP,
+		voice_deliver_ani = ITAS_VOICE_DELIVER_ANI,
+		
+		smtp_secure = ITAS_SMTP_SECURE,
+		smtp_host = ITAS_SMTP_HOST,
+		smtp_port = ITAS_SMTP_PORT,
+		smtp_timeout_seconds = ITAS_SMTP_TIMEOUT_SECONDS,
+		smtp_username = ITAS_SMTP_USERNAME,
+		smtp_password = ITAS_SMTP_PASSWORD,
+		email_from = ITAS_SMTP_EMAIL_FROM,
+		
+		sms_carrier = ITAS_SMS_CARRIER,
+		sms_emulator = ITAS_SMS_EMULATOR,
+		sms_thinq_account = ITAS_SMS_THINQ_ACCOUNT,
+		sms_thinq_username = ITAS_SMS_THINQ_USERNAME,
+		sms_thinq_api_token = ITAS_SMS_THINQ_API_TOKEN,
+		sms_thinq_from = ITAS_SMS_THINQ_FROM,
+		sms_twilio_account = ITAS_SMS_TWILIO_ACCOUNT,
+		sms_twilio_sid = ITAS_SMS_TWILIO_SID,
+		sms_twilio_token = ITAS_SMS_TWILIO_TOKEN,
+		sms_twilio_from = ITAS_SMS_TWILIO_FROM,
+		
+		vm_use_tts = ITAS_VOICEMAIL_USE_TTS,
+		aws_access_key = ITAS_TTS_ACCESS_KEY,
+		aws_secret_key = ITAS_TTS_SECRET_KEY,
+		aws_region_name = ITAS_TTS_REGION_NAME,
+		tts_location = Path( ITAS_TTS_LOCATION ),
+		tts_default_voice = ITAS_TTS_DEFAULT_VOICE,
+	))
 	
 	cert_path = Path( ITAS_CERTIFICATE_PEM )
 	if cert_path.exists():
