@@ -712,7 +712,7 @@ class ESL:
 		assert is_valid_uuid( uuid ), f'invalid uuid={uuid!r}'
 		assert isinstance( key, str ) and ' ' not in key, f'invalid key={key!r}'
 		r = await self._send( ESL.ValueRequest( self, f'api uuid_getvar {uuid} {key}' ))
-		return r.value
+		return None if r.value == '_undef_' else r.value
 	
 	async def uuid_getchanvar( self,
 		uuid: str,
