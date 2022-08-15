@@ -1,0 +1,2 @@
+https://github.com/kkroening/ffmpeg-python
+https://pypi.org/project/tinytag/

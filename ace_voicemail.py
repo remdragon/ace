@@ -663,7 +663,7 @@ class Voicemail:
 				await self.admin_main_menu( box, settings )
 				return True, None
 			return True, settings
-		elif digit is not None and digit in '1234567890':
+		elif digit and digit in '1234567890':
 			return int( digit ), settings
 		
 		now: str = datetime.datetime.now().strftime( '%Y-%m-%d-%H-%M-%S' )
