@@ -594,6 +594,7 @@ class State( metaclass = ABCMeta ):
 class CallState( State ):
 	uuid: str
 	box: Opt[int] = None # set to an integer if we're inside of a specific voicemail box
+	hangup_on_exit: bool = True
 	
 	def __init__( self, esl: ESL, uuid: str, did: str, ani: str ) -> None:
 		super().__init__( esl )
