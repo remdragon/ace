@@ -706,27 +706,27 @@ class CallState( State ):
 		global_flag = await self.load_flag( 'global_flag' )
 		
 		if global_flag:
-			if self.try_wav( f'global_{global_flag}' ):
+			if await self.try_wav( f'global_{global_flag}' ):
 				return
 		
 		category = ( didinfo.get( 'category' ) or '' ).strip()
 		if category:
 			cat_flag = await self.load_flag( f'category_{category}' )
 			if cat_flag:
-				if self.try_wav( f'category_{category}_{cat_flag}' ):
+				if await self.try_wav( f'category_{category}_{cat_flag}' ):
 					return
 		
 		did_flag = ( didinfo.get( 'flag' ) or '' ).strip()
 		if did_flag:
-			if self.try_wav( f'{self.did}_{did_flag}' ):
+			if await self.try_wav( f'{self.did}_{did_flag}' ):
 				return
 		
 		#holiday = holidays.today()
 		#if holiday ~= nil then
 		#	holname = string.upper( holiday.name )
 		#	holname = holname:gsub( ' ', '' )
-		#	if try_wav( uuid, did .. '_' .. holname ) then return end
-		#	if try_wav( uuid, did .. '_HOLIDAY' ) then return end
+		#	if await self.try_wav( uuid, did .. '_' .. holname ) then return end
+		#	if await self.try_wav( uuid, did .. '_HOLIDAY' ) then return end
 		#else
 		#	log.debug( 'not a holiday' )
 		#end
