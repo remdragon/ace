@@ -77,6 +77,7 @@ if __name__ == '__main__':
 
 # local imports:
 import ace_engine
+from ace_fields import Field, ValidationError
 import auditing
 import repo
 from tts import TTS_VOICES, tts_voices
@@ -306,34 +307,6 @@ else:
 #region custom DID fields
 
 
-class ValidationError( Exception ):
-	pass
-
-class Field:
-	def __init__( self, field: str, label: str, *,
-		tooltip: str = '',
-		required: bool = False,
-		min_length: Opt[int] = None,
-		max_length: Opt[int] = None,
-	) -> None:
-		self.field = field
-		self.label = label
-		self.tooltip = tooltip
-		self.required = required
-		self.min_length = min_length
-		self.max_length = max_length
-	
-	def validate( self, rawvalue: Opt[str] ) -> Union[None,int,str]:
-		if rawvalue is None:
-			if self.required:
-				raise ValidationError( f'{self.label} is required' )
-			return None
-		if self.min_length is not None and len( rawvalue ) < self.min_length:
-			raise ValidationError( f'{self.label} is too short, min length is {self.min_length!r}' )
-		if self.max_length is not None and len( rawvalue ) > self.max_length:
-			raise ValidationError( f'{self.label} is too long, max length is {self.max_length!r}' )
-		return rawvalue
-
 class IntField( Field ):
 	def __init__( self, field: str, label: str, *,
 		tooltip: str = '',
@@ -398,6 +371,7 @@ if not cfg_path.is_file():
 		f'ITAS_VOICE_DELIVER_ANI = {""!r}',
 		f'ITAS_FREESWITCH_JSON_CDR_PATH = {"/var/log/freeswitch/json_cdr"!r}',
 		f'ITAS_FREESWITCH_SOUNDS = {["/usr/share/freeswitch/sounds/en/us/callie"]!r}',
+		f'ITAS_PREANNOUNCE_PATH = {"/usr/share/freeswitch/sounds/preannounce/"!r}',
 		f'ITAS_REPOSITORY_TYPE = {"fs"!r}',
 		f'ITAS_REPOSITORY_FS_PATH = {"/usr/share/itas/ace/"!r}',
 		f'ITAS_REPOSITORY_SQLITE_PATH = {"/usr/share/itas/ace/ace.sqlite"!r}',
@@ -473,6 +447,7 @@ ITAS_OWNER_GROUP: str = ''
 ITAS_VOICE_DELIVER_ANI: str = ''
 ITAS_FREESWITCH_JSON_CDR_PATH: str = ''
 ITAS_FREESWITCH_SOUNDS: List[str] = []
+ITAS_PREANNOUNCE_PATH: str = ''
 ITAS_REPOSITORY_TYPE: str = ''
 ITAS_REPOSITORY_FS_PATH: str = ''
 ITAS_REPOSITORY_SQLITE_PATH: str = ''
@@ -656,11 +631,12 @@ REPO_FACTORY_NOFS: Type[repo.Repository] = REPO_FACTORY
 if REPO_FACTORY == repo.RepoFs:
 	REPO_FACTORY_NOFS = repo.RepoSqlite
 
-#REPO_DIDS = REPO_FACTORY( 'dids', '.did', [
-#	repo.SqlInteger( 'id', null = False, size = 10, auto = True, primary = True ),
-#	repo.SqlText( 'name', null = True ),
-#	
-#])
+REPO_DIDS = REPO_FACTORY( repo_config, 'dids', '.did', [
+	#repo.SqlInteger( 'id', null = False, size = 10, auto = True, primary = True ),
+	#repo.SqlText( 'name', null = True ),
+])
+
+REPO_ANIS = REPO_FACTORY( repo_config, 'anis', '.ani', [] )
 
 REPO_ROUTES = REPO_FACTORY( repo_config, 'routes', '.route', [
 	repo.SqlInteger( 'id', null = False, size = 10, auto = True, primary = True ),
@@ -2433,9 +2409,12 @@ if __name__ == '__main__':
 	
 	assert ITAS_TTS_DEFAULT_VOICE in tts_voices, f'invalid ITAS_TTS_DEFAULT_VOICE={ITAS_TTS_DEFAULT_VOICE!r}'
 	ace_engine.start( ace_engine.Config(
-		did_path = dids_path,
-		ani_path = anis_path,
+		repo_anis = REPO_ANIS,
+		repo_dids = REPO_DIDS,
 		repo_routes = REPO_ROUTES,
+		did_fields = ITAS_DID_FIELDS,
+		flags_path = flags_path,
+		preannounce_path = Path( ITAS_PREANNOUNCE_PATH ),
 		vm_min_pin_length = ITAS_VOICEMAIL_MIN_PIN_LENGTH,
 		vm_box_path = voicemail_meta_path,
 		vm_msgs_path = voicemail_msgs_path,

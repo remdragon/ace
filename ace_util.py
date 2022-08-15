@@ -15,8 +15,8 @@ from esl import ESL
 
 logger = logging.getLogger( __name__ )
 
-CAUSE = Literal['NORMAL_CLEARING','USER_BUSY']
-causes =       ('NORMAL_CLEARING','USER_BUSY')
+CAUSE = Literal['ORIGINATOR_CANCEL','NORMAL_CLEARING','UNALLOCATED_NUMBER','USER_BUSY']
+causes =       ('ORIGINATOR_CANCEL','NORMAL_CLEARING','UNALLOCATED_NUMBER','USER_BUSY')
 
 on_event: Opt[Callable[[ESL.Message],None]] = None
 

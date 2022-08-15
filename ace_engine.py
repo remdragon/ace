@@ -31,10 +31,12 @@ from typing_extensions import Final, Literal # Python 3.7
 import uuid
 
 # 3rd-party imports:
+import aiofiles # pip install aiofiles
 import aiohttp # pip install aiohttp
 import pydub # pip install pydub
 
 # local imports:
+from ace_fields import Field
 from ace_tod import match_tod
 import ace_util as util
 from ace_voicemail import Voicemail, MSG, SETTINGS
@@ -62,11 +64,19 @@ CONTINUE: Final = 'continue'
 STOP: Final = 'stop'
 RESULT = Literal['continue','stop']
 
+ACE_STATE = 'ace-state'
+STATE_RUNNING = 'running'
+STATE_CONTINUE = 'continue'
+STATE_KILL = 'kill'
+
 @dataclass
 class Config:
-	did_path: Path # TODO FIXME: repo.Repository
-	ani_path: Path # TODO FIXME: repo.Repository
+	repo_anis: repo.Repository
+	repo_dids: repo.Repository
 	repo_routes: repo.Repository
+	did_fields: List[Field]
+	flags_path: Path
+	preannounce_path: Path
 	vm_min_pin_length: int
 	vm_box_path: Path
 	vm_msgs_path: Path
@@ -145,12 +155,22 @@ def _on_event( event: ESL.Message ) -> None:
 def valid_route( x: Any ) -> bool:
 	return isinstance( x, int )
 
+def expired( expiration: str ) -> bool:
+	#log = logger.getChild( 'expired' )
+	if not expiration:
+		return False
+	now = datetime.datetime.now().strftime( '%Y-%m-%d %H:%M:%S' )
+	#log.debug( 'comparing now=%r vs expiration=%r', now, expiration )
+	return now >= expiration
+
 #endregion globals
 #region State
 
 
 class State( metaclass = ABCMeta ):
 	config: Config
+	repo_anis: repo.AsyncRepository
+	repo_dids: repo.AsyncRepository
 	repo_routes: repo.AsyncRepository
 	
 	# operational values:
@@ -590,6 +610,164 @@ class CallState( State ):
 			log.debug( 'bridge_uuid ~= nil' )
 			return False
 		return True
+	
+	async def try_ani( self ) -> Opt[int]:
+		log = logger.getChild( 'CallState.try_ani' )
+		
+		try:
+			data = await self.repo_anis.get_by_id( self.ani )
+		except repo.ResourceNotFound as e:
+			log.debug( 'no config found for ani %r', self.ani )
+			return None
+		
+		# first check for DID overrides
+		overrides = str( data.get( 'overrides' ) or '' )
+		for override in overrides.split( '\n' ):
+			#log.debug( 'override=' .. override )
+			override, _, comment = map( str.strip, override.partition( '#' ))
+			#log.debug( 'override=' .. override .. ', comment=' .. comment )
+			did2, _, override = map( str.strip, override.partition( ' ' ))
+			if did2 == self.did:
+				#log.debug( 'matched did2=' .. did2 )
+				route_, _, exp = map( str.strip, override.partition( ' ' ))
+				#log.debug( 'route=%r, exp=%r', route_, exp )
+				if not expired( exp ):
+					log.debug( 'ani=%r did=%r -> route=%r', self.ani, self.did, route_ )
+					await self.esl.uuid_setvar( self.uuid, 'route', route_ )
+					try:
+						return int( route_ )
+					except ValueError:
+						log.warning( 'unable to convert route %r to an integer', route_ )
+			#else:
+			#	log.debug( 'ignoring did2=' .. did2 )
+		
+		route = cast( Opt[int], data.get( 'route' ))
+		if isinstance( route, int ):
+			log.debug( 'ani=%r did=* -> route=%r', self.ani, route )
+			await self.esl.uuid_setvar( self.uuid, 'route', str( route ))
+			return route
+		elif route is not None:
+			log.warning( 'invalid route=%r', route )
+		
+		return None
+	
+	async def try_did( self ) -> Tuple[Opt[int],Opt[Dict[str,Any]]]:
+		log = logger.getChild( 'CallState.try_did' )
+		try:
+			data = await self.repo_dids.get_by_id( self.did )
+		except repo.ResourceNotFound as e:
+			log.debug( 'no config found for did %r', self.did )
+			return None, None
+		
+		route = await self.toint( data, 'route' )
+		log.debug( 'route=%r', route )
+		if route is not None:
+			await self.esl.uuid_setvar( self.uuid, 'route', str( route ))
+		
+		for fld in self.config.did_fields:
+			value = str( data.get( fld.field ) or '' ).strip()
+			if value is not None:
+				log.debug( 'setting field %r to %r', fld.field, value )
+				await self.esl.uuid_setvar( self.uuid, fld.field, value )
+			#else:
+			#	log.debug( 'skipping field %r b/c value %r', fld.field, value )
+		
+		variables = str( data.get( 'variables' ) or '' )
+		for variable in variables.split( '\n' ):
+			field, _, value = map( str.strip, variable.partition( '=' ))
+			if field and value:
+				log.debug( 'setting variable %r to %r', field, value )
+				await self.esl.uuid_setvar( self.uuid, field, value )
+		return route, data
+	
+	async def load_flag( self, flag_name: str ) -> Opt[str]:
+		flag_path = self.config.flags_path / f'{flag_name}.flag'
+		try:
+			async with aiofiles.open( str( flag_path ), 'r' ) as f:
+				flag = await f.read()
+		except FileNotFoundError as e:
+			raise repo.ResourceNotFound( str( flag_path )).with_traceback( e.__traceback__ ) from None
+		return flag
+	
+	async def try_wav( self, filename: str ) -> bool:
+		log = logger.getChild( 'CallState.try_wav' )
+		path = self.config.preannounce_path / f'{filename}.wav'
+		if not path.is_file():
+			log.debug( 'path not found: %r', str( path ))
+			return False
+		log.debug( 'found path: %r', str( path ))
+		await self.esl.uuid_setvar( self.uuid, 'preannounce_wav', str( path ))
+		return True
+	
+	async def set_preannounce( self, didinfo: Dict[str,Any] ) -> None:
+		log = logger.getChild( 'CallState.set_preannounce' )
+		preannounce = 'default.wav'
+		
+		global_flag = await self.load_flag( 'global_flag' )
+		
+		if global_flag:
+			if self.try_wav( f'global_{global_flag}' ):
+				return
+		
+		category = ( didinfo.get( 'category' ) or '' ).strip()
+		if category:
+			cat_flag = await self.load_flag( f'category_{category}' )
+			if cat_flag:
+				if self.try_wav( f'category_{category}_{cat_flag}' ):
+					return
+		
+		did_flag = ( didinfo.get( 'flag' ) or '' ).strip()
+		if did_flag:
+			if self.try_wav( f'{self.did}_{did_flag}' ):
+				return
+		
+		#holiday = holidays.today()
+		#if holiday ~= nil then
+		#	holname = string.upper( holiday.name )
+		#	holname = holname:gsub( ' ', '' )
+		#	if try_wav( uuid, did .. '_' .. holname ) then return end
+		#	if try_wav( uuid, did .. '_HOLIDAY' ) then return end
+		#else
+		#	log.debug( 'not a holiday' )
+		#end
+		
+		async def _uuid_getint( key: str, default: int ) -> int:
+			value = await self.esl.uuid_getvar( self.uuid, key )
+			if value is None:
+				return default
+			try:
+				return int( value )
+			except ValueError as e:
+				log.warning( 'Could not convert %r value %r to int: %r', key, value, e )
+				return default
+		
+		# BEGIN bushrs stuff
+		# DOW table: Sun=1 Mon=2 Tue=3 Wed=4 Thu=5 Fri=6 Sat=7
+		bushrs_start = await _uuid_getint( 'bushrs_start', 8 )
+		bushrs_end = await _uuid_getint( 'bushrs_end', 17 )
+		bushrs_dow = await self.esl.uuid_getvar( self.uuid, 'bushrs_dow' ) or '23456' # M-F
+		now = datetime.datetime.now()
+		now_dow = str(( now.weekday() + 1 ) % 7 + 1 ) # now.weekday() MON=0 ... SUN=6, we need SUN=1 ... SAT=7
+		log.debug( 'bushrs_dow=%r, now_dow=%r', bushrs_dow, now_dow )
+		tod = 'AFTHRS'
+		if now_dow in bushrs_dow:
+			if now.hour >= bushrs_start and now.hour < bushrs_end:
+				tod = 'BUSHRS'
+			else:
+				log.debug( 'hour mismatch' )
+		else:
+			log.debug( 'dow mismatch' )
+		
+		if await self.try_wav( f'{self.did}_{tod}' ):
+			return
+		
+		if await self.try_wav( str( self.did )):
+			return
+		
+		if await self.try_wav( 'default' ):
+			return
+		
+		log.debug( 'no preannounce recording found' )
 	
 	async def _pagd( self, params: PARAMS, success: Callable[[str],Coroutine[Any,Any,Opt[RESULT]]] ) -> RESULT:
 		log = logger.getChild( 'CallState._pagd' )
@@ -1421,6 +1599,11 @@ class NotifyState( State ):
 #endregion NotifyState
 #region bootstrap
 
+def normalize_phone_number( phone: str ) -> str:
+	phone = re.sub( r'[^\d]', '', phone )
+	if len( phone ) == 11 and phone[0] == '1':
+		phone = phone[1:]
+	return phone
 
 async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter ) -> None:
 	log = logger.getChild( '_handler' )
@@ -1435,7 +1618,11 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 		uuid = headers['Unique-ID']
 		did = headers['Caller-Destination-Number']
 		ani = headers['Caller-ANI']
-		log.debug( 'did=%r ani=%r uuid=%r', did, ani, uuid )
+		log.debug( 'uuid=%r raw did=%r ani=%r', uuid, did, ani )
+		
+		did = normalize_phone_number( did )
+		ani = normalize_phone_number( ani )
+		log.debug( 'uuid=%r normalized did=%r ani=%r', uuid, did, ani )
 		
 		log.debug( 'calling myevents' )
 		await esl.myevents()
@@ -1444,80 +1631,38 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 		
 		state = CallState( esl, uuid, did, ani )
 		
-		if True:
-			async for event in esl.answer():
-				log.debug( 'answer event %r', event.event_name )
-			await asyncio.sleep( 0.5 )
+		route = await state.try_ani()
+		if route is None:
+			route, didinfo = await state.try_did()
+			if didinfo is not None:
+				await state.set_preannounce( didinfo )
 		
-		if True:
-			await esl.uuid_break( uuid, 'all' )
-			await esl.uuid_broadcast( uuid, 'tone_stream://$${us-ring};loops=-1', 'aleg' )
-			log.debug( 'sleeping...' )
-			await asyncio.sleep( 12 )
+		if not route:
+			log.error( 'no route to execute: route=%r', route )
+			await util.hangup( esl, uuid, 'UNALLOCATED_NUMBER', 'ace_engine._handler#1' )
+			return
 		
-		if True:
-			await esl.uuid_break( uuid, 'all' )
-			await esl.uuid_broadcast( uuid, '$${hold_music}', 'aleg' )
-			log.debug( 'sleeping...' )
-			await asyncio.sleep( 12 )
+		try:
+			routedata = state.config.repo_routes.get_by_id( route )
+		except repo.ResourceNotFound:
+			log.error( 'route does not exist: route=%r', route )
+			await util.hangup( esl, uuid, 'UNALLOCATED_NUMBER', 'ace_engine._handler#2' )
+			return
 		
-		if True:
-			log.debug( 'break...' )
-			await esl.uuid_break( uuid, 'all' )
-			
-			async for event in esl.events():
-				log.debug( 'drained event %r', event.event_name )
-			
-			log.debug( 'playback...' )
-			async for event in esl.playback( 'ivr/ivr-welcome.wav' ):
-				log.debug( 'playback event %r', event.event_name )
+		nodes = cast( List[PARAMS], routedata.get( 'nodes' ) or [] )
+		r = await state.exec_top_actions( nodes )
+		log.info( 'route %r exited with %r', route, r )
 		
-		if True:
-			log.debug( 'draining events...' )
-			async for event in esl.events():
-				log.debug( 'drained event %r', event.event_name )
-			
-			log.debug( 'pagd...' )
-			digits_: List[str] = []
-			async for event in esl.play_and_get_digits(
-				min_digits = 1,
-				max_digits = 10,
-				tries = 1,
-				timeout = datetime.timedelta( seconds = 5 ),
-				terminators = '#',
-				file = 'ivr/ivr-please_enter_pin_followed_by_pound.wav',
-				digits = digits_,
-			):
-				pass
-			digits = ''.join( digits_ )
-			log.debug( 'digits=%r', digits )
-		
-		if True:
-			async for event in esl.events():
-				log.debug( 'drained event %r', event.event_name )
-			
-			log.debug( 'record...' )
-			async for event in esl.record(
-				path = Path( '/tmp/test.wav' ),
-				time_limit = datetime.timedelta( seconds = 30 ),
-			):
-				log.debug( f'record event_name=%r', event.event_name )
-		
-		log.debug( 'issuing hangup' )
-		async for event in esl.hangup():
-			log.debug( 'hangup event %r', event.event_name )
-		
-		#try:
-		#	while True:
-		#		log.warn( 'waiting for events...' )
-		#		data = ( await reader.read( 4096 )).decode( 'us-ascii' )
-		#		if not data: # == EOF
-		#			break
-		#		log.warn( f'{data=}' )
-		#		#writer.write( b'foo\n' )
-		#		#await writer.drain()
-		#except ConnectionAbortedError:
-		#	log.exception( 'Lost connection:' )
+		if state.hangup_on_exit:
+			cause: Final = 'NORMAL_CLEARING'
+			log.debug( 'hanging up call with %r because route exited with %r', cause, r )
+			await esl.uuid_kill( uuid, cause )
+			await esl.uuid_setvar( uuid, ACE_STATE, STATE_KILL )
+		else:
+			#cause = 'NORMAL_CLEARING'
+			#log.debug( 'hanging up call with %r because route exited with %r and we have no way to signal inband lua yet', cause, r )
+			await esl.uuid_setvar( uuid, ACE_STATE, STATE_CONTINUE )
+	
 	except Exception:
 		log.exception( 'Unexpected error:' )
 	finally:
@@ -1527,7 +1672,11 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 async def _server(
 	config: Config,
 ) -> None:
+	util.on_event = _on_event
+	
 	State.config = config
+	State.repo_anis = repo.AsyncRepository( config.repo_anis )
+	State.repo_dids = repo.AsyncRepository( config.repo_dids )
 	State.repo_routes = repo.AsyncRepository( config.repo_routes )
 	
 	TTS.aws_access_key = config.aws_access_key

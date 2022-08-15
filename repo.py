@@ -25,6 +25,9 @@ logger = logging.getLogger( __name__ )
 class ResourceAlreadyExists( Exception ):
 	pass
 
+class ResourceNotFound( Exception ):
+	pass
+
 def json_dumps( data: Any ) -> str:
 	return json.dumps( data, indent = '\t', separators = ( ',', ': ' ))
 
@@ -375,8 +378,9 @@ class RepoSqlite( Repository ):
 		assert isinstance( id, int )
 		with closing( self.database.cursor() ) as cur:
 			cur.execute( f'select * from "{self.tablename}" WHERE id = ?', ( id, ) )
-			item: Dict[str,Any] = cur.fetchone() # TODO FIXME: EOF?
-		
+			item: Opt[Dict[str,Any]] = cur.fetchone() # TODO FIXME: EOF?
+		if item is None:
+			raise ResourceNotFound( id )
 		return item
 	
 	def list( self,
@@ -524,9 +528,11 @@ class RepoFs( Repository ):
 	
 	def get_by_id( self, id: REPOID ) -> Dict[str,Any]:
 		itemFile = self._path_from_id( id )
-		with itemFile.open( 'r' ) as fileContent: # TODO FIXME: this can raise FileNotFoundError
-			item: Dict[str,Any] = json.loads( fileContent.read() )
-		
+		try:
+			with itemFile.open( 'r' ) as fileContent: # TODO FIXME: this can raise FileNotFoundError
+				item: Dict[str,Any] = json.loads( fileContent.read() )
+		except FileNotFoundError as e:
+			raise ResourceNotFound( id ).with_traceback( e.__traceback__ ) from None
 		return item
 	
 	def list( self,

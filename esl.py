@@ -26,7 +26,7 @@ g_last_id: int = 0
 
 UUID_BROADCAST_LEG = Literal['aleg','bleg','holdb','both']
 
-CAUSE = Literal['NORMAL_CLEARING','USER_BUSY','ORIGINATOR_CANCEL'] # TODO FIXME: there are other causes...
+CAUSE = Literal['NORMAL_CLEARING','ORIGINATOR_CANCEL','UNALLOCATED_NUMBER','USER_BUSY'] # TODO FIXME: there are other causes...
 
 def is_valid_uuid( uuid: Any ) -> bool:
 	# 8437cb01-2fbf-42e4-bbe5-a32c265f44b3
