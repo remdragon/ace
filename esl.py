@@ -386,10 +386,10 @@ class ESL:
 	async def event_plain_all( self ) -> ESL.Request:
 		return await self._send( ESL.Request( self, 'event plain all' ))
 	
-	async def execute( self, app: str, *args: str ) -> AsyncIterator[ESL.Message]:
+	async def execute( self, app: str, *args: str, escape: bool = True ) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.execute' )
 		assert isinstance( app, str ) and len( app ), f'invalid app={app!r}'
-		args_ = ' '.join( map( self.escape, args ))
+		args_ = ' '.join( map( self.escape, args ) if escape else args )
 		r = await self._send( ESL.Request( self, 'sendmsg', {
 			'call-command': 'execute',
 			'execute-app-name': app,
@@ -575,11 +575,12 @@ class ESL:
 			str( timeout_milliseconds ),
 			terminators,
 			file,
-			invalid_file or '',
-			var_name or '',
-			regexp or '',
-			str( digit_timeout_ms ),
-			transfer_on_failure or '',
+			self.escape( invalid_file or '' ),
+			self.escape( var_name or '' ),
+			self.escape( regexp or '' ),
+			self.escape( str( digit_timeout_ms ) ),
+			self.escape( transfer_on_failure or '' ),
+			escape = False,
 		):
 			try:
 				event_name = event.event_name

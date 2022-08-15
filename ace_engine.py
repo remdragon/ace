@@ -69,6 +69,7 @@ STATE_RUNNING = 'running'
 STATE_CONTINUE = 'continue'
 STATE_KILL = 'kill'
 
+
 @dataclass
 class Config:
 	repo_anis: repo.Repository
@@ -113,6 +114,7 @@ class Config:
 	tts_location: Path
 	tts_default_voice: TTS_VOICES
 
+
 @dataclass
 class PAGD:
 	min_digits: int
@@ -126,6 +128,7 @@ class PAGD:
 	digits: Opt[str] = None
 	valid: Opt[bool] = None
 
+
 class ElapsedTimer:
 	def __init__( self, interval: Opt[datetime.timedelta] ) -> None:
 		self.interval = interval
@@ -137,6 +140,7 @@ class ElapsedTimer:
 			return False
 		self.t1 += self.interval.total_seconds()
 		return True
+
 
 T = TypeVar( 'T' )
 
@@ -150,7 +154,7 @@ def expect( type: Type[T], data: Dict[str,Any], name: str, *, required: bool = F
 
 def _on_event( event: ESL.Message ) -> None:
 	log = logger.getChild( '_on_event' )
-	log.warning( 'event %r TODO FIXME: check for hangup or channel teardown event and throw a call ended exception...', event.event_name )
+	log.debug( 'ignoring event %r', event.event_name )
 
 def valid_route( x: Any ) -> bool:
 	return isinstance( x, int )
@@ -162,6 +166,7 @@ def expired( expiration: str ) -> bool:
 	now = datetime.datetime.now().strftime( '%Y-%m-%d %H:%M:%S' )
 	#log.debug( 'comparing now=%r vs expiration=%r', now, expiration )
 	return now >= expiration
+
 
 #endregion globals
 #region State
@@ -688,7 +693,7 @@ class CallState( State ):
 				flag = await f.read()
 		except FileNotFoundError as e:
 			raise repo.ResourceNotFound( str( flag_path )).with_traceback( e.__traceback__ ) from None
-		return flag
+		return flag.strip() or None
 	
 	async def try_wav( self, filename: str ) -> bool:
 		log = logger.getChild( 'CallState.try_wav' )
@@ -1423,7 +1428,28 @@ class CallState( State ):
 		else:
 			while True:
 				result, settings = await vm.guest( self.did, self.ani, box, self.notify )
-				assert False, 'TODO FIXME: finish converting this code...'
+				if result == True or settings is None: return CONTINUE
+				if result == False: return STOP
+				
+				digit: Opt[int] = result
+				branches = cast( Dict[str,PARAMS], settings.get( 'branches' ) or {} )
+				while digit:
+					digit_ = str( digit )
+					branch = branches.get( digit_ )
+					if branch:
+						old_box = self.box
+						try:
+							self.box = box
+							r = await self._exec_branch( digit_, branch, None, log = log )
+						finally:
+							self.box = old_box
+						return r
+					
+					digit_ = await vm.play_menu([ 'ivr/ivr-that_was_an_invalid_entry.wav' ])
+					try:
+						digit = int( digit_ )
+					except ValueError:
+						digit = None
 		
 		return CONTINUE
 	
