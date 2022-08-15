@@ -37,6 +37,7 @@ class TTS:
 		self.say( f'<say-as interpret-as="digits">{digits}</say-as>' )
 	
 	async def generate( self ) -> Path:
+		log = logger.getChild( 'TTS.generate' )
 		x = polly.AWSPolly(
 			aws_access_key = self.aws_access_key,
 			aws_secret_key = self.aws_secret_key,
@@ -45,6 +46,7 @@ class TTS:
 		
 		text = ' '.join( self.text )
 		ssml_text = f'<speak><prosody rate="-5%">{text}</prosody></speak>'
+		log.debug( 'ssml_text=%r', ssml_text )
 		
 		loop = asyncio.get_running_loop()
 		path = await loop.run_in_executor( None,

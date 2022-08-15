@@ -948,7 +948,7 @@ class CallState( State ):
 		#log = logger.getChild( 'CallState.action_answer' )
 		if self.state == HUNT: return CONTINUE
 		
-		if not util.answer( self.esl, self.uuid, 'ace_eso.CallState.action_answer' ):
+		if not await util.answer( self.esl, self.uuid, 'ace_eso.CallState.action_answer' ):
 			return STOP
 		
 		return CONTINUE
