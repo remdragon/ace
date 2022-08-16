@@ -1,8 +1,8 @@
 import UINode from './UINode.js'
 
 var greeting_options = [
-	{ 'label': '(No Greeting)', 'value': 'X' },
-	{ 'label': '(Active)', 'value': '' },
+	{ 'label': '(Use Default Behavior)', 'value': '' },
+	{ 'label': '(Play Active Greeting)', 'value': 'A' },
 	{ 'label': 'Greeting 1', 'value': '1' },
 	{ 'label': 'Greeting 2', 'value': '2' },
 	{ 'label': 'Greeting 3', 'value': '3' },
@@ -12,6 +12,7 @@ var greeting_options = [
 	{ 'label': 'Greeting 7', 'value': '7' },
 	{ 'label': 'Greeting 8', 'value': '8' },
 	{ 'label': 'Greeting 9', 'value': '9' },
+	{ 'label': '(Play NO Greeting At All)', 'value': 'X' },
 ]
 
 export default class Voicemail extends UINode {
@@ -68,6 +69,6 @@ When that finishes, execution will resume here
 		{
 			return greeting_options
 		},
-		label: 'Play a different greeting other than the current (0 to play no greeting)',
+		label: 'Play the following greeting instead of allowing the default greeting behavior:',
 	}]
 }

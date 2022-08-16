@@ -1,6 +1,7 @@
 import{ UINode, walkChild } from './UINode.js'
 import NamedSubtree from './named_subtree.js'
 
+const GREETING_LABEL = 'Greeting'
 const DELIVERY_LABEL = 'Delivery'
 
 export default class RootVoiceMail extends UINode {
@@ -16,6 +17,7 @@ If user doesn't press any digits, timeout plays a beep and records a message<br/
 <br/>
 Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${did}`
 	
+	greeting_subtree_help = 'Add nodes here to define what the caller hears when entering the voicemail box'
 	digit_subtree_help = 'If this digit is pressed during the greeting, do this instead'
 	delivery_subtree_help = 'Use this to send emails and SMS msgs when a message has been created.'
 	
@@ -35,6 +37,7 @@ Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${
 	default_email_body = ''
 	default_sms_message = ''
 	
+	greetingBranch = null//: greeting branch...
 	branches = null
 	delivery = null
 	
@@ -119,6 +122,13 @@ Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${
 		
 		this.treenode.uinode = this
 		
+		this.makeFixedBranch( 'greetingBranch', GREETING_LABEL,
+			'context_VoicemailGreeting',
+			this.greeting_subtree_help,
+			data,
+			'context_VoicemailGreetingChildren',
+		)
+		
 		this.branches = {}
 		if( data.branches )
 		{
@@ -163,6 +173,12 @@ Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${
 	{
 		const domNodes = this.treenode.childNodes.sort(( a, b ) =>
 		{
+			// greeting is always at the top
+			if( a.text === GREETING_LABEL )
+				return -1
+			if( b.text === GREETING_LABEL )
+				return 1
+			
 			// delivery is always at the bottom
 			if( a.text === DELIVERY_LABEL )
 				return 1
@@ -191,6 +207,10 @@ Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${
 		const sup = super.getJson()
 		delete sup['type']
 		
+		let greetingBranch = null
+		if( this.greetingBranch )
+			greetingBranch = this.greetingBranch.getJson()
+		
 		const branchesData = {}
 		for( const digit in this.branches )
 		{
@@ -198,12 +218,17 @@ Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${
 			branchesData[digit] = branch ? branch.getJson() : {}
 		}
 		
+		let delivery = null
+		if( this.delivery )
+			delivery = this.delivery.getJson()
+		
 		return {
 			...sup,
 			type: 'root_voicemail',
 			name: this.name,
-			delivery: this.delivery.getJson(),
+			greetingBranch: greetingBranch,
 			branches: branchesData,
+			delivery: delivery,
 		}
 	}
 	

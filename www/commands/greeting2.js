@@ -16,13 +16,13 @@ var greeting_options = [
 export default class Greeting extends UINode {
 	static icon = '/media/streamline/megaphone-greeting.png'
 	static context_menu_name = 'Greeting'
-	static command = 'greeting'
+	static command = 'greeting2'
 	
 	help = `Plays a selected greeting from a voicemail box`
 	
 	get label()
 	{
-		return 'Greeting ' + ( this.name ?? greeting_options[this.greeting] ?? '(Unset)' )
+		return 'Greeting ' + ( this.name ?? greeting_options[this.greeting]?.value ?? '(Unset)' )
 	}
 	
 	name//: string

@@ -64,7 +64,7 @@ function initTree( data, Root )
 	//console.log( 'id=', id, 'route_data=', route_data )
 	root = new Root( tree, id, route_data )
 	
-	divHelp = document.getElementById( 'div_help' )
+	divHelp = document.getElementById( 'div_details' )
 	
 	tree.nodeSelectedEvent = onNodeSelected
 	

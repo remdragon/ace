@@ -644,6 +644,8 @@ REPO_ROUTES = REPO_FACTORY( repo_config, 'routes', '.route', [
 	repo.SqlJson( 'json', null = False ),
 ])
 
+REPO_BOXES = REPO_FACTORY( repo_config, 'boxes', '.box', [] )
+
 REPO_JSON_CDR = REPO_FACTORY_NOFS( repo_config, 'cdr', '.cdr', [
 	repo.SqlInteger( 'id', null = False, size = 16, auto = True, primary = True ),
 	repo.SqlVarChar( 'call_uuid', size = 36, null = False ),
@@ -854,6 +856,10 @@ def http_sounds() -> Response:
 #endregion http - misc
 #region http - DID
 
+def valid_destination( dest: str ) -> bool:
+	if dest.startswith( 'V' ):
+		dest = dest[1:]
+	return dest.isnumeric()
 
 @app.route( '/dids/', methods = [ 'GET' ] )
 @login_required # type: ignore
@@ -1009,12 +1015,9 @@ def try_post_did( did: int, data: Dict[str,str] ) -> int:
 	if category:
 		data2['category'] = category
 	
-	try:
-		route = int( data.get( 'route', '0' ))
-	except Exception as e5:
-		raise ValidationError( f'invalid Route: {e5!r}' ) from None
-	if route <= 0:
-		raise ValidationError( 'route must be an integer > 0' )
+	route = data.get( 'route' ) or ''
+	if not valid_destination( route ):
+		raise ValidationError( f'invalid Destination: {route!r}' )
 	data2['route'] = route
 	
 	try:
@@ -1111,18 +1114,29 @@ def http_did( did: int ) -> Response:
 		else:
 			data = request.args
 	
-	tollfree = data.get( 'tollfree', '' )
-	acct = data.get( 'acct', '' ) or ''
-	name = data.get( 'name', '' )
-	category = data.get( 'category', '' )
-	try:
-		route = to_optional_int( data.get( 'route', '' ) or None )
-	except ValueError as e:
-		return _http_failure(
-			return_type,
-			f'Bad route: {e!r}',
-			400,
-		)
+	tollfree: str = data.get( 'tollfree' ) or ''
+	acct: str = data.get( 'acct' ) or ''
+	name: str = data.get( 'name' ) or ''
+	category: str = data.get( 'category' ) or ''
+	route_: str = str( data.get( 'route' ) or '' )
+	if route_.startswith( 'V' ):
+		try:
+			_ = int( route_[1:] )
+		except ValueError as e:
+			return _http_failure(
+				return_type,
+				f'Bad route: {e!r}',
+				400,
+			)
+	else:
+		try:
+			route = to_optional_int( route_ )
+		except ValueError as e:
+			return _http_failure(
+				return_type,
+				f'Bad route: {e!r}',
+				400,
+			)
 	variables = data.get( 'variables', '' )
 	flag = data.get( 'flag', '' )
 	notes = data.get( 'notes', '' )
@@ -1150,15 +1164,32 @@ def http_did( did: int ) -> Response:
 			500,
 		)
 	
+	try:
+		boxes = REPO_BOXES.list()
+	except Exception as e:
+		return _http_failure(
+			return_type,
+			f'Error querying voicemail box list: {e!r}',
+			500,
+		)
+	
 	route_options: List[str] = []
 	found = False
 	for r, routedata in routes:
 		att = ''
-		if route == r:
+		if route_ == str( r ):
 			att = ' selected'
 			found = True
 		lbl = routedata.get( 'name' ) or '(Unnamed)'
-		route_options.append( f'<option value="{r}"{att}>{r} {lbl}</option>' )
+		route_options.append( f'<option value="{r}"{att}>Route {r} {lbl}</option>' )
+	for box, boxdata in boxes:
+		att = ''
+		key = f'V{box}'
+		if route_ == key:
+			att = ' selected'
+			found = True
+		lbl = boxdata.get( 'name' ) or '(Unnamed)'
+		route_options.append( f'<option value="{key}"{att}>VM {box} {lbl}</option>' )
 	if not found:
 		route_options.insert( 0, f'<option value="{route}" selected>{route} DOES NOT EXIST</option>' )
 	
@@ -1183,7 +1214,7 @@ def http_did( did: int ) -> Response:
 		'</td></tr></table>',
 		
 		'<table class="unpadded"><tr><td valign="top">',
-		f'<b>Route:</b><br/><select name="route">{"".join(route_options)}</select>',
+		f'<b>Destination:</b><br/><select name="route">{"".join(route_options)}</select>',
 		'</td><td>&nbsp;</td><td valign="top">',
 		'<b>DID Flag:</b><br/>',
 		f'<span tooltip="{flag_tip}"><input type="text" name="flag" value="{html_att(str(flag))}" size="31" maxlength="30"/></span>',
@@ -1716,21 +1747,21 @@ def http_routes() -> Response:
 	# END route list
 
 route_id_html = '''
-<table border="0">
-	<tr>
-		<td class="tree"><div id="div_tree"></div></td>
-		<td class="help">
-			<div id="div_help">
-				This is the Route Editor.<br/>
-				<br/>
-				Please click on a node to select it and see more details about
-				it.<br/>
-				<br/>
-				Or try right-clicking on a node for more options.
-			</div>
-		</td>
-	</tr>
-</table>
+<div class="tree-editor">
+	<div class="tree">
+		<div id="div_tree"></div>
+	</div>
+	<div class="details">
+		<div id="div_details">
+			This is the Route Editor.<br/>
+			<br/>
+			Please click on a node to select it and see more details about
+			it.<br/>
+			<br/>
+			Or try right-clicking on a node for more options.
+		</div>
+	</div>
+</div>
 
 <br/>
 <br/>
@@ -2029,21 +2060,21 @@ def http_voicemails() -> Response:
 	# END voicemail boxes list
 
 voicemail_id_html = '''
-<table border="0">
-	<tr>
-		<td class="tree"><div id="div_tree"></div></td>
-		<td class="help">
-			<div id="div_help">
-				This is the Voicemail Box Editor.<br/>
-				<br/>
-				Please click on a node to select it and see more details about
-				it.<br/>
-				<br/>
-				Or try right-clicking on a node for more options.
-			</div>
-		</td>
-	</tr>
-</table>
+<div class="tree-editor">
+	<div class="tree">
+		<div id="div_tree"></div>
+	</div>
+	<div class="details">
+		<div id="div_details">
+			This is the Voicemail Box Editor.<br/>
+			<br/>
+			Please click on a node to select it and see more details about
+			it.<br/>
+			<br/>
+			Or try right-clicking on a node for more options.
+		</div>
+	</div>
+</div>
 
 <br/>
 <br/>

@@ -20,12 +20,13 @@ from itertools import chain
 import json
 import logging
 from multiprocessing import Process
+from mypy_extensions import TypedDict
 from pathlib import Path
 import re
 import time
 from typing import (
-	Any, Awaitable, Callable, cast, Coroutine, Dict, List, Optional as Opt,
-	Tuple, Type, TypeVar, Union,
+	Any, Awaitable, Callable, cast, Coroutine, Dict, List, Mapping as Map,
+	Optional as Opt, Tuple, Type, TypeVar, Union,
 )
 from typing_extensions import Final, Literal # Python 3.7
 import uuid
@@ -39,7 +40,7 @@ import pydub # pip install pydub
 from ace_fields import Field
 from ace_tod import match_tod
 import ace_util as util
-from ace_voicemail import Voicemail, MSG, SETTINGS
+from ace_voicemail import Voicemail, MSG, SETTINGS, SILENCE_1_SECOND
 from email_composer import Email_composer
 from esl import ESL
 import repo
@@ -52,8 +53,6 @@ from tts import TTS, TTS_VOICES, tts_voices
 
 
 logger = logging.getLogger( __name__ )
-
-PARAMS = Dict[str,Any]
 
 GOTO: Final = 'goto'
 EXEC: Final = 'exec'
@@ -68,6 +67,156 @@ ACE_STATE = 'ace-state'
 STATE_RUNNING = 'running'
 STATE_CONTINUE = 'continue'
 STATE_KILL = 'kill'
+
+class ACTION( TypedDict ):
+	type: str
+	name: Opt[str]
+
+ACTIONS = List[ACTION]
+
+class BRANCH( TypedDict ):
+	name: str
+	nodes: ACTIONS
+
+BRANCHES = Dict[str,BRANCH]
+
+class ACTION_ACD_CALL_ADD( ACTION ):
+	gates: str
+	priority: int
+	queue_offset_seconds: int
+
+class ACTION_ACD_CALL_GATE( ACTION ):
+	gate: int
+	priority: int
+
+class ACTION_ACD_CALL_UNGATE( ACTION ):
+	gate: int
+
+class ACTION_ANSWER( ACTION ):
+	pass
+
+class ACTION_BRIDGE( ACTION ):
+	dial_string: str
+
+class ACTION_EMAIL( ACTION ):
+	mailto: str
+	body: str
+	subject: str
+	format: Literal['mp3','wav','-','']
+
+class ACTION_GREETING( ACTION ):
+	box: Union[int,str]
+	greeting: Opt[str]
+
+class ACTION_GOTO( ACTION ):
+	destination: str
+
+class ACTION_HANGUP( ACTION ):
+	cause: util.CAUSE
+
+class ACTION_IFNUM( ACTION ):
+	lhs: Union[int,float,str]
+	op: str
+	rhs: Union[int,float,str]
+
+class ACTION_IFSTR( ACTION ):
+	lhs: str
+	op: str
+	rhs: str
+
+class ACTION_IVR( ACTION ):
+	terminators: str
+	digit_regex: str
+	variable_name: str
+	branches: BRANCHES
+
+class ACTION_LABEL( ACTION ):
+	uuid: str
+
+class ACTION_LOG( ACTION ):
+	level: Literal['CONSOLE','ALERT','CRIT','ERR','WARNING','NOTICE','INFO','DEBUG']
+	text: str
+
+class ACTION_LUA( ACTION ):
+	pass
+
+class ACTION_LUAFILE( ACTION ):
+	file: str
+
+class ACTION_MOH( ACTION ):
+	stream: str
+
+class ACTION_PAGD( ACTION ):
+	terminators: str
+	digit_regex: str
+	variable_name: str
+
+class ACTION_PLAYBACK( ACTION ):
+	sound: str
+
+class ACTION_PLAYTTS( ACTION ):
+	text: str
+	voice: TTS_VOICES
+
+class ACTION_PLAY_DTMF( ACTION ):
+	dtmf: str
+
+class ACTION_PREANNOUNCE( ACTION ):
+	pass
+
+class ACTION_PREANSWER( ACTION ):
+	pass
+
+class ACTION_PYTHON( ACTION ):
+	pass
+
+class ACTION_REPEAT( ACTION ):
+	pass
+
+class ACTION_RING( ACTION ):
+	tone: str
+
+class ACTION_ROUTE( ACTION ):
+	pass
+
+class ACTION_RXFAX( ACTION ):
+	mailto: str
+
+class ACTION_SET( ACTION ):
+	variable: str
+	value: str
+
+class ACTION_SILENCE( ACTION ):
+	seconds: int
+	divisor: int # 0 == complete silence, >0 == comfort noise
+
+class ACTION_SMS( ACTION ):
+	pass
+
+class ACTION_THROTTLE( ACTION ):
+	pass
+
+class ACTION_TOD( ACTION ):
+	times: str
+	hit: BRANCHES
+	miss: BRANCHES
+
+class ACTION_TONE( ACTION ):
+	pass
+
+class ACTION_TRANSFER( ACTION ):
+	pass
+
+class ACTION_VOICEMAIL( ACTION ):
+	box: str
+	greeting_override: str
+
+class ACTION_VOICE_DELIVER( ACTION ):
+	trusted: bool
+
+class ACTION_WAIT( ACTION ):
+	minutes: Union[int,str]
+	seconds: Union[int,str]
 
 
 @dataclass
@@ -141,16 +290,17 @@ class ElapsedTimer:
 		self.t1 += self.interval.total_seconds()
 		return True
 
-
+D = TypeVar( 'D' )
 T = TypeVar( 'T' )
+K = TypeVar( 'K' )
+V = TypeVar( 'V' )
 
-def expect( type: Type[T], data: Dict[str,Any], name: str, *, required: bool = False, default: Opt[T] = None ) -> T:
-	value = data.get( name )
-	if value is None:
-		return default if default is not None else type()
+def expect( type: Type[T], value: Opt[T], *, default: Opt[T] = None ) -> T:
+	if value is None and default is not None:
+		return default
 	if isinstance( value, type ):
 		return value
-	raise ValueError( f'expecting {name!r} of type {str(type)!r} but got {value!r}' )
+	raise ValueError( f'expecting {type.__module__}.{type.__qualname__} but got {value!r}' )
 
 def _on_event( event: ESL.Message ) -> None:
 	log = logger.getChild( '_on_event' )
@@ -217,66 +367,67 @@ class State( metaclass = ABCMeta ):
 		log.debug( 'output=%r', s )
 		return s
 	
-	async def tonumber( self, data: Dict[str,Any], name: str, *, expand: bool = False, default: Opt[Union[int,float]] = None ) -> Union[int,float]:
-		value = data.get( name )
-		if value is None:
+	async def tonumber( self, data: Map[str,Any], name: str, *, expand: bool = False, default: Opt[Union[int,float]] = None ) -> Union[int,float]:
+		value1 = data.get( name )
+		if value1 is None:
 			if default is not None:
 				return default
 		else:
 			if expand:
-				value = await self.expand( str( value ))
+				value2: str = await self.expand( str( value1 ))
 			try:
-				return int( value )
+				return int( value2 )
 			except ValueError:
 				pass
 			try:
-				return float( value )
+				return float( value2 )
 			except ValueError:
 				pass
-		raise ValueError( f'Expecting {name!r} of type convertable to int/float but got {value!r}' )
+		raise ValueError( f'Expecting {name!r} of type convertable to int/float but got {value1!r}' )
 	
-	async def toint( self, data: Dict[str,Any], name: str, *, expand: bool = False, default: Opt[int] = None ) -> int:
-		value = data.get( name )
-		if value is None:
+	async def toint( self, data: Map[str,Any], name: str, *, expand: bool = False, default: Opt[int] = None ) -> int:
+		value1 = data.get( name )
+		if value1 is None:
 			if default is not None:
 				return default
 		else:
 			if expand:
-				value = await self.expand( str( value ))
+				value2 = await self.expand( str( value1 ))
 			try:
-				return int( value )
+				return int( value2 )
 			except ValueError:
 				pass
-		raise ValueError( f'Expecting {name!r} of type convertable to int/float but got {value!r}' )
+		raise ValueError( f'Expecting {name!r} of type convertable to int/float but got {value1!r}' )
 	
 	async def load_route( self, route: int ) -> Dict[str,Any]:
 		return await self.repo_routes.get_by_id( route )
 	
-	async def exec_branch( self, params: PARAMS, which: str, pagd: Opt[PAGD], *, log: logging.Logger ) -> RESULT:
-		branch: Dict[str,Any] = expect( dict, params, which, default = {} )
+	async def exec_branch( self, action: ACTION, which: str, pagd: Opt[PAGD], *, log: logging.Logger ) -> RESULT:
+		branch: BRANCH = cast( BRANCH, expect( dict, action.get( which ), default = {} ))
 		return await self._exec_branch( which, branch, pagd, log = log )
 	
-	async def _exec_branch( self, which: str, branch: Dict[str,Any], pagd: Opt[PAGD], *, log: logging.Logger ) -> RESULT:
+	async def _exec_branch( self, which: str, branch: BRANCH, pagd: Opt[PAGD], *, log: logging.Logger ) -> RESULT:
 		name: Opt[str] = branch.get( 'name' )
-		nodes: List[Any] = expect( list, branch, 'nodes', default = [] )
-		log.info( 'executing %s branch %r', which, name )
+		nodes: ACTIONS = expect( list, branch.get( 'nodes' ) or [] )
+		if which:
+			log.info( 'executing %s branch %r', which, name )
 		return await self.exec_actions( nodes, pagd )
 	
-	async def exec_actions( self, actions: List[PARAMS], pagd: Opt[PAGD] = None ) -> RESULT:
+	async def exec_actions( self, actions: ACTIONS, pagd: Opt[PAGD] = None ) -> RESULT:
 		for action in actions or []:
 			r = await self.exec_action( action, pagd )
 			if r != CONTINUE: return r
 			if pagd and pagd.digits: return CONTINUE
 		return CONTINUE
 	
-	async def exec_action( self, action: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def exec_action( self, action: ACTION, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.exec_action' )
-		action_type = expect( str, action, 'type', default = '' )
+		action_type = expect( str, action.get( 'type' ), default = '' )
 		if not action_type:
 			log.error( 'action.type is missing' ) # TODO FIXME: diagnostic info?
 			return CONTINUE
 		fname = f'action_{action_type}'
-		f: Opt[Callable[[PARAMS,Opt[PAGD]],Awaitable[RESULT]]] = getattr( self, fname, None )
+		f: Opt[Callable[[ACTION,Opt[PAGD]],Awaitable[RESULT]]] = getattr( self, fname, None )
 		if not f or not callable( f ):
 			log.error( 'action invalid or unavailable in this context: %r', action_type )
 			return CONTINUE
@@ -293,7 +444,7 @@ class State( metaclass = ABCMeta ):
 				return STOP
 		return r
 	
-	async def exec_top_actions( self, actions: List[PARAMS] ) -> RESULT:
+	async def exec_top_actions( self, actions: ACTIONS ) -> RESULT:
 		log = logger.getChild( 'State.exec_top_actions' )
 		while True:
 			r = await self.exec_actions( actions )
@@ -302,25 +453,26 @@ class State( metaclass = ABCMeta ):
 			else:
 				return r
 	
-	async def action_goto( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_goto( self, action: ACTION_GOTO, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_goto' )
 		if self.state == HUNT: return CONTINUE
 		
-		self.goto_uuid = expect( str, params, 'destination' )
+		self.goto_uuid = expect( str, action.get( 'destination' ))
 		log.info( 'destination=%r', self.goto_uuid )
 		self.state = GOTO
 		return STOP
 	
-	async def action_ifnum( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_ifnum( self, action: ACTION_IFNUM, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_ifnum' )
-		if self.state == HUNT:
-			if STOP == await self.exec_branch( params, 'trueBranch', pagd, log = log ): return STOP
-			if self.state != HUNT: return CONTINUE
-			return await self.exec_branch( params, 'falseBranch', pagd, log = log )
 		
-		lhs: Union[int,float] = await self.tonumber( params, 'lhs', expand = True )
-		op: str = await self.expand( expect( str, params, 'op' ))
-		rhs: Union[int,float] = await self.tonumber( params, 'rhs', expand = True )
+		if self.state == HUNT:
+			if STOP == await self.exec_branch( action, 'trueBranch', pagd, log = log ): return STOP
+			if self.state != HUNT: return CONTINUE
+			return await self.exec_branch( action, 'falseBranch', pagd, log = log )
+		
+		lhs: Union[int,float] = await self.tonumber( action, 'lhs', expand = True )
+		op: str = await self.expand( expect( str, action.get( 'op' )))
+		rhs: Union[int,float] = await self.tonumber( action, 'rhs', expand = True )
 		
 		result: Opt[bool] = None
 		if op == '<=':
@@ -341,19 +493,20 @@ class State( metaclass = ABCMeta ):
 		log.info( 'lhs=%r op=%r rhs=%r result=%r', lhs, op, rhs, result )
 		
 		which = 'trueBranch' if result else 'falseBranch'
-		return await self.exec_branch( params, which, pagd, log = log )
+		return await self.exec_branch( action, which, pagd, log = log )
 	
-	async def action_ifstr( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_ifstr( self, action: ACTION_IFSTR, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_ifstr' )
-		if self.state == HUNT:
-			if STOP == await self.exec_branch( params, 'trueBranch', pagd, log = log ): return STOP
-			if self.state != HUNT: return CONTINUE
-			return await self.exec_branch( params, 'falseBranch', pagd, log = log )
 		
-		lhs: str = await self.expand( expect( str, params, 'lhs' ))
-		op: str = await self.expand( expect( str, params, 'op' ))
-		rhs: str = await self.expand( expect( str, params, 'rhs' ))
-		if not expect( bool, params, 'case', default = False ):
+		if self.state == HUNT:
+			if STOP == await self.exec_branch( action, 'trueBranch', pagd, log = log ): return STOP
+			if self.state != HUNT: return CONTINUE
+			return await self.exec_branch( action, 'falseBranch', pagd, log = log )
+		
+		lhs: str = await self.expand( expect( str, action.get( 'lhs' )))
+		op: str = await self.expand( expect( str, action.get( 'op' )))
+		rhs: str = await self.expand( expect( str, action.get( 'rhs' )))
+		if not expect( bool, action.get( 'case' ), default = False ):
 			lhs = lhs.lower()
 			rhs = rhs.lower()
 		
@@ -382,37 +535,39 @@ class State( metaclass = ABCMeta ):
 		log.info( 'lhs=%r op=%r rhs=%r result=%r', lhs, op, rhs, result )
 		
 		which = 'trueBranch' if result else 'falseBranch'
-		return await self.exec_branch( params, which, pagd, log = log )
+		return await self.exec_branch( action, which, pagd, log = log )
 	
-	async def action_label( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_label( self, action: ACTION_LABEL, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_label' )
 		try:
-			label_uuid = params['uuid']
+			label_uuid = action['uuid']
 		except KeyError:
 			log.error( 'label missing "uuid"' )
 		else:
 			if self.state == HUNT and self.goto_uuid == label_uuid:
-				log.info( 'HIT name=%r', params.get( 'name' ))
+				log.info( 'HIT name=%r', action.get( 'name' ))
 				self.state = EXEC
 			else:
-				log.info( 'PASS name=%r', params.get( 'name' ))
+				log.info( 'PASS name=%r', action.get( 'name' ))
 		return CONTINUE
 	
-	async def action_log( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_log( self, action: ACTION_LOG, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_log' )
 		if self.state == HUNT: return CONTINUE
 		
-		level = getattr( logging, params.get( 'level' ) or 'DEBUG', logging.DEBUG )
-		text = await self.expand( params.get( 'text' ) or '?' )
-		log.log( level, text )
+		raise NotImplementedError( 'how to invoke freeswitch logging via ESL?' )
+		#level
+		#level = getattr( logging, action.get( 'level' ) or 'DEBUG', logging.DEBUG )
+		#text = await self.expand( action.get( 'text' ) or '?' )
+		#log.log( level, text )
 		
 		return CONTINUE
 	
-	async def action_lua( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_lua( self, action: ACTION_LUA, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_lua' )
 		if self.state == HUNT: return CONTINUE
 		
-		#source = ( params.get( 'source' ) or '' ).strip()
+		#source = ( action.get( 'source' ) or '' ).strip()
 		#if not source:
 		#	log.error( 'cannot execute lua code: source is empty' )
 		#	return CONTINUE
@@ -421,11 +576,11 @@ class State( metaclass = ABCMeta ):
 		
 		return CONTINUE
 	
-	async def action_laufile( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_laufile( self, action: ACTION_LUAFILE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_luafile' )
 		if self.state == HUNT: return CONTINUE
 		
-		file = ( params.get( 'file' ) or '' ).strip()
+		file = ( action.get( 'file' ) or '' ).strip()
 		if not file:
 			log.error( 'cannot execute lua file: no filename provided' ) # TODO FIXME: log some of this stuff to freeswitch console?
 			return CONTINUE
@@ -434,7 +589,7 @@ class State( metaclass = ABCMeta ):
 		
 		return CONTINUE
 	
-	async def action_python( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_python( self, action: ACTION_PYTHON, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_python' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -442,10 +597,10 @@ class State( metaclass = ABCMeta ):
 		
 		return CONTINUE
 	
-	async def action_repeat( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_repeat( self, action: ACTION_REPEAT, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_repeat' )
-		count: int = await self.toint( params, 'count', default = 0 )
-		nodes = expect( list, params, 'nodes', default = [] )
+		count: int = await self.toint( action, 'count', default = 0 )
+		nodes = cast( ACTIONS, expect( list, action.get( 'nodes' ), default = [] ))
 		i: int = 0
 		while count == 0 or i < count:
 			if self.state != HUNT:
@@ -530,12 +685,12 @@ class State( metaclass = ABCMeta ):
 						log.error( 'sms to %r failure: %r', smsto, jdata )
 		return CONTINUE
 	
-	async def action_sms( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_sms( self, action: ACTION_SMS, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_sms' )
 		if self.state == HUNT: return CONTINUE
 		
-		smsto: str = str( params.get( 'smsto' ) or '' ).strip() # TODO FIXME: thinq expects 'XXXXXXXXXX'
-		message: str = str( params.get( 'message' ) or '' ).strip()
+		smsto: str = str( action.get( 'smsto' ) or '' ).strip() # TODO FIXME: thinq expects 'XXXXXXXXXX'
+		message: str = str( action.get( 'message' ) or '' ).strip()
 		if not message:
 			settings = cast( Opt[SETTINGS], getattr( self, 'settings', None ))
 			message = ( settings.get( 'default_sms_message' ) if settings else '' ) or 'You have a new voicemail'
@@ -555,34 +710,36 @@ class State( metaclass = ABCMeta ):
 			log.error( 'cannot send sms, invalid sms_carrier=%r', self.config.sms_carrier )
 			return CONTINUE
 	
-	async def action_tod( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_tod( self, action: ACTION_TOD, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_tod' )
 		if self.state == HUNT:
-			if STOP == await self.exec_branch( params, 'hit', pagd, log = log ):
+			if STOP == await self.exec_branch( action, 'hit', pagd, log = log ):
 				return STOP
 			if self.state != HUNT: return CONTINUE
-			return await self.exec_branch( params, 'miss', pagd, log = log )
+			return await self.exec_branch( action, 'miss', pagd, log = log )
 		
 		which = 'miss'
-		if match_tod( expect( str, params, 'times' )):
+		if match_tod( expect( str, action.get( 'times' ))):
 			# make sure holiday params match too
 			log.warning( 'TODO FIXME: implement holidays' )
 			which = 'hit'
 		
-		return await self.exec_branch( params, which, pagd, log = log )
+		return await self.exec_branch( action, which, pagd, log = log )
 	
-	async def action_wait( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_wait( self, action: ACTION_WAIT, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_wait' )
 		if self.state == HUNT: return CONTINUE
 		
-		minutes: int = await self.toint( params, 'minutes', default = 0 )
-		seconds = minutes * 60 + await self.toint( params, 'seconds', default = 0 )
+		minutes: int = await self.toint( action, 'minutes', default = 0 )
+		seconds = minutes * 60 + await self.toint( action, 'seconds', default = 0 )
 		
 		if isinstance( self, CallState ) and pagd is not None:
-			params2: PARAMS = {
-				'seconds': seconds,
-				'divisor': 0,
-			}
+			params2 = ACTION_SILENCE(
+				type = 'silence',
+				name = '',
+				seconds = seconds,
+				divisor = 0,
+			)
 			log.info( 'executing silence instead (b/c pagd is active)' )
 			return await self.action_silence( params2, pagd )
 		else:
@@ -617,7 +774,7 @@ class CallState( State ):
 			return False
 		return True
 	
-	async def try_ani( self ) -> Opt[int]:
+	async def try_ani( self ) -> Opt[Union[int,str]]:
 		log = logger.getChild( 'CallState.try_ani' )
 		
 		try:
@@ -657,7 +814,7 @@ class CallState( State ):
 		
 		return None
 	
-	async def try_did( self ) -> Tuple[Opt[int],Opt[Dict[str,Any]]]:
+	async def try_did( self ) -> Tuple[Opt[Union[int,str]],Opt[Dict[str,Any]]]:
 		log = logger.getChild( 'CallState.try_did' )
 		try:
 			data = await self.repo_dids.get_by_id( self.did )
@@ -775,27 +932,32 @@ class CallState( State ):
 		
 		log.debug( 'no preannounce recording found' )
 	
-	async def _pagd( self, params: PARAMS, success: Callable[[str],Coroutine[Any,Any,Opt[RESULT]]] ) -> RESULT:
+	async def _pagd( self, action: Union[ACTION_IVR,ACTION_PAGD], success: Callable[[str],Coroutine[Any,Any,Opt[RESULT]]] ) -> RESULT:
 		log = logger.getChild( 'CallState._pagd' )
-		timeout = datetime.timedelta( seconds = await self.tonumber( params, 'timeout', default = 3 ))
+		timeout = datetime.timedelta( seconds = await self.tonumber( action, 'timeout', default = 3 ))
 		pagd = PAGD(
-			min_digits = await self.toint( params, 'min_digits', default = 1 ),
-			max_digits = await self.toint( params, 'max_digits', default = 1 ),
+			min_digits = await self.toint( action, 'min_digits', default = 1 ),
+			max_digits = await self.toint( action, 'max_digits', default = 1 ),
 			timeout = datetime.timedelta( milliseconds = 50 ), # don't want to apply pagd.timeout to every node under greeting branch
-			terminators = expect( str, params, 'terminators', default = '' ),
-			digit_regex = expect( str, params, 'digit_regex', default = '' ),
-			variable_name = expect( str, params, 'variable_name', default = '' ),
-			digit_timeout = datetime.timedelta( seconds = await self.tonumber( params, 'digit_timeout', default = timeout.total_seconds() ))
+			terminators = expect( str, action.get( 'terminators' ), default = '' ),
+			digit_regex = expect( str, action.get( 'digit_regex' ), default = '' ),
+			variable_name = expect( str, action.get( 'variable_name' ), default = '' ),
+			digit_timeout = datetime.timedelta( seconds = await self.tonumber( action, 'digit_timeout', default = timeout.total_seconds() ))
 		)
-		max_attempts = await self.toint( params, 'max_attempts', default = 3 )
+		max_attempts = await self.toint( action, 'max_attempts', default = 3 )
 		attempt: int = 1
 		r: RESULT
 		while attempt <= max_attempts:
 			if not pagd.digits:
-				r = await self.exec_branch( params, 'greetingBranch', pagd, log = log )
+				r = await self.exec_branch( action, 'greetingBranch', pagd, log = log )
 				if r == STOP: return STOP
 				if not pagd.digits:
-					r = await self.action_silence( { 'seconds': 3 }, pagd )
+					r = await self.action_silence( ACTION_SILENCE(
+						type = 'silence',
+						name = '',
+						seconds = 3,
+						divisor = 0,
+					), pagd )
 					log.info( 'back from post-greeting auto-silence with r=%r, digits=%r, valid=%r',
 						r, pagd.digits, pagd.valid
 					)
@@ -812,13 +974,13 @@ class CallState( State ):
 			if attempt < max_attempts:
 				if pagd.digits:
 					pagd.digits = None
-					r = await self.exec_branch( params, 'invalidBranch', pagd, log = log )
+					r = await self.exec_branch( action, 'invalidBranch', pagd, log = log )
 					if r == STOP: return STOP
 				else:
-					r = await self.exec_branch( params, 'timeoutBranch', pagd, log = log )
+					r = await self.exec_branch( action, 'timeoutBranch', pagd, log = log )
 					if r == STOP: return STOP
 			else:
-				r = await self.exec_branch( params, 'failureBranch', None, log = log )
+				r = await self.exec_branch( action, 'failureBranch', None, log = log )
 				return r
 			attempt += 1
 		return CONTINUE
@@ -891,13 +1053,13 @@ class CallState( State ):
 			
 			return CONTINUE
 	
-	async def action_acd_call_add( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_acd_call_add( self, action: ACTION_ACD_CALL_ADD, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_acd_call_add' )
 		if self.state == HUNT: return CONTINUE
 		
-		gates: str = expect( str, params, 'gates' )
-		priority: int = await self.toint( params, 'priority' )
-		queue_offset_seconds: int = await self.toint( params, 'queue_offset_seconds', default = 0 )
+		gates: str = expect( str, action.get( 'gates' ))
+		priority: int = await self.toint( action, 'priority' )
+		queue_offset_seconds: int = await self.toint( action, 'queue_offset_seconds', default = 0 )
 		
 		r = await self.esl.luarun(
 			'itas/acd.lua',
@@ -913,12 +1075,12 @@ class CallState( State ):
 		
 		return CONTINUE
 	
-	async def action_acd_call_gate( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_acd_call_gate( self, action: ACTION_ACD_CALL_GATE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_acd_call_gate' )
 		if self.state == HUNT: return CONTINUE
 		
-		gate: str = expect( str, params, 'gate' )
-		priority: int = await self.toint( params, 'priority' )
+		gate: str = str( action.get( 'gate' ) or '' )
+		priority: int = await self.toint( action, 'priority' )
 		
 		r = await self.esl.luarun(
 			'itas/acd.lua',
@@ -932,11 +1094,11 @@ class CallState( State ):
 		
 		return CONTINUE
 	
-	async def action_acd_call_ungate( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_acd_call_ungate( self, action: ACTION_ACD_CALL_UNGATE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_acd_call_ungate' )
 		if self.state == HUNT: return CONTINUE
 		
-		gate: str = expect( str, params, 'gate' )
+		gate: str = str( action.get( 'gate' ) or '' )
 		
 		r = await self.esl.luarun(
 			'itas/acd.lua',
@@ -949,7 +1111,7 @@ class CallState( State ):
 		
 		return CONTINUE
 	
-	async def action_answer( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_answer( self, action: ACTION_ANSWER, pagd: Opt[PAGD] ) -> RESULT:
 		#log = logger.getChild( 'CallState.action_answer' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -958,10 +1120,10 @@ class CallState( State ):
 		
 		return CONTINUE
 	
-	async def _bridge( self, params: PARAMS ) -> str:
+	async def _bridge( self, action: ACTION_BRIDGE ) -> str:
 		log = logger.getChild( 'CallState._bridge' )
 		
-		timeout_seconds: int = await self.toint( params, 'timeout', default = 0 )
+		timeout_seconds: int = await self.toint( action, 'timeout', default = 0 )
 		timeout: Opt[datetime.timedelta] = (
 			datetime.timedelta( seconds = timeout_seconds )
 			if timeout_seconds
@@ -984,13 +1146,13 @@ class CallState( State ):
 		exists_timer = ElapsedTimer( datetime.timedelta( seconds = 6 ))
 		
 		try:
-			dial_string = expect( str, params, 'dial_string' )
+			dial_string: str = expect( str, action.get( 'dial_string' ))
 			chanvars = { 'origination_uuid': bridge_uuid }
 			origin = '&playback(silence_stream://-1)'
-			dialplan = str( params.get( 'dialplan' ) or '' )
-			context = str( params.get( 'context' ) or '' )
-			cid_name = str( params.get( 'cid_name' ) or '' )
-			cid_num = str( params.get( 'cid_num' ) or '' )
+			dialplan = str( action.get( 'dialplan' ) or '' )
+			context = str( action.get( 'context' ) or '' )
+			cid_name = str( action.get( 'cid_name' ) or '' )
+			cid_num = str( action.get( 'cid_num' ) or '' )
 			
 			try:
 				r = await self.esl.originate( dial_string,
@@ -1065,103 +1227,103 @@ class CallState( State ):
 		finally:
 			await self.esl.filter_delete( 'Unique-ID', bridge_uuid )
 	
-	async def action_bridge( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_bridge( self, action: ACTION_BRIDGE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_bridge' )
 		if self.state == HUNT: return CONTINUE
 		
 		if not await util.answer( self.esl, self.uuid, 'action_bridge' ):
 			return STOP
 		
-		result = await self._bridge( params )
+		result = await self._bridge( action )
 		
 		if result[:3] == '+OK':
 			return CONTINUE
 		
 		# origination failed:
 		which = 'timeoutBranch' if 'NO_ANSWER' in result else 'failBranch'
-		return await self.exec_branch( params, which, pagd, log = log )
+		return await self.exec_branch( action, which, pagd, log = log )
 	
-	async def _greeting( self, params: PARAMS, box: int, pagd: Opt[PAGD] ) -> RESULT:
+	async def _greeting( self, action: ACTION_GREETING, box: int, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState._greeting' )
-		greeting: int = await self.toint( params, 'greeting', default = 1 )
+		greeting: int = await self.toint( action, 'greeting', default = 1 )
 		vm = Voicemail( self.esl, self.uuid )
 		if greeting < 1 or greeting > 9:
 			settings = vm.load_box_settings( box )
 			if not settings:
 				log.error( 'invalid box=%r (unable to load settings)', box )
 				return CONTINUE
-			greeting = await self.toint( params, 'greeting', default = 1 )
+			greeting = await self.toint( action, 'greeting', default = 1 )
 		path = vm.box_greeting_path( box, greeting )
 		if not path or not path.is_file():
 			log.error( 'invalid or non-existing greeting path: %r', path )
 			return CONTINUE
 		return await self._playback( str( path ), pagd )
 	
-	async def action_greeting( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_greeting( self, action: ACTION_GREETING, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_greeting' )
 		if self.state == HUNT: return CONTINUE
 		
-		box: int = await self.toint( params, 'box', default = 0 )
+		box: int = await self.toint( action, 'box', default = 0 )
 		if not box: # "current" box
 			if not self.box:
 				log.error( 'current box requested but not currently inside the digit map of a voicemail box' )
 				return CONTINUE
 			box = self.box
 		
-		return await self._greeting( params, box, pagd )
+		return await self._greeting( action, box, pagd )
 	
-	async def action_greeting2( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_greeting2( self, action: ACTION_GREETING, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_greeting2' )
 		if self.state == HUNT: return CONTINUE
 		
-		box: Opt[int] = await self.toint( params, 'box' )
+		box: Opt[int] = await self.toint( action, 'box' )
 		if not box:
 			log.error( 'no box # specified' )
 			return CONTINUE
 		
-		return await self._greeting( params, box, pagd )
+		return await self._greeting( action, box, pagd )
 	
-	async def action_hangup( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_hangup( self, action: ACTION_HANGUP, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_hangup' )
 		if self.state == HUNT: return CONTINUE
 		
-		cause: util.CAUSE = cast( util.CAUSE, expect( str, params, 'cause', default = 'NORMAL_CLEARING' ))
+		cause: util.CAUSE = cast( util.CAUSE, expect( str, action.get( 'cause' ), default = 'NORMAL_CLEARING' ))
 		if cause not in util.causes:
 			log.warning( f'unrecognized hangup cause={cause!r}' )
 		await util.hangup( self.esl, self.uuid, cause, 'action_hangup' )
 		return STOP
 	
-	async def action_ivr( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_ivr( self, action: ACTION_IVR, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_ivr' )
 		
 		if pagd is not None:
 			log.error( 'cannot execute a PAGD in the greeting path on another PAGD or an IVR' )
 			return CONTINUE
 		
-		branches: Dict[str,Any] = expect( dict, params, 'branches' )
+		branches: BRANCHES = expect( dict, action.get( 'branches' ))
 		
 		if self.state == HUNT:
 			for digits, branch in branches.items():
 				if STOP == await self._exec_branch( digits, branch, None, log = log ): return STOP
 				if self.state != HUNT: return CONTINUE
-			return await self.exec_branch( params, 'failureBranch', None, log = log )
+			return await self.exec_branch( action, 'failureBranch', None, log = log )
 		
 		async def _success( digits: str ) -> Opt[RESULT]:
 			log.info( 'got digits=%r', digits )
-			branch: Dict[str,Any] = expect( dict, branches, digits, default = {} )
+			branch: BRANCH = cast( BRANCH, expect( dict, branches.get( digits ), default = {} ))
 			if branch:
 				return await self._exec_branch( digits, branch, None, log = log )
 			else:
 				log.error( 'no branch found for digits=%r', digits )
 				return None
 		
-		return await self._pagd( params, _success )
+		return await self._pagd( action, _success )
 	
-	async def _broadcast( self, params: PARAMS, key: str, *, default: str, log: logging.Logger ) -> RESULT:
+	async def _broadcast( self, stream: Opt[str], *, default: str, log: logging.Logger ) -> RESULT:
 		log2 = log.getChild( '_broadcast' )
 		if self.state == HUNT: return CONTINUE
 		
-		stream: str = await self.expand( expect( str, params, key, default = default ))
+		stream = await self.expand(( stream or '' ).strip() or default )
 		
 		log.debug( 'breaking' )
 		await self.esl.uuid_break( self.uuid, 'all' )
@@ -1171,11 +1333,11 @@ class CallState( State ):
 		
 		return CONTINUE
 	
-	async def action_moh( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_moh( self, action: ACTION_MOH, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_moh' )
-		return await self._broadcast( params, 'stream', default = '$${hold_music}', log = log )
+		return await self._broadcast( action.get( 'stream' ), default = '$${hold_music}', log = log )
 	
-	async def action_pagd( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_pagd( self, action: ACTION_PAGD, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_pagd' )
 		
 		if pagd is not None:
@@ -1183,33 +1345,33 @@ class CallState( State ):
 			return CONTINUE
 		
 		if self.state == HUNT:
-			if STOP == await self.exec_branch( params, 'successBranch', None, log = log ): return STOP
+			if STOP == await self.exec_branch( action, 'successBranch', None, log = log ): return STOP
 			if self.state != HUNT: return CONTINUE
 			
-			return await self.exec_branch( params, 'failureBranch', None, log = log )
+			return await self.exec_branch( action, 'failureBranch', None, log = log )
 		
 		async def _success( digits: str ) -> Opt[RESULT]:
-			return await self.exec_branch( params, 'successBranch', None, log = log )
+			return await self.exec_branch( action, 'successBranch', None, log = log )
 		
-		return await self._pagd( params, _success )
+		return await self._pagd( action, _success )
 	
-	async def action_playback( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_playback( self, action: ACTION_PLAYBACK, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_playback' )
 		if self.state == HUNT: return CONTINUE
 		
-		sound = expect( str, params, 'sound', default = 'ivr/ivr-invalid_sound_prompt.wav' )
+		sound = expect( str, action.get( 'sound' ), default = 'ivr/ivr-invalid_sound_prompt.wav' )
 		log.info( 'sound=%r', sound )
 		return await self._playback( sound, pagd )
 	
-	async def action_playtts( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_playtts( self, action: ACTION_PLAYTTS, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_playtts' )
 		if self.state == HUNT: return CONTINUE
 		
-		text = await self.expand( params.get( 'text' ) or '' )
+		text = await self.expand( action.get( 'text' ) or '' )
 		if not text:
 			log.error( 'tts node has no text prompt' )
 			text = 'Error'
-		tts = TTS( params.get( 'voice' ))
+		tts = TTS( action.get( 'voice' ))
 		tts.say( text )
 		stream = await tts.generate()
 		r = await self._playback( str( stream ), pagd )
@@ -1218,11 +1380,11 @@ class CallState( State ):
 		)
 		return r
 	
-	async def action_play_dtmf( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_play_dtmf( self, action: ACTION_PLAY_DTMF, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_play_dtmf' )
 		if self.state == HUNT: return CONTINUE
 		
-		dtmf = params.get( 'dtmf' ) or ''
+		dtmf = action.get( 'dtmf' ) or ''
 		if dtmf:
 			r = await self.esl.uuid_send_dtmf( self.uuid, dtmf )
 			log.info( 'uuid_send_dtmf( %r, %r ) -> %r', self.uuid, dtmf, r )
@@ -1230,7 +1392,7 @@ class CallState( State ):
 			log.error( 'no dtmf digits specified' )
 		return CONTINUE
 	
-	async def action_preannounce( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_preannounce( self, action: ACTION_PREANNOUNCE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_preannounce' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -1241,7 +1403,7 @@ class CallState( State ):
 		log.info( 'sound=%r', sound )
 		return await self._playback( sound, pagd )
 	
-	async def action_preanswer( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_preanswer( self, action: ACTION_PREANSWER, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_preanswer' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -1251,15 +1413,15 @@ class CallState( State ):
 		
 		return CONTINUE
 	
-	async def action_ring( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_ring( self, action: ACTION_RING, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_ring' )
-		return await self._broadcast( params, 'tone', default = '$${us-ring}', log = log )
+		return await self._broadcast( action.get( 'tone' ), default = '$${us-ring}', log = log )
 	
-	async def action_route( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_route( self, action: ACTION_ROUTE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.route' )
 		if self.state == HUNT: return CONTINUE
 		
-		route: int = await self.toint( params, 'route' )
+		route: int = await self.toint( action, 'route' )
 		if not valid_route( route ):
 			log.warning( 'invalid route=%r', route )
 			return CONTINUE
@@ -1268,18 +1430,18 @@ class CallState( State ):
 		old_route = self.route
 		log.info( 'executing route=%r', route )
 		result = await self.exec_top_actions(
-			expect( list, routedata, 'nodes', default = [] )
+			expect( list, routedata.get( 'nodes' ), default = [] )
 		)
 		self.route = old_route
 		return result
 	
-	async def action_rxfax( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_rxfax( self, action: ACTION_RXFAX, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_rxfax' )
 		if self.state == HUNT: return CONTINUE
 		
-		mailto = expect( str, params, 'mailto', default = '' ).strip()
+		mailto = expect( str, action.get( 'mailto' ), default = '' ).strip()
 		if not mailto:
-			log.warning( 'cannot rxfax b/x params.mailto=%r', mailto )
+			log.warning( 'cannot rxfax b/x action.mailto=%r', mailto )
 			return STOP
 		
 		# generate a fax image path that doesn't exist already
@@ -1292,10 +1454,10 @@ class CallState( State ):
 		await self.esl.uuid_setvar( self.uuid, 'ace_rxfax_path', str( path ))
 		await self.esl.uuid_setvar( self.uuid, 'ace_rxfax_mailto', mailto )
 		# TODO FIXME: calculate time spent receiving fax and expression it as an injection variable
-		subject = str( params.get( 'subject' ) or '' ).strip()
+		subject = str( action.get( 'subject' ) or '' ).strip()
 		if not subject:
 			subject = 'fax received at {did} from {ani}'
-		body = str( params.get( 'body' ) or '' ).strip()
+		body = str( action.get( 'body' ) or '' ).strip()
 		if not body:
 			body = 'See attached'
 		
@@ -1303,34 +1465,34 @@ class CallState( State ):
 		log.info( 'uuid_transfer result=%r', result )
 		return STOP
 	
-	async def action_set( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_set( self, action: ACTION_SET, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_set' )
 		if self.state == HUNT: return CONTINUE
 		
-		variable: str = str( await self.expand( params.get( 'variable' ) or '' ))
-		value: str = str( await self.expand( params.get( 'value' ) or '' ))
+		variable: str = str( await self.expand( action.get( 'variable' ) or '' ))
+		value: str = str( await self.expand( action.get( 'value' ) or '' ))
 		r = await self.esl.uuid_setvar( self.uuid, variable, value )
 		log.info( 'uuid_setvar( %r, %r, %r ) -> %r', self.uuid, variable, value, r )
 		return CONTINUE
 	
-	async def action_silence( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_silence( self, action: ACTION_SILENCE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_silence' )
 		if self.state == HUNT: return CONTINUE
 		
-		seconds = await self.tonumber( params, 'seconds', default = 0 )
-		divisor = await self.tonumber( params, 'divisor', default = 0 )
+		seconds = await self.tonumber( action, 'seconds', default = 0 )
+		divisor = await self.tonumber( action, 'divisor', default = 0 )
 		duration = -1 if seconds < 0 else seconds * 1000
 		stream = f'silence_stream://{duration}!r,{divisor!r}'
 		log.info( '%s', stream )
 		return await self._playback( stream, pagd )
 	
-	async def action_throttle( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_throttle( self, action: ACTION_THROTTLE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_throttle' )
 		if self.state == HUNT:
-			if STOP == await self.exec_branch( params, 'allowedBranch', pagd, log = log ):
+			if STOP == await self.exec_branch( action, 'allowedBranch', pagd, log = log ):
 				return STOP
 			if self.state != HUNT: return CONTINUE
-			return await self.exec_branch( params, 'throttledBranch', pagd, log = log )
+			return await self.exec_branch( action, 'throttledBranch', pagd, log = log )
 		
 		try:
 			throttle_id = await self.esl.uuid_getvar( self.uuid, 'throttle_id' ) or self.did
@@ -1377,32 +1539,32 @@ class CallState( State ):
 				self.uuid, backend, realm, throttle_id, r,
 			)
 		
-		return await self.exec_branch( params, which, pagd, log = log )
+		return await self.exec_branch( action, which, pagd, log = log )
 	
-	async def action_tone( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_tone( self, action: ACTION_TONE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_tone' )
 		if self.state == HUNT: return CONTINUE
 		
-		tone = str( params.get( 'tone' ) or '' ).strip()
+		tone = str( action.get( 'tone' ) or '' ).strip()
 		if not tone:
 			log.error( 'Cannot play tone b/c tone=%r', tone )
 			return CONTINUE
 		
-		loops = await self.toint( params, 'loops', default = 1 )
+		loops = await self.toint( action, 'loops', default = 1 )
 		stream = f'tone_stream://{tone};loops={loops}'
 		log.info( 'stream=%r', stream )
 		return await self._playback( stream, pagd )
 	
-	async def action_transfer( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_transfer( self, action: ACTION_TRANSFER, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_transfer' )
 		if self.state == HUNT: return CONTINUE
 		
-		leg = cast( Literal['','-bleg','-both'], str( params.get( 'leg' ) or '' ).strip() )
+		leg = cast( Literal['','-bleg','-both'], str( action.get( 'leg' ) or '' ).strip() )
 		assert leg in ( '', '-bleg', '-both' ), f'invalid leg={leg!r}'
-		dest = str( params.get( 'dest' ) or '' ).strip()
-		dialplan = cast( Literal['','xml','inline'], str( params.get( 'dialplan' ) or '' ).strip() )
+		dest = str( action.get( 'dest' ) or '' ).strip()
+		dialplan = cast( Literal['','xml','inline'], str( action.get( 'dialplan' ) or '' ).strip() )
 		assert dialplan in ( '', 'xml', 'inline' ), f'invalid dialplan={dialplan!r}'
-		context = str( params.get( 'context' ) or '' ).strip()
+		context = str( action.get( 'context' ) or '' ).strip()
 		log.info( 'leg=%r dest=%r dialplan=%r context=%r',
 			leg, dest, dialplan, context,
 		)
@@ -1411,45 +1573,137 @@ class CallState( State ):
 		self.hangup_on_exit = False
 		return STOP
 	
-	async def action_voicemail( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def _guest_greeting( self, action: ACTION_VOICEMAIL, box: int, settings: SETTINGS, vm: Voicemail ) -> Opt[str]:
+		log = logger.getChild( 'CallState._guest_greeting' )
+		
+		try:
+			active_greeting = int( settings.get( 'greeting' ) or '' )
+		except ValueError:
+			active_greeting = 1
+		
+		async def _make_greeting_branch( greeting: int ) -> BRANCH:
+			path = vm.box_greeting_path( box, greeting )
+			if path is None or not path.is_file():
+				playlist = await vm._the_person_at_extension_is_not_available_record_at_the_tone( box )
+				greeting_branch = BRANCH( name = '', nodes = cast( ACTIONS, list(
+					ACTION_PLAYBACK( type = 'playback', name = '', sound = sound ) for sound in playlist
+				)))
+			else:
+				greeting_branch = BRANCH( name = '', nodes = cast( ACTIONS, [
+					ACTION_PLAYBACK( type = 'playback', name = '', sound = str( path ))
+				]))
+			return greeting_branch
+		
+		which: str = ''
+		greeting_branch: BRANCH
+		greeting_override = str( action.get( 'greeting_override' ) or '' )
+		if greeting_override == 'A': # play active greeting
+			greeting_branch = await _make_greeting_branch( active_greeting )
+		elif greeting_override == 'X': # play no greeting at all
+			return ''
+		elif greeting_override.isnumeric():
+			greeting_branch = await _make_greeting_branch( int( greeting_override ))
+		else:
+			if greeting_override:
+				log.warning( 'invalid greeting_override=%r', greeting_override )
+			which = 'greetingBranch'
+			greeting_branch = cast( BRANCH, settings.get( which ) or {} )
+		
+		if not greeting_branch.get( 'nodes' ):
+			# this can happen if:
+			# 1) greeting_override == 'A'
+			# 2) default behavior was requested but no greeting behavior was defined in the voicemail box
+			which = ''
+			greeting_branch = { 'name': '', 'nodes': [
+				ACTION_GREETING( type = 'greeting', name = '', box = box, greeting = str( active_greeting ))
+			]}
+		
+		pagd = PAGD(
+			min_digits = 1,
+			max_digits = 1,
+			timeout = datetime.timedelta( seconds = 5 ), # TODO FIXME: customizable?
+			terminators = '#',
+			digit_regex = '',
+			variable_name = '',
+			digit_timeout = datetime.timedelta( seconds = 5 ), # TODO FIXME: customizable?
+		)
+		if STOP == await self._exec_branch( which, greeting_branch, pagd, log = log ):
+			return STOP
+		if greeting_override is None:
+			greeting_override = settings.get( 'greeting' ) or 1
+		greeting: Opt[Path] = vm.box_greeting_path( box, greeting_override )
+		if greeting is not None and greeting.is_file():
+			playlist: List[str] = [
+				str( greeting ),
+				SILENCE_1_SECOND,
+				await vm._record_your_message_at_the_tone_press_any_key_or_stop_talking_to_end_the_recording()
+			]
+			digit = await vm.play_menu( playlist )
+		elif greeting != 0:
+			playlist = await vm._the_person_at_extension_is_not_available_record_at_the_tone( box )
+			digit = await vm.play_menu( playlist )
+		return digit
+	
+	async def action_voicemail( self, action: ACTION_VOICEMAIL, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_voicemail' )
 		if self.state == HUNT: return CONTINUE
 		
-		box: Opt[int] = await self.toint( params, 'box', expand = True )
+		box: Opt[int] = await self.toint( action, 'box', expand = True )
 		if box is None:
-			log.warning( 'invalid box=%r', params.get( 'box' ))
+			log.warning( 'invalid box=%r', action.get( 'box' ))
 			return CONTINUE
 		
 		vm = Voicemail( self.esl, self.uuid )
 		
+		_ = await util.answer( self.esl, self.uuid, 'CallState.action_voicemail' )
+		
 		if box == 0:
 			if not await vm.checkin():
 				return STOP
-		else:
-			while True:
-				result, settings = await vm.guest( self.did, self.ani, box, self.notify )
-				if result == True or settings is None: return CONTINUE
-				if result == False: return STOP
-				
-				digit: Opt[int] = result
-				branches = cast( Dict[str,PARAMS], settings.get( 'branches' ) or {} )
-				while digit:
-					digit_ = str( digit )
-					branch = branches.get( digit_ )
-					if branch:
-						old_box = self.box
-						try:
-							self.box = box
-							r = await self._exec_branch( digit_, branch, None, log = log )
-						finally:
-							self.box = old_box
-						return r
-					
-					digit_ = await vm.play_menu([ 'ivr/ivr-that_was_an_invalid_entry.wav' ])
+			return CONTINUE
+		
+		settings_: Opt[SETTINGS] = await vm.load_box_settings( box )
+		if settings_ is None:
+			stream = await vm._the_person_you_are_trying_to_reach_is_not_available_and_does_not_have_voicemail()
+			await vm.play_menu([ stream ])
+			# TODO FIXME: do we want to forceably hangup the call here?
+			# TODO FIXME: or add a "no box" branch to the voicemail node in the editor?
+			await vm.goodbye()
+			return STOP
+		settings: SETTINGS = settings_
+		
+		branches: BRANCHES = settings.get( 'branches' ) or {}
+		digit: Opt[str] = None
+		while True: # this loop only exists to serve replay of greeting in the case of "invalid entry"
+			if not digit:
+				digit = await self._guest_greeting( action, box, settings, vm )
+			if digit is None:
+				return STOP
+			if digit == '*':
+				# user pressed * during the above recording, time to try to log them into their box
+				if await vm.login( box, settings ):
+					await vm.admin_main_menu( box, settings )
+				await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'CallState.action_voicemail' )
+				return STOP
+			if digit and digit in '1234567890':
+				branch = branches.get( digit )
+				if branch:
+					old_box: Opt[int] = self.box
 					try:
-						digit = int( digit_ )
-					except ValueError:
-						digit = None
+						self.box = box
+						r = await self._exec_branch( digit, branch, None, log = log )
+					finally:
+						self.box = old_box
+					return r
+				else:
+					digit = await vm.play_menu([ 'ivr/ivr-that_was_an_invalid_entry.wav' ])
+					continue
+			# no diversions selected, record message:
+			if digit and digit != '#':
+				log.warning( 'invalid digit=%r', digit )
+			if await vm.guest( self.did, self.ani, box, settings, self.notify ):
+				await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'CallState.action_voicemail' )
+			return STOP
 		
 		return CONTINUE
 	
@@ -1474,19 +1728,19 @@ class NotifyState( State ):
 	async def can_continue( self ) -> bool:
 		return self.msg.status == 'new' and self.msg.path.is_file()
 	
-	async def action_email( self, params: PARAMS ) -> RESULT:
+	async def action_email( self, action: ACTION_EMAIL ) -> RESULT:
 		# TODO FIXME: might we have a use for this in CallState too?
 		log = logger.getChild( 'NotifyState.action_email' )
 		if self.state == HUNT: return CONTINUE
 		
 		ec = Email_composer()
-		to: str = expect( str, params, 'mailto', default = '' )
+		to: str = expect( str, action.get( 'mailto' ), default = '' )
 		cc = ''
 		bcc = ''
 		ec.from_ = self.config.email_from
-		ec.subject = expect( str, params, 'subject', default = '' )
-		ec.text = expect( str, params, 'body', default = '' )
-		fmt: str = expect( str, params, 'format', default = '' )
+		ec.subject = expect( str, action.get( 'subject' ), default = '' )
+		ec.text = expect( str, action.get( 'body' ), default = '' )
+		fmt: str = expect( str, action.get( 'format' ), default = '' )
 		file: Opt[Path] = None
 		if self.msg is not None:
 			file = self.msg.path
@@ -1535,18 +1789,18 @@ class NotifyState( State ):
 		
 		return CONTINUE
 	
-	async def _voice_deliver( self, params: PARAMS, number: str ) -> Tuple[bool,Opt[str]]:
+	async def _voice_deliver( self, action: ACTION_VOICE_DELIVER, number: str ) -> Tuple[bool,Opt[str]]:
 		log = logger.getChild( 'NotifyState._voice_deliver' )
 		
-		timeout = datetime.timedelta( seconds = await self.toint( params, 'timeout', default = 0 ))
+		timeout = datetime.timedelta( seconds = await self.toint( action, 'timeout', default = 0 ))
 		if timeout.total_seconds() <= 0:
 			timeout = datetime.timedelta( seconds = 60 )
 		
 		dest = f'loopback/{number}/default'
-		cid_name = str( params.get( 'cid_name' ) or '' ).strip() or f'VMBox {self.box}'
-		cid_num = str( params.get( 'cid_num' ) or '' ).strip() or self.config.voice_deliver_ani
-		context = str( params.get( 'context' ) or '' ).strip() or 'default'
-		trusted = expect( bool, params, 'trusted' )
+		cid_name = str( action.get( 'cid_name' ) or '' ).strip() or f'VMBox {self.box}'
+		cid_num = str( action.get( 'cid_num' ) or '' ).strip() or self.config.voice_deliver_ani
+		context = str( action.get( 'context' ) or '' ).strip() or 'default'
+		trusted = expect( bool, action.get( 'trusted' ))
 		
 		origination_uuid = str( uuid.uuid4() )
 		
@@ -1602,11 +1856,11 @@ class NotifyState( State ):
 				return False, '-ERR timeout before answer'
 			await asyncio.sleep( 0.5 )
 	
-	async def action_voice_deliver( self, params: PARAMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_voice_deliver( self, action: ACTION_VOICE_DELIVER, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'NotifyState.action_voice_deliver' )
 		if self.state == HUNT: return CONTINUE
 		
-		number = str( params.get( 'number' ) or '' ).strip()
+		number = str( action.get( 'number' ) or '' ).strip()
 		path = self.msg.path
 		
 		if not number:
@@ -1617,7 +1871,7 @@ class NotifyState( State ):
 			log.warning( 'cannot voice deliver - wave file no longer exists' )
 			return CONTINUE
 		
-		ok, reason = await self._voice_deliver( params, number )
+		ok, reason = await self._voice_deliver( action, number )
 		log.info( 'ok=%r, reason=%r', ok, reason )
 		
 		return CONTINUE
@@ -1669,14 +1923,30 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 			await util.hangup( esl, uuid, 'UNALLOCATED_NUMBER', 'ace_engine._handler#1' )
 			return
 		
-		try:
-			routedata = state.config.repo_routes.get_by_id( route )
-		except repo.ResourceNotFound:
-			log.error( 'route does not exist: route=%r', route )
-			await util.hangup( esl, uuid, 'UNALLOCATED_NUMBER', 'ace_engine._handler#2' )
-			return
+		route_ = str( route or '' )
+		if route_.startswith( 'V' ):
+			try:
+				box = int( route_[1:] )
+			except ValueError:
+				log.error( 'Could not interpret %r as an integer voicemail box #', route_[1:] )
+				await util.hangup( esl, uuid, 'UNALLOCATED_NUMBER', 'ace_engine._handler#2' )
+				return
+			routedata = {
+				#'type': 'root_route',
+				'nodes': [{
+					'type': 'voicemail',
+					'box': box,
+				}]
+			}
+		else:
+			try:
+				routedata = state.config.repo_routes.get_by_id( route )
+			except repo.ResourceNotFound:
+				log.error( 'route does not exist: route=%r', route )
+				await util.hangup( esl, uuid, 'UNALLOCATED_NUMBER', 'ace_engine._handler#3' )
+				return
 		
-		nodes = cast( List[PARAMS], routedata.get( 'nodes' ) or [] )
+		nodes = cast( ACTIONS, routedata.get( 'nodes' ) or [] )
 		r = await state.exec_top_actions( nodes )
 		log.info( 'route %r exited with %r', route, r )
 		

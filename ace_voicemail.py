@@ -32,6 +32,7 @@ logger = logging.getLogger( __name__ )
 CONF_VOICEMAIL_NAME = False
 
 class SETTINGS( TypedDict ):
+	type: Literal['root_voicemail']
 	greeting: Opt[int]
 	max_greeting_seconds: Opt[int]
 	max_message_seconds: Opt[int]
@@ -41,6 +42,8 @@ class SETTINGS( TypedDict ):
 	format: Opt[str]
 	default_sms_message: Opt[str]
 	delivery: Dict[str,Any]
+	branches: Dict[str,Any]
+	greetingBranch: Dict[str,Any]
 
 g_base = Path( '/usr/share/itas/ace/voicemail' )
 g_meta_base: Path = g_base / 'meta' 
@@ -630,41 +633,8 @@ class Voicemail:
 		playlist.append( await self._record_your_message_at_the_tone_press_any_key_or_stop_talking_to_end_the_recording() )
 		return playlist
 	
-	async def guest( self, did: str, ani: str, box: int, notify: Callable[[int,SETTINGS,MSG],Coroutine[Any,Any,None]], greeting_override: Opt[int] = None ) -> Tuple[Opt[Union[bool,int]],Opt[SETTINGS]]:
+	async def guest( self, did: str, ani: str, box: int, settings: SETTINGS, notify: Callable[[int,SETTINGS,MSG],Coroutine[Any,Any,None]], greeting_override: Opt[int] = None ) -> bool:
 		log = logger.getChild( 'Voicemail.guest' )
-		_ = await util.answer( self.esl, self.uuid, 'ace_eso_vm.Voicemail.guest' )
-		settings_: Opt[SETTINGS] = await self.load_box_settings( box )
-		if settings_ is None:
-			stream = await self._the_person_you_are_trying_to_reach_is_not_available_and_does_not_have_voicemail()
-			await self.play_menu( [ stream ])
-			# TODO FIXME: do we want to forceably hangup the call here?
-			# TODO FIXME: or add a "no box" branch to the voicemail node in the editor?
-			await self.goodbye()
-			return False, None
-		settings: SETTINGS = settings_
-		digit: Opt[str] = None
-		if greeting_override is None:
-			greeting_override = settings.get( 'greeting' ) or 1
-		greeting: Opt[Path] = self.box_greeting_path( box, greeting_override )
-		if greeting is not None and greeting.is_file():
-			playlist: List[str] = [
-				str( greeting ),
-				SILENCE_1_SECOND,
-				await self._record_your_message_at_the_tone_press_any_key_or_stop_talking_to_end_the_recording()
-			]
-			digit = await self.play_menu( playlist )
-		elif greeting != 0:
-			playlist = await self._the_person_at_extension_is_not_available_record_at_the_tone( box )
-			digit = await self.play_menu( playlist )
-		
-		if digit == '*':
-			# user pressed * during the above recording, time to try to log them into their box
-			if await self.login( box, settings ):
-				await self.admin_main_menu( box, settings )
-				return True, None
-			return True, settings
-		elif digit and digit in '1234567890':
-			return int( digit ), settings
 		
 		now: str = datetime.datetime.now().strftime( '%Y-%m-%d-%H-%M-%S' )
 		uuid: str = str( uuid4() ).replace( '-', '' )
@@ -761,7 +731,7 @@ class Voicemail:
 					])
 					await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'ace_eso_vm.Voicemail.guest' )
 					asyncio.get_running_loop().call_soon( self.guest_delete, tmp_name )
-					return False, None
+					return False
 				elif digit == GUEST_SAVE or count >= 10:
 					log.debug( 'guest saved message' )
 					_guest_save()
@@ -770,7 +740,7 @@ class Voicemail:
 						SILENCE_1_SECOND,
 					])
 					await self.goodbye()
-					return False, None
+					return False
 				elif digit == GUEST_URGENT and settings.get( 'allow_guest_urgent' ):
 					log.debug( 'marked message urgent' )
 					priority = 'urgent'

@@ -6,14 +6,19 @@ table {
 	width: 100%;
 }
 
-table td.tree {
+div.tree-editor {
+	display: flex
+}
+
+div.tree-editor div.tree {
+	flex: 1;
 	text-align: left;
 	padding: 4px;
 	vertical-align: top
 }
 
-table td.help {
-	flex: 1;
+div.tree-editor div.details {
+	flex: 2;
 	vertical-align: top;
 	display: inline-block;
 }

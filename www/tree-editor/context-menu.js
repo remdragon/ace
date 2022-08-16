@@ -440,6 +440,12 @@ const context_menu = {
 	contextPAGD: {
 		elements: [ copyNode, deleteNode, nodeActions ]
 	},
+	context_VoicemailGreeting: {
+		elements: [ copyNode, pasteNode, newGreetingInvalidTimeoutLogicNode, createVoicemailPlayNode ]
+	},
+	context_VoicemailGreetingChildren: {
+		elements: [ copyNode, pasteNode, deleteNode, newGreetingInvalidTimeoutLogicNode, createVoicemailPlayNode ]
+	},
 	context_GreetingInvalidTimeout: {
 		elements: [ copyNode, pasteNode, newGreetingInvalidTimeoutLogicNode, createRoutePlayNode ]
 	},

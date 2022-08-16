@@ -22,7 +22,7 @@ export default class Greeting extends UINode {
 	
 	get label()
 	{
-		return 'Greeting ' + ( this.name ?? greeting_options[this.greeting] ?? '(Unset)' )
+		return 'Greeting ' + ( this.name ?? greeting_options[this.greeting]?.value ?? '(Unset)' )
 	}
 	
 	name//: string
