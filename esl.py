@@ -588,7 +588,7 @@ class ESL:
 					dtmf_digit = event.header( 'DTMF-Digit' )
 					log.debug( 'event %s: dtmf_digit=%r', event_name, dtmf_digit )
 					assert dtmf_digit
-					if digits is not None:
+					if digits is not None and dtmf_digit not in terminators:
 						digits.append( dtmf_digit )
 				else:
 					log.debug( 'ignoring event_name=%r', event_name )
