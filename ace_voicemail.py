@@ -17,7 +17,7 @@ from typing import (
 	Any, Callable, cast, Coroutine, Dict, List, Optional as Opt, Tuple, Union,
 )
 from typing_extensions import AsyncIterator, Literal
-import uuid
+from uuid import uuid4
 
 # 3rd-party imports:
 import aiofiles # pip install aiofiles
@@ -667,7 +667,7 @@ class Voicemail:
 			return int( digit ), settings
 		
 		now: str = datetime.datetime.now().strftime( '%Y-%m-%d-%H-%M-%S' )
-		uuid: str = str( uuid.uuid4() ).replace( '-', '' )
+		uuid: str = str( uuid4() ).replace( '-', '' )
 		folder: Path = self.box_msgs_path( box )
 		#log.debug( 'mkdirp( %s )', repr( folder ))
 		await util.mkdirp( folder )
@@ -1517,7 +1517,7 @@ class Voicemail:
 		except Exception as e:
 			log.error( 'Error creating %r: %r', str( meta_path ), e)
 		async def _record() -> Path:
-			tmp_uuid: str = str( uuid.uuid4() )
+			tmp_uuid: str = str( uuid4() )
 			tmp_path: Opt[Path] = self.box_greeting_path( box, f'-tmp-{tmp_uuid}' )
 			assert tmp_path is not None # this should only happen if greeting == 0
 			if self.use_tts:

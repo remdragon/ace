@@ -1737,7 +1737,8 @@ def _main(
 
 def start( config: Config ) -> None:
 	eso_process = Process(
-		target = lambda: _main( config ),
+		target = _main,
+		args = ( config, ),
 		daemon = True,
 	)
 	eso_process.start()

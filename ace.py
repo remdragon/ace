@@ -1557,7 +1557,7 @@ def http_flags() -> Response:
 		value = data['value']
 		
 		path = flag_file_path( name )
-		with path.open ( 'w' ) as f:
+		with path.open( 'w' ) as f:
 			new_audit().audit( f'Set flag {name}={value!r} at {str(path)!r}' )
 			print( value, file = f )
 		
@@ -1565,7 +1565,7 @@ def http_flags() -> Response:
 			return rest_success( [] )
 	
 	h: List[str] = []
-	def flag_form ( name: str, label: str ) -> None:
+	def flag_form( name: str, label: str ) -> None:
 		last_modified: str = '(never)'
 		value = ''
 		path = flag_file_path( name )
