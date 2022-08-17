@@ -864,6 +864,7 @@ class Voicemail:
 		return await self.play_menu([ stream ])
 	
 	async def login( self, box: int, settings: SETTINGS, playlist: Opt[List[str]] = None ) -> Opt[bool]:
+		log = logger.getChild( 'Voicemail.login' )
 		if playlist is None:
 			playlist = await self._please_enter_your_password_followed_by_pound()
 		incorrect: List[str] = []
@@ -873,13 +874,17 @@ class Voicemail:
 		for i in range( 3 ):
 			if digits == '':
 				digits = await self.play_pin( playlist )
-				if digits is None: return None
+				if digits is None:
+					log.debug( 'login failure due to call terminator detected' )
+					return None
 			if pin is not None and digits == str( pin ):
+				log.debug( 'correct pin received - login successful' )
 				return True
 			if not incorrect: incorrect = await self._login_incorrect()
 			digits = await self.play_menu( incorrect )
 		await self.too_many_failed_attempts()
 		await self.goodbye()
+		log.debug( 'login failure due to too many failed attempts' )
 		return False
 	
 	async def checkin( self ) -> bool:
@@ -982,10 +987,14 @@ class Voicemail:
 			]
 	
 	async def admin_main_menu( self, box: int, settings: SETTINGS ) -> bool:
+		log = logger.getChild( 'Voicemail.admin_main_menu' )
 		assert settings # this function should be called with settings already loaded...
+		log.debug( 'generating main menu' )
 		menu = await self._main_menu()
 		while True:
+			log.debug( 'calling play_menu' )
 			digit: Opt[str] = await self.play_menu( menu )
+			log.debug( 'digit=%r', digit )
 			if digit is None:
 				return False
 			elif digit == MAIN_NEW_MSGS:

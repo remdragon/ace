@@ -1669,7 +1669,10 @@ class CallState( State ):
 			if digit == '*':
 				# user pressed * during the above recording, time to try to log them into their box
 				if await vm.login( box, settings ):
+					log.debug( 'login success, calling admin_main_menu for box=%r', box )
 					await vm.admin_main_menu( box, settings )
+					log.debug( 'back from admin_main_menu from box=%r', box )
+				log.debug( 'hanging up and terminating script' )
 				await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'CallState.action_voicemail' )
 				return STOP
 			if digit and digit in '1234567890':
