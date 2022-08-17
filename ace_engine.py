@@ -368,22 +368,22 @@ class State( metaclass = ABCMeta ):
 		return s
 	
 	async def tonumber( self, data: Map[str,Any], name: str, *, expand: bool = False, default: Opt[Union[int,float]] = None ) -> Union[int,float]:
-		value1 = data.get( name )
-		if value1 is None:
+		value = data.get( name )
+		if value is None:
 			if default is not None:
 				return default
 		else:
 			if expand:
-				value2: str = await self.expand( str( value1 ))
+				value = await self.expand( str( value ))
 			try:
-				return int( value2 )
+				return int( value )
 			except ValueError:
 				pass
 			try:
-				return float( value2 )
+				return float( value )
 			except ValueError:
 				pass
-		raise ValueError( f'Expecting {name!r} of type convertable to int/float but got {value1!r}' )
+		raise ValueError( f'Expecting {name!r} of type convertable to int/float but got {value!r}' )
 	
 	async def toint( self, data: Map[str,Any], name: str, *, expand: bool = False, default: Opt[int] = None ) -> int:
 		value = data.get( name )
