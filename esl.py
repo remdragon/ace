@@ -406,6 +406,9 @@ class ESL:
 				if event_name == 'CHANNEL_EXECUTE_COMPLETE':
 					app2 = event.header( 'Application' )
 					appdata = event.header( 'Application-Data' )
+					log.debug( 'app=%r app2=%r args_=%r appdata=%r',
+						app, app2, args_, appdata,
+					)
 					if app == app2 and appdata == args_:
 						return
 	
