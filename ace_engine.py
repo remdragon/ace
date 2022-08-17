@@ -1709,7 +1709,7 @@ class CallState( State ):
 		state = NotifyState( self.esl, box, msg, settings )
 		delivery = settings.get( 'delivery' ) or {}
 		nodes = delivery.get( 'nodes' ) or []
-		await self.exec_top_actions( nodes )
+		await state.exec_top_actions( nodes )
 
 
 #endregion CallState
