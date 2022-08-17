@@ -668,7 +668,9 @@ class Voicemail:
 			if not tmp_name.is_file():
 				log.debug( 'not launching guest_save hook b/c file does not exist: %s', repr( tmp_name ))
 			else:
-				asyncio.get_running_loop().call_soon( lambda: self.guest_save( box, settings, stem, priority, notify ))
+				asyncio.ensure_future(
+					self.guest_save( box, settings, stem, priority, notify )
+				)
 		
 		if self.use_tts:
 			x = TTS()
@@ -743,7 +745,7 @@ class Voicemail:
 						SILENCE_2_SECONDS,
 					])
 					await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'ace_voicemail.Voicemail.guest' )
-					asyncio.get_running_loop().call_soon( self.guest_delete, tmp_name )
+					asyncio.ensure_future( self.guest_delete ( tmp_name ))
 					return False
 				elif digit == GUEST_SAVE or count >= 10:
 					log.debug( 'guest saved message' )
@@ -822,7 +824,7 @@ class Voicemail:
 				
 				msg = self.parse_recording_path( msgs_path, new_name.name )
 				
-				asyncio.get_running_loop().call_soon( notify, box, settings, msg )
+				asyncio.ensure_future( notify( box, settings, msg ))
 				return
 		log.warning( 'GIVING UP TRYING TO RENAME FILE' )
 	

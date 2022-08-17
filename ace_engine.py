@@ -302,9 +302,17 @@ def expect( type: Type[T], value: Opt[T], *, default: Opt[T] = None ) -> T:
 		return value
 	raise ValueError( f'expecting {type.__module__}.{type.__qualname__} but got {value!r}' )
 
+class ChannelHangup( Exception ):
+	pass
+
 def _on_event( event: ESL.Message ) -> None:
 	log = logger.getChild( '_on_event' )
-	log.debug( 'ignoring event %r', event.event_name )
+	evt_name = event.event_name
+	if evt_name == 'CHANNEL_HANGUP':
+		uuid = event.header( 'Unique-ID' )
+		raise ChannelHangup( uuid )
+	else:
+		log.debug( 'ignoring event %r', evt_name )
 
 def valid_route( x: Any ) -> bool:
 	return isinstance( x, int )
@@ -1950,6 +1958,8 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 			#log.debug( 'hanging up call with %r because route exited with %r and we have no way to signal inband lua yet', cause, r )
 			await esl.uuid_setvar( uuid, ACE_STATE, STATE_CONTINUE )
 	
+	except ChannelHangup as e:
+		log.warning( repr( e ))
 	except Exception:
 		log.exception( 'Unexpected error:' )
 	finally:
