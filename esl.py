@@ -579,7 +579,7 @@ class ESL:
 			str( max_digits ),
 			str( tries ),
 			str( timeout_milliseconds ),
-			terminators,
+			self.escape( terminators ),
 			file,
 			self.escape( invalid_file or '' ),
 			self.escape( var_name or '' ),

@@ -280,7 +280,7 @@ def number_audio( value: int ) -> List[str]:
 		value = newvalue
 		sounds.extend( number_audio( hundreds ))
 		sounds.append( HUNDRED )
-	decade: int
+	decade: Opt[int] = None
 	decade_sound: str
 	if value >= 90:
 		decade, decade_sound = 90, NINETY
@@ -500,7 +500,7 @@ class Voicemail:
 		if max_attempts < 1:
 			max_attempts = 1
 		timeout = datetime.timedelta( seconds = 0.01 ) # maybe this should be longer?
-		terminators: str = '#'
+		terminators: str = ''
 		error: str = ''
 		digit_regex: str = ''
 		variable_name: str = ''
