@@ -601,7 +601,7 @@ class ESL:
 	) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.playback' )
 		assert isinstance( stream, str ) and len( stream ), f'invalid stream={stream!r}'
-		async for event in self.execute( 'playback', stream ):
+		async for event in self.execute( 'playback', stream, escape = False ):
 			try:
 				yield event
 			except Exception:
