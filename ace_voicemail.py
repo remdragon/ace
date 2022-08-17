@@ -432,11 +432,24 @@ class Voicemail:
 		async def _play( path: str, local_timeout: datetime.timedelta ) -> str:
 			log = logger.getChild( 'Voicemail.play._play' )
 			log.debug( 'playing %r', path )
+			max_attempts = 1
+			log.info( 'executing playAndGetDigits mindig=%r maxdig=%r #atts=%r timeout=%r term=%r snd=%r err=%r re=%r var=%r dig_timeout=%r',
+				min_digits,
+				max_digits,
+				max_attempts,
+				local_timeout,
+				terminators,
+				path,
+				error,
+				digit_regex,
+				variable_name,
+				digit_timeout
+			)
 			digits_: List[str] = []
 			async for event in self.esl.play_and_get_digits( self.uuid,
 				min_digits,
 				max_digits,
-				1,
+				max_attempts,
 				local_timeout,
 				terminators,
 				path,
