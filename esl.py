@@ -355,9 +355,9 @@ class ESL:
 	
 	# BEGIN requests:
 	
-	async def answer( self ) -> AsyncIterator[ESL.Message]:
+	async def answer( self, uuid: str ) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.answer' )
-		async for event in self.execute( 'answer' ):
+		async for event in self.execute( uuid, 'answer' ):
 			try:
 				yield event
 			except Exception:
@@ -386,7 +386,7 @@ class ESL:
 	async def event_plain_all( self ) -> ESL.Request:
 		return await self._send( ESL.Request( self, 'event plain all' ))
 	
-	async def execute( self, app: str, *args: str, escape: bool = True ) -> AsyncIterator[ESL.Message]:
+	async def execute( self, uuid: str, app: str, *args: str, escape: bool = True ) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.execute' )
 		assert isinstance( app, str ) and len( app ), f'invalid app={app!r}'
 		args_ = ' '.join( map( self.escape, args ) if escape else args )
@@ -402,14 +402,15 @@ class ESL:
 					yield event
 				except Exception:
 					log.exception( 'Unexpected error processing event:' )
+				evt_uuid = event.header( 'Unique-ID' )
 				event_name = event.event_name
-				if event_name == 'CHANNEL_EXECUTE_COMPLETE':
+				if uuid == evt_uuid and event_name == 'CHANNEL_EXECUTE_COMPLETE':
 					app2 = event.header( 'Application' )
 					appdata = event.header( 'Application-Data' )
 					log.debug( 'app=%r app2=%r args_=%r appdata=%r',
 						app, app2, args_, appdata,
 					)
-					if app == app2 and appdata == args_:
+					if app == app2: # and appdata == args_:
 						return
 	
 	async def filter( self,
@@ -444,9 +445,9 @@ class ESL:
 			f'api global_setvar {key} {val}'
 		))
 	
-	async def hangup( self, cause: CAUSE = 'NORMAL_CLEARING' ) -> AsyncIterator[ESL.Message]:
+	async def hangup( self, uuid: str, cause: CAUSE = 'NORMAL_CLEARING' ) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.hangup' )
-		async for event in self.execute( 'hangup', cause ):
+		async for event in self.execute( uuid, 'hangup', cause ):
 			try:
 				yield event
 			except Exception:
@@ -456,6 +457,7 @@ class ESL:
 		return await self._send( ESL.ValueRequest( self, 'api hostname' ))
 	
 	async def limit( self,
+		uuid: str,
 		backend: str,
 		realm: str,
 		resource: str,
@@ -481,7 +483,7 @@ class ESL:
 			dialplan,
 			context,
 		]))
-		async for event in self.execute( 'limit', *args ):
+		async for event in self.execute( uuid, 'limit', *args ):
 			try:
 				yield event
 			except Exception:
@@ -543,6 +545,7 @@ class ESL:
 		return await self._send( ESL.Request( self, cmd ))
 	
 	async def play_and_get_digits( self,
+		uuid: str,
 		min_digits: int,
 		max_digits: int,
 		tries: int,
@@ -571,7 +574,7 @@ class ESL:
 			timeout_milliseconds
 		)
 		
-		async for event in self.execute( 'play_and_get_digits',
+		async for event in self.execute( uuid, 'play_and_get_digits',
 			str( min_digits ),
 			str( max_digits ),
 			str( tries ),
@@ -599,26 +602,27 @@ class ESL:
 			except Exception:
 				log.exception( 'Unexpected error processing event:' )
 	
-	async def playback( self, stream: str, *,
+	async def playback( self, uuid: str, stream: str, *,
 		event_lock: bool = False,
 	) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.playback' )
 		assert isinstance( stream, str ) and len( stream ), f'invalid stream={stream!r}'
-		async for event in self.execute( 'playback', stream, escape = False ):
+		async for event in self.execute( uuid, 'playback', stream, escape = False ):
 			try:
 				yield event
 			except Exception:
 				log.exception( 'Unexpected error processing event:' )
 	
-	async def pre_answer( self ) -> AsyncIterator[ESL.Message]:
+	async def pre_answer( self, uuid: str ) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.pre_answer' )
-		async for event in self.execute( 'pre_answer' ):
+		async for event in self.execute( uuid, 'pre_answer' ):
 			try:
 				yield event
 			except Exception:
 				log.exception( 'Unexpected error processing event:' )
 	
 	async def record( self,
+		uuid: str,
 		path: Path,
 		time_limit: Opt[datetime.timedelta] = None,
 		silence_threshold: int = 30,
@@ -631,7 +635,7 @@ class ESL:
 		assert isinstance( silence_threshold, int ) and silence_threshold > 0, f'invalid silence_threshold={silence_threshold!r}'
 		assert isinstance( silence_hits, int ) and silence_hits > 0, f'invalid silence_hits={silence_hits!r}'
 		path_ = str( path ).replace( '\\', '/' )
-		async for event in self.execute( 'record',
+		async for event in self.execute( uuid, 'record',
 			path_,
 			str( int( time_limit.total_seconds() )) if time_limit else '',
 			str( silence_threshold ),

@@ -1019,7 +1019,7 @@ class CallState( State ):
 				digit_timeout
 			)
 			digits_: List[str] = []
-			async for event in self.esl.play_and_get_digits(
+			async for event in self.esl.play_and_get_digits( self.uuid,
 				min_digits = min_digits,
 				max_digits = max_digits,
 				tries = max_attempts,
@@ -1048,7 +1048,7 @@ class CallState( State ):
 			await self.esl.uuid_break( self.uuid, 'all' )
 			
 			log.info( 'executing playback %r', sound )
-			async for event in self.esl.playback( sound ):
+			async for event in self.esl.playback( self.uuid, sound ):
 				_on_event( event )
 			
 			return CONTINUE
@@ -1517,7 +1517,7 @@ class CallState( State ):
 		realm = 'inbound'
 		
 		try:
-			async for event in self.esl.limit( backend, realm, throttle_id ):
+			async for event in self.esl.limit( self.uuid, backend, realm, throttle_id ):
 				_on_event( event )
 		except Exception as e:
 			log.error( 'Error trying to execute limit app: %r', e )

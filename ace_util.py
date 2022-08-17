@@ -30,7 +30,7 @@ async def answer( esl: ESL, uuid: str, source: str ) -> bool:
 		# TODO FIXME: check for -ERR condition? (ESL might throw an error so may not be necessary)
 		log.debug( 'result: %r', r )
 	else:
-		async for event in await esl.answer():
+		async for event in await esl.answer( uuid ):
 			if on_event:
 				on_event( event )
 	
@@ -65,7 +65,7 @@ async def hangup( esl: ESL, uuid: str, cause: CAUSE, source: str ) -> None:
 		r = await esl.uuid_kill( uuid, cause )
 		log.debug( 'result: %r', r )
 	else:
-		async for event in await esl.hangup( cause ):
+		async for event in await esl.hangup( uuid, cause ):
 			if on_event:
 				on_event( event )
 
@@ -92,7 +92,7 @@ async def pre_answer( esl: ESL, uuid: str, source: str ) -> bool:
 		# TODO FIXME: check for -ERR condition? (ESL might throw an error so may not be necessary)
 		log.debug( 'result: %r', r )
 	else:
-		async for event in await esl.pre_answer():
+		async for event in await esl.pre_answer( uuid ):
 			if on_event:
 				on_event( event )
 	
