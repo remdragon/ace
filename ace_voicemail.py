@@ -598,7 +598,7 @@ class Voicemail:
 		else:
 			stream = GOODBYE
 		await self.play_menu( [ stream, SILENCE_2_SECONDS ])
-		await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'ace_eso_vm.Voicemail.goodbye' )
+		await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'ace_voicemail.Voicemail.goodbye' )
 	
 	async def _the_person_you_are_trying_to_reach_is_not_available_and_does_not_have_voicemail( self ) -> str:
 		if self.use_tts:
@@ -729,7 +729,7 @@ class Voicemail:
 						GOODBYE,
 						SILENCE_2_SECONDS,
 					])
-					await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'ace_eso_vm.Voicemail.guest' )
+					await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'ace_voicemail.Voicemail.guest' )
 					asyncio.get_running_loop().call_soon( self.guest_delete, tmp_name )
 					return False
 				elif digit == GUEST_SAVE or count >= 10:
@@ -867,7 +867,7 @@ class Voicemail:
 		if playlist is None:
 			playlist = await self._please_enter_your_password_followed_by_pound()
 		incorrect: List[str] = []
-		await util.answer( self.esl, self.uuid, 'ace_eso_vm.Voicemail.login' )
+		await util.answer( self.esl, self.uuid, 'ace_voicemail.Voicemail.login' )
 		pin: str = settings['pin']
 		digits: Opt[str] = ''
 		for i in range( 3 ):
@@ -884,7 +884,7 @@ class Voicemail:
 	
 	async def checkin( self ) -> bool:
 		log = logger.getChild( 'Voicemail.checkin' )
-		await util.answer( self.esl, self.uuid, 'ace_eso_vm.Voicemail.checkin' )
+		await util.answer( self.esl, self.uuid, 'ace_voicemail.Voicemail.checkin' )
 		mailbox_prompt: List[str] = await self._please_enter_your_mailbox_followed_by_pound()
 		password_prompt: List[str] = await self._please_enter_your_password_followed_by_pound()
 		incorrect: List[str] = []
@@ -1003,7 +1003,7 @@ class Voicemail:
 				digit = ''
 	
 	async def voice_deliver( self, box: int, msg: MSG, trusted: bool, settings: SETTINGS ) -> None:
-		log = logger.getChild( 'ace_eso_vm.Voicemail.voice_deliver' )
+		log = logger.getChild( 'ace_voicemail.Voicemail.voice_deliver' )
 		
 		x = TTS()
 		x.say( 'You have a new message in your voicemail box number ' )

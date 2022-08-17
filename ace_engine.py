@@ -822,7 +822,7 @@ class CallState( State ):
 			log.debug( 'no config found for did %r', self.did )
 			return None, None
 		
-		route = await self.toint( data, 'route' )
+		route: Opt[Union[int,str]] = data.get( 'route' ) or None
 		log.debug( 'route=%r', route )
 		if route is not None:
 			await self.esl.uuid_setvar( self.uuid, 'route', str( route ))
