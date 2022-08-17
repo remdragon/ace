@@ -1629,20 +1629,7 @@ class CallState( State ):
 		)
 		if STOP == await self._exec_branch( which, greeting_branch, pagd, log = log ):
 			return STOP
-		if greeting_override is None:
-			greeting_override = settings.get( 'greeting' ) or 1
-		greeting: Opt[Path] = vm.box_greeting_path( box, greeting_override )
-		if greeting is not None and greeting.is_file():
-			playlist: List[str] = [
-				str( greeting ),
-				SILENCE_1_SECOND,
-				await vm._record_your_message_at_the_tone_press_any_key_or_stop_talking_to_end_the_recording()
-			]
-			digit = await vm.play_menu( playlist )
-		elif greeting != 0:
-			playlist = await vm._the_person_at_extension_is_not_available_record_at_the_tone( box )
-			digit = await vm.play_menu( playlist )
-		return digit
+		return pagd.digits
 	
 	async def action_voicemail( self, action: ACTION_VOICEMAIL, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_voicemail' )
