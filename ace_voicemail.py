@@ -500,7 +500,7 @@ class Voicemail:
 		if max_attempts < 1:
 			max_attempts = 1
 		timeout = datetime.timedelta( seconds = 0.01 ) # maybe this should be longer?
-		terminators: str = ''
+		terminators: str = '#'
 		error: str = ''
 		digit_regex: str = ''
 		variable_name: str = ''
