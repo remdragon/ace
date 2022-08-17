@@ -1165,7 +1165,7 @@ class Voicemail:
 		msg_num: int = 1
 		loop: bool = True
 		while loop:
-			msg = msgs[msg_num]
+			msg = msgs[msg_num - 1]
 			
 			prevnext: bool = True
 			digit2: Opt[str] = await self.admin_listen_msg( msg, msg_num, prevnext )
