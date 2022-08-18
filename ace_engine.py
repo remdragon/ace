@@ -23,6 +23,7 @@ from multiprocessing import Process
 from mypy_extensions import TypedDict
 from pathlib import Path
 import re
+import sys
 import time
 from typing import (
 	Any, Awaitable, Callable, cast, Coroutine, Dict, List, Mapping as Map,
@@ -41,12 +42,15 @@ from ace_fields import Field
 from ace_tod import match_tod
 import ace_util as util
 from ace_voicemail import Voicemail, MSG, SETTINGS, SILENCE_1_SECOND
+import aiohttp_logging
 from email_composer import Email_composer
 from esl import ESL
 import repo
 import smtplib2
 from tts import TTS, TTS_VOICES, tts_voices
 
+if __name__ == '__main__':
+	aiohttp_logging.monkey_patch()
 
 #endregion imports
 #region globals
@@ -1629,14 +1633,22 @@ class CallState( State ):
 		pagd = PAGD(
 			min_digits = 1,
 			max_digits = 1,
-			timeout = datetime.timedelta( seconds = 5 ), # TODO FIXME: customizable?
-			terminators = '#',
+			timeout = datetime.timedelta( seconds = 0.1 ), # TODO FIXME: customizable?
+			terminators = '',
 			digit_regex = '',
 			variable_name = '',
-			digit_timeout = datetime.timedelta( seconds = 5 ), # TODO FIXME: customizable?
+			digit_timeout = datetime.timedelta( seconds = 0.1 ), # TODO FIXME: customizable?
 		)
 		if STOP == await self._exec_branch( which, greeting_branch, pagd, log = log ):
 			return STOP
+		if not pagd.digits:
+			if STOP == await self.action_silence( ACTION_SILENCE(
+				type = 'silence',
+				name = '',
+				seconds = 5, # TODO FIXME: customizable
+				divisor = 0,
+			), pagd ):
+				return STOP
 		return pagd.digits
 	
 	async def action_voicemail( self, action: ACTION_VOICEMAIL, pagd: Opt[PAGD] ) -> RESULT:
@@ -1997,6 +2009,12 @@ async def _server(
 def _main(
 	config: Config
 ) -> None:
+	if sys.platform != 'win32':
+		journald_handler = JournaldLogHandler()
+		journald_handler.setFormatter(
+			logging.Formatter( '[%(levelname)s] %(message)s' )
+		)
+		logger.addHandler( journald_handler )
 	logging.basicConfig(
 		level = logging.DEBUG,
 		#level = DEBUG9,

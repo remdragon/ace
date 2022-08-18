@@ -856,12 +856,16 @@ class ESL:
 					#		return
 					#	raise
 					if not data:
-						log.debug( 'got EOF' )
+						log.debug( 'got EOF (0 bytes)' )
 						await self._event_queue.put( ESL.ErrorEvent( ESL.HardError( 'EOF' )))
 						return
 					else:
 						log.log( DEBUG9, 'data=%r', data )
 						buf = await self._reader_parse_bytes( buf + data )
+				except ConnectionAbortedError:
+					log.debug( 'got EOF (ConnectionAbortedError)' )
+					await self._event_queue.put( ESL.ErrorEvent( ESL.HardError( 'EOF' )))
+					return
 				except Exception as e:
 					log.exception( 'Unexpected error:' )
 					await self._event_queue.put( ESL.ErrorEvent( ESL.HardError( repr( e )).with_traceback( e.__traceback__ )))
