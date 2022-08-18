@@ -193,7 +193,7 @@ class ACTION_SET( ACTION ):
 	value: str
 
 class ACTION_SILENCE( ACTION ):
-	seconds: int
+	seconds: Union[int,float]
 	divisor: int # 0 == complete silence, >0 == comfort noise
 
 class ACTION_SMS( ACTION ):
@@ -1740,7 +1740,7 @@ class NotifyState( State ):
 	async def can_continue( self ) -> bool:
 		return self.msg.status == 'new' and self.msg.path.is_file()
 	
-	async def action_email( self, action: ACTION_EMAIL ) -> RESULT:
+	async def action_email( self, action: ACTION_EMAIL, pagd: Opt[PAGD] ) -> RESULT:
 		# TODO FIXME: might we have a use for this in CallState too?
 		log = logger.getChild( 'NotifyState.action_email' )
 		if self.state == HUNT: return CONTINUE
