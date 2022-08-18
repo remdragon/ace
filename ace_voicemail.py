@@ -770,7 +770,7 @@ class Voicemail:
 						digit = ''
 					count = count + 1
 		finally:
-			if not deleted:
+			if deleted:
 				log.debug( 'not launching guest_save hook b/c deleted=%r', deleted )
 			elif not tmp_name.is_file():
 				log.debug( 'not launching guest_save hook b/c file does not exist: %s', repr( tmp_name ))
