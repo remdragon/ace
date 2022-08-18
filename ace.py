@@ -922,7 +922,7 @@ def http_dids() -> Response:
 					log.error( f'error parsing json of {str(file)!r}: {e!r}' )
 					continue
 		data['did'] = did2
-		dids.append( { **datadefs, **data } )
+		dids.append({ **datadefs, **data })
 		if len( dids ) >= q_limit:
 			break
 	if return_type == 'application/json':
@@ -1632,7 +1632,7 @@ def http_flags() -> Response:
 #endregion http - flags
 #region http - routes
 
-@app.route( '/routes', methods = [ 'GET', 'POST', 'DELETE' ] )
+@app.route( '/routes', methods = [ 'GET', 'POST' ] )
 @login_required # type: ignore
 def http_routes() -> Response:
 	log = logger.getChild( 'http_routes' )
@@ -1824,26 +1824,31 @@ def http_route( route: int ) -> Response:
 		)
 
 def route_delete( route: int ) -> Response:
+	assert isinstance( route, int ) and route > 0, f'invalid route={route!r}'
 	# check if route even exists:
 	if not REPO_ROUTES.exists( route ):
 		raise HttpFailure( f'Route {route!r} does not exist', 404 )
 	
 	# check if route is referenced by any DID
-	for file in dids_path.glob( '*.did' ):
-		with file.open( 'r' ) as f:
-			raw = f.read()
-		did = json.loads( raw ) if raw else {}
-		if route == did.get( 'route' ):
-			raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by DID {file.stem}' )
+	for did, did_data in REPO_DIDS.list():
+		try:
+			did_route = int( did_data.get( 'route' ))
+		except ValueError:
+			pass
+		else:
+			if route == did_route:
+				raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by DID {did}' )
 	
-	# check if route is referenced by ani ANI
-	for file in anis_path.glob( '*.ani' ):
-		with file.open( 'r' ) as f:
-			raw = f.read()
-		ani = json.loads( raw ) if raw else {}
-		if route == ani.get( 'route' ):
-			raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by ANI {file.stem}' )
-		overrides = ani.get( 'overrides' ) or ''
+	# check if route is referenced by an ANI
+	for ani, ani_data in REPO_ANIS.list():
+		try:
+			ani_route = int( ani_data.get( 'route' ))
+		except ValueError:
+			pass
+		else:
+			if route == ani_route:
+				raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by ANI {ani}' )
+		overrides = ani_data.get( 'overrides' ) or ''
 		for line in overrides.split( '\n' ):
 			parts = re.split( r'\s+', line )
 			if len( parts ) >= 2:
@@ -1853,7 +1858,7 @@ def route_delete( route: int ) -> Response:
 					pass
 				else:
 					if route == override_route:
-						raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by ANI {file.stem}' )
+						raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by ANI {ani}' )
 	
 	# check if route is referenced by another route:
 	def json_dict_route_check( jdata: Any ) -> Opt[Any]:
