@@ -253,7 +253,6 @@ class Config:
 	sms_thinq_username: str
 	sms_thinq_api_token: str
 	sms_thinq_from: str
-	sms_twilio_account: str
 	sms_twilio_sid: str
 	sms_twilio_token: str
 	sms_twilio_from: str
@@ -636,7 +635,7 @@ class State( metaclass = ABCMeta ):
 		).decode( 'us-ascii' )
 		
 		headers = {
-			'Authorization': 'Basic {auth}',
+			'Authorization': f'Basic {auth}',
 		}
 		formdata = {
 			'from_did': self.config.sms_thinq_from,
@@ -663,7 +662,7 @@ class State( metaclass = ABCMeta ):
 	async def _sms_twilio( self, smsto: str, message: str ) -> RESULT:
 		log = logger.getChild( 'State._sms_twilio' )
 		
-		url = f'https://api.twilio.com/2010-04-01/Accounts/{self.config.sms_twilio_account}/Messages.json'
+		url = f'https://api.twilio.com/2010-04-01/Accounts/{self.config.sms_twilio_sid}/Messages.json'
 		if self.config.sms_emulator: # enable this for testing with sms_emulators.py
 			url = 'http://127.0.0.1:8080/twilio/send'
 		auth = base64.b64encode(
@@ -671,7 +670,7 @@ class State( metaclass = ABCMeta ):
 		).decode( 'us-ascii' )
 		
 		headers = {
-			'Authorization': 'Basic {auth}',
+			'Authorization': f'Basic {auth}',
 		}
 		formdata = {
 			'From': self.config.sms_thinq_from,

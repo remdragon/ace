@@ -406,7 +406,6 @@ if not cfg_path.is_file():
 		f'ITAS_SMS_THINQ_USERNAME = {""!r}',
 		f'ITAS_SMS_THINQ_API_TOKEN = {""!r}',
 		f'ITAS_SMS_THINQ_FROM = {""!r}',
-		f'ITAS_SMS_TWILIO_ACCOUNT = {""!r}',
 		f'ITAS_SMS_TWILIO_SID = {""!r}',
 		f'ITAS_SMS_TWILIO_TOKEN = {""!r}',
 		f'ITAS_SMS_TWILIO_FROM = {""!r}',
@@ -472,7 +471,6 @@ ITAS_SMS_THINQ_ACCOUNT: str = ''
 ITAS_SMS_THINQ_USERNAME: str = ''
 ITAS_SMS_THINQ_API_TOKEN: str = ''
 ITAS_SMS_THINQ_FROM: str = ''
-ITAS_SMS_TWILIO_ACCOUNT: str = ''
 ITAS_SMS_TWILIO_SID: str = ''
 ITAS_SMS_TWILIO_TOKEN: str = ''
 ITAS_SMS_TWILIO_FROM: str = ''
@@ -487,6 +485,15 @@ exec( cfg_raw + '\n' ) # this exec overrides the variables from flask.cfg
 assert ITAS_SMTP_EMAIL_FROM, f'flask.cfg missing ITAS_SMTP_EMAIL_FROM'
 assert ITAS_SMTP_SECURE in ( 'yes', 'no', 'starttls' ), f'flask.cfg has invalid ITAS_SMTP_SECURE={ITAS_SMTP_SECURE!r}'
 assert ITAS_SMS_CARRIER in ( '', 'thinq', 'twilio' ), f'flask.cfg has invalid ITAS_SMS_CARRIER={ITAS_SMS_CARRIER!r}'
+if ITAS_SMS_CARRIER == 'thinq':
+	assert ITAS_SMS_THINQ_ACCOUNT, f'invalid ITAS_SMS_THINQ_ACCOUNT={ITAS_SMS_THINQ_ACCOUNT!r}'
+	assert ITAS_SMS_THINQ_USERNAME, f'invalid ITAS_SMS_THINQ_USERNAME={ITAS_SMS_THINQ_USERNAME!r}'
+	assert ITAS_SMS_THINQ_API_TOKEN, f'invalid ITAS_SMS_THINQ_API_TOKEN={ITAS_SMS_THINQ_API_TOKEN!r}'
+	assert ITAS_SMS_THINQ_FROM, f'invalid ITAS_SMS_THINQ_FROM={ITAS_SMS_THINQ_FROM!r}'
+elif ITAS_SMS_CARRIER == 'twilio':
+	assert ITAS_SMS_TWILIO_SID, f'invalid ITAS_SMS_TWILIO_SID={ITAS_SMS_TWILIO_SID!r}'
+	assert ITAS_SMS_TWILIO_TOKEN, f'invalid ITAS_SMS_TWILIO_TOKEN={ITAS_SMS_TWILIO_TOKEN!r}'
+	assert ITAS_SMS_TWILIO_FROM, f'invalid ITAS_SMS_TWILIO_FROM={ITAS_SMS_TWILIO_FROM!r}'
 # end of flask.cfg variables
 
 app.config.from_object( __name__ )
@@ -2463,7 +2470,6 @@ if __name__ == '__main__':
 		sms_thinq_username = ITAS_SMS_THINQ_USERNAME,
 		sms_thinq_api_token = ITAS_SMS_THINQ_API_TOKEN,
 		sms_thinq_from = ITAS_SMS_THINQ_FROM,
-		sms_twilio_account = ITAS_SMS_TWILIO_ACCOUNT,
 		sms_twilio_sid = ITAS_SMS_TWILIO_SID,
 		sms_twilio_token = ITAS_SMS_TWILIO_TOKEN,
 		sms_twilio_from = ITAS_SMS_TWILIO_FROM,
