@@ -36,11 +36,10 @@ import uuid
 import aiofiles # pip install aiofiles
 import aiohttp # pip install aiohttp
 import pydub # pip install pydub
-if sys.platform != 'win32':
-	from systemd.journal import JournaldLogHandler # pip install systemd
 
 # local imports:
 from ace_fields import Field
+import ace_logging
 from ace_tod import match_tod
 import ace_util as util
 from ace_voicemail import Voicemail, MSG, SETTINGS, SILENCE_1_SECOND
@@ -268,6 +267,8 @@ class Config:
 	aws_region_name: str
 	tts_location: Path
 	tts_default_voice: TTS_VOICES
+	
+	loglevels: Dict[str,str]
 
 
 @dataclass
@@ -2022,17 +2023,7 @@ async def _server(
 def _main(
 	config: Config
 ) -> None:
-	if sys.platform != 'win32':
-		journald_handler = JournaldLogHandler()
-		journald_handler.setFormatter(
-			logging.Formatter( '[%(levelname)s] %(message)s' )
-		)
-		logger.addHandler( journald_handler )
-	logging.basicConfig(
-		level = logging.DEBUG,
-		#level = DEBUG9,
-		format = '%(asctime)s:%(levelname)s:%(name)s:%(message)s',
-	)
+	ace_logging.init( config.loglevels )
 	#print( 'repo_routes=}' )
 	asyncio.run( _server( config ) )
 

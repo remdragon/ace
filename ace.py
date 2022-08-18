@@ -70,7 +70,6 @@ if sys.platform != 'win32':
 	import grp
 	import pam # pip install python-pam
 	import pwd
-	from systemd.journal import JournaldLogHandler # pip install systemd
 
 if __name__ == '__main__':
 	sys.path.append( 'incpy' )
@@ -78,6 +77,7 @@ if __name__ == '__main__':
 # local imports:
 import ace_engine
 from ace_fields import Field, ValidationError
+import ace_logging
 import auditing
 import repo
 from tts import TTS_VOICES, tts_voices
@@ -416,6 +416,7 @@ if not cfg_path.is_file():
 		f'ITAS_TTS_LOCATION = {"/var/lib/freeswitch/tts/"!r}',
 		f'ITAS_TTS_DEFAULT_VOICE = {"Joanna"!r}',
 		'ITAS_MOTD = {!r}'.format( "Don't Panic!" ),
+		'ITAS_LOGLEVELS = {!r}'.format( {} ),
 	] )
 	with cfg_path.open( 'w' ) as f:
 		print( cfg_raw, file = f )
@@ -481,6 +482,7 @@ ITAS_TTS_REGION_NAME: str = ''
 ITAS_TTS_LOCATION: str = ''
 ITAS_TTS_DEFAULT_VOICE: TTS_VOICES = 'Joanna'
 ITAS_MOTD: str = ''
+ITAS_LOGLEVELS: Dict[str,str] = {}
 exec( cfg_raw + '\n' ) # this exec overrides the variables from flask.cfg
 assert ITAS_SMTP_EMAIL_FROM, f'flask.cfg missing ITAS_SMTP_EMAIL_FROM'
 assert ITAS_SMTP_SECURE in ( 'yes', 'no', 'starttls' ), f'flask.cfg has invalid ITAS_SMTP_SECURE={ITAS_SMTP_SECURE!r}'
@@ -2426,18 +2428,7 @@ def spawn ( target: Callable[...,Any], *args: Any, **kwargs: Any ) -> Thread:
 
 
 if __name__ == '__main__':
-	if sys.platform != 'win32':
-		journald_handler = JournaldLogHandler()
-		journald_handler.setFormatter(
-			logging.Formatter( '[%(levelname)s] %(message)s' )
-		)
-		logger.addHandler( journald_handler )
-	
-	logging.basicConfig(
-		level = logging.DEBUG,
-		#level = DEBUG9,
-		format = '%(asctime)s:%(levelname)s:%(name)s:%(message)s',
-	)
+	ace_logging.init( ITAS_LOGLEVELS )
 	cmd = sys.argv[1] if len( sys.argv ) > 1 else ''
 	if cmd:
 		sys.exit( service_command( cmd ))
@@ -2483,6 +2474,8 @@ if __name__ == '__main__':
 		aws_region_name = ITAS_TTS_REGION_NAME,
 		tts_location = Path( ITAS_TTS_LOCATION ),
 		tts_default_voice = ITAS_TTS_DEFAULT_VOICE,
+		
+		loglevels = ITAS_LOGLEVELS,
 	))
 	
 	cert_path = Path( ITAS_CERTIFICATE_PEM )
