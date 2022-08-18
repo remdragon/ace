@@ -1759,6 +1759,7 @@ class NotifyState( State ):
 		ec.text = expect( str, action.get( 'body' ), default = '' )
 		fmt: str = expect( str, action.get( 'format' ), default = '' )
 		file: Opt[Path] = None
+		content_type = 'audio/wav'
 		if self.msg is not None:
 			file = self.msg.path
 		
@@ -1784,6 +1785,11 @@ class NotifyState( State ):
 			mp3_file = file.with_suffix( '.mp3' )
 			pydub.AudioSegment.from_wav( str( file )).export( str( mp3_file ), format = 'mp3' )
 			file = mp3_file
+			content_type = 'audio/mpeg'
+		
+		if file:
+			with file.open( 'rb' ) as f:
+				ec.attach( f, file.name, content_type )
 		
 		if self.config.smtp_secure == 'yes':
 			smtp: Union[smtplib2.SMTP,smtplib2.SMTP_SSL] = smtplib2.SMTP_SSL(
