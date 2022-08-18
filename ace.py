@@ -1832,9 +1832,10 @@ def route_delete( route: int ) -> Response:
 	# check if route is referenced by any DID
 	for did, did_data in REPO_DIDS.list():
 		try:
-			did_route = int( did_data.get( 'route' ))
+			did_route_ = cast( Opt[Union[int,str]], did_data.get( 'route' ))
+			did_route: Opt[int] = int( did_route_ ) if did_route_ is not None else None
 		except ValueError:
-			pass
+			pass # could also be a 'V...' but we don't care here
 		else:
 			if route == did_route:
 				raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by DID {did}' )
@@ -1842,7 +1843,8 @@ def route_delete( route: int ) -> Response:
 	# check if route is referenced by an ANI
 	for ani, ani_data in REPO_ANIS.list():
 		try:
-			ani_route = int( ani_data.get( 'route' ))
+			route_ = cast( Opt[Union[int,str]], ani_data.get( 'route' ))
+			ani_route = int( route_ ) if route_ is not None else None
 		except ValueError:
 			pass
 		else:

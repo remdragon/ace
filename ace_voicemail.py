@@ -713,62 +713,63 @@ class Voicemail:
 				])
 		menu.append( SILENCE_3_SECONDS )
 		
-		while True:
-			async for event in self.esl.playback( self.uuid, TONE ):
-				self._on_event( event )
-			
-			log.debug( 'box %r RECORDING', box )
-			async for event in self.esl.record( self.uuid, tmp_name,
-				max_message_time,
-				silence_threshold,
-				silence_seconds,
-			):
-				self._on_event( event )
-			
-			digit = ''
-			count: int = 1
-			
-			while digit != GUEST_RERECORD:
-				digit = await self.play_menu( menu )
-				if digit == GUEST_LISTEN:
-					log.debug( 'listening to own message' )
-					await self.play_menu([ str( tmp_name )]) # TODO FIXME: collect digit?
-				elif digit == GUEST_RERECORD:
-					log.debug( 'rerecording' )
-					# do nothing, let it fall through
-				elif digit == GUEST_DELETE:
-					log.debug( 'deleted message' )
-					await self.play_menu([
-						DELETED, #THIS_MSG_WILL_SELF_DESTRUCT_IN_54321, # DELETED
-						SILENCE_1_SECOND,
-						GOODBYE,
-						SILENCE_2_SECONDS,
-					])
-					await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'ace_voicemail.Voicemail.guest' )
-					asyncio.ensure_future( self.guest_delete ( tmp_name ))
-					return False
-				elif digit == GUEST_SAVE or count >= 10:
-					log.debug( 'guest saved message' )
-					_guest_save()
-					await self.play_menu([
-						SAVED,
-						SILENCE_1_SECOND,
-					])
-					await self.goodbye()
-					return False
-				elif digit == GUEST_URGENT and settings.get( 'allow_guest_urgent' ):
-					log.debug( 'marked message urgent' )
-					priority = 'urgent'
-					await self.play_menu([
-						MARKED_URGENT,
-						SILENCE_1_SECOND,
-					])
-				elif digit is not None and digit != '':
-					await self.play_invalid_value( digit )
-					digit = ''
-				count = count + 1
-		_guest_save()
-		return True, None
+		try:
+			while True:
+				async for event in self.esl.playback( self.uuid, TONE ):
+					self._on_event( event )
+				
+				log.debug( 'box %r RECORDING', box )
+				async for event in self.esl.record( self.uuid, tmp_name,
+					max_message_time,
+					silence_threshold,
+					silence_seconds,
+				):
+					self._on_event( event )
+				
+				digit = ''
+				count: int = 1
+				
+				while digit != GUEST_RERECORD:
+					digit = await self.play_menu( menu )
+					if digit == GUEST_LISTEN:
+						log.debug( 'listening to own message' )
+						await self.play_menu([ str( tmp_name )]) # TODO FIXME: collect digit?
+					elif digit == GUEST_RERECORD:
+						log.debug( 'rerecording' )
+						# do nothing, let it fall through
+					elif digit == GUEST_DELETE:
+						log.debug( 'deleted message' )
+						await self.play_menu([
+							DELETED, #THIS_MSG_WILL_SELF_DESTRUCT_IN_54321, # DELETED
+							SILENCE_1_SECOND,
+							GOODBYE,
+							SILENCE_2_SECONDS,
+						])
+						asyncio.ensure_future( self.guest_delete ( tmp_name ))
+						await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'ace_voicemail.Voicemail.guest' )
+						return False
+					elif digit == GUEST_SAVE or count >= 10:
+						log.debug( 'guest saved message' )
+						await self.play_menu([
+							SAVED,
+							SILENCE_1_SECOND,
+						])
+						await self.goodbye()
+						return False
+					elif digit == GUEST_URGENT and settings.get( 'allow_guest_urgent' ):
+						log.debug( 'marked message urgent' )
+						priority = 'urgent'
+						await self.play_menu([
+							MARKED_URGENT,
+							SILENCE_1_SECOND,
+						])
+					elif digit is not None and digit != '':
+						await self.play_invalid_value( digit )
+						digit = ''
+					count = count + 1
+		finally:
+			_guest_save()
+		return True
 
 	async def play_invalid_value( self, digit: Opt[str] ) -> None:
 		if self.use_tts:
@@ -1029,32 +1030,33 @@ class Voicemail:
 	async def voice_deliver( self, box: int, msg: MSG, trusted: bool, settings: SETTINGS ) -> None:
 		log = logger.getChild( 'ace_voicemail.Voicemail.voice_deliver' )
 		
-		x = TTS()
-		x.say( 'You have a new message in your voicemail box number ' )
-		x.digits( box )
-		if trusted:
-			x.say( '. To listen now, press any digit.' )
-		else:
-			x.say( '. To listen now, enter your pin number followed by pound.' )
-		intro: str = str( await x.generate() )
+		try:
+			x = TTS()
+			x.say( 'You have a new message in your voicemail box number ' )
+			x.digits( box )
+			if trusted:
+				x.say( '. To listen now, press any digit.' )
+			else:
+				x.say( '. To listen now, enter your pin number followed by pound.' )
+			intro: str = str( await x.generate() )
+			
+			if trusted:
+				max_attempts: int = 3
+				digits: str = await self.play_menu([ intro ], max_attempts )
+				if not digits:
+					return
+			else:
+				if not await self.login( box, settings, [ intro ] ): # TODO FIXME: make this optional...
+					return
+			
+			prevnext: bool = False
+			digit: Opt[str] = await self.admin_listen_msg( msg, None, prevnext )
 		
-		if trusted:
-			max_attempts: int = 3
-			digits: str = await self.play_menu([ intro ], max_attempts )
-			if not digits:
-				return
-		else:
-			if not await self.login( box, settings, [ intro ] ): # TODO FIXME: make this optional...
-				return
-		
-		prevnext: bool = False
-		digit: Opt[str] = await self.admin_listen_msg( msg, None, prevnext )
-		
-		msgs: List[MSG] = [ msg ]
-		await self.admin_listen_finalize( msgs )
-		
-		if digit == LISTEN_MAIN_MENU:
-			await self.admin_main_menu( box, settings )
+			if digit == LISTEN_MAIN_MENU:
+				await self.admin_main_menu( box, settings )
+		finally:
+			msgs: List[MSG] = [ msg ]
+			await self.admin_listen_finalize( msgs )
 	
 	async def admin_listen_new( self, box: int, settings: SETTINGS ) -> None:
 		await self.admin_listen( box, settings,
@@ -1162,35 +1164,36 @@ class Voicemail:
 				if digit1 == '': digit1 = await self.play_menu( intro )
 			return #digit1 is not None
 		
-		msg_num: int = 1
-		loop: bool = True
-		while loop:
-			msg = msgs[msg_num - 1]
-			
-			prevnext: bool = True
-			digit2: Opt[str] = await self.admin_listen_msg( msg, msg_num, prevnext )
-			if digit2 is None: # session !ready
-				loop = False
-			elif digit2 == LISTEN_NEXT_MSG:
-				if msg_num >= len( msgs ):
-					msg_num = len( msgs )
-					digit2 = await self.play_menu([ await self._no_more_messages() ])
-					#if digit2 == '': # TODO FIXME: test if commenting this out is correct
-					#	digit2 = await _menu()
-				else:
-					msg_num = msg_num + 1
-			elif digit2 == LISTEN_PREV_MSG:
-				if msg_num <= 1:
-					msg_num = 1
-					digit2 = await self.play_menu([ await self._no_more_messages() ])
-					#if digit2 == '': # TODO FIXME: test if commenting this out is correct
-					#	digit2 = await _menu()
-				else:
-					msg_num = msg_num - 1
-			elif digit2 == LISTEN_MAIN_MENU:
-				loop = False
-		
-		await self.admin_listen_finalize( msgs )
+		try:
+			msg_num: int = 1
+			loop: bool = True
+			while loop:
+				msg = msgs[msg_num - 1]
+				
+				prevnext: bool = True
+				digit2: Opt[str] = await self.admin_listen_msg( msg, msg_num, prevnext )
+				if digit2 is None: # session !ready
+					loop = False
+				elif digit2 == LISTEN_NEXT_MSG:
+					if msg_num >= len( msgs ):
+						msg_num = len( msgs )
+						digit2 = await self.play_menu([ await self._no_more_messages() ])
+						#if digit2 == '': # TODO FIXME: test if commenting this out is correct
+						#	digit2 = await _menu()
+					else:
+						msg_num = msg_num + 1
+				elif digit2 == LISTEN_PREV_MSG:
+					if msg_num <= 1:
+						msg_num = 1
+						digit2 = await self.play_menu([ await self._no_more_messages() ])
+						#if digit2 == '': # TODO FIXME: test if commenting this out is correct
+						#	digit2 = await _menu()
+					else:
+						msg_num = msg_num - 1
+				elif digit2 == LISTEN_MAIN_MENU:
+					loop = False
+		finally:
+			await self.admin_listen_finalize( msgs )
 	
 	async def admin_listen_msg( self, msg: MSG, msg_num: Opt[int], prevnext: bool ) -> Opt[str]:
 		if msg.old_priority is None: msg.old_priority = msg.priority

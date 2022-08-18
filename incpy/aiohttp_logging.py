@@ -8,6 +8,7 @@ from typing import Any, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
 	from aiohttp.connector import Connection
+	from aiohttp.client_proto import ResponseHandler
 
 logger = logging.getLogger( __name__ )
 
@@ -16,7 +17,7 @@ OriginalStreamWriter = aiohttp.client_reqrep.StreamWriter
 OriginalClientResponse_start = aiohttp.client_reqrep.ClientResponse.start
 OriginalClientResponse_read = aiohttp.client_reqrep.ClientResponse.read
 
-async def LoggingClientRequest_send(self, conn: Connection) -> aiohttp.client_reqrep.ClientResponse:
+async def LoggingClientRequest_send(self: aiohttp.client_reqrep.ClientRequest, conn: Connection) -> aiohttp.client_reqrep.ClientResponse:
 	logger.debug( f'requesting {self.method} {self.original_url}' )
 	return await OriginalClientRequest_send( self, conn )
 
@@ -28,7 +29,7 @@ class LoggingStreamWriter( OriginalStreamWriter ):
 			logger.debug( f'C>{line}' )
 
 class LoggingProtocol:
-	def __init__( self, protocol: 'Protocol' ) -> None:
+	def __init__( self, protocol: ResponseHandler ) -> None:
 		self.protocol = protocol
 	
 	async def read( self ) -> Tuple[Any,Any]:
@@ -40,16 +41,16 @@ class LoggingProtocol:
 		logger.debug( 'S>' ) # show blank line between headers and body
 		return msg, payload
 
-async def LoggingClientResponse_start( self, connection: Connection ) -> aiohttp.client_reqrep.ClientResponse:
+async def LoggingClientResponse_start( self: aiohttp.client_reqrep.ClientResponse, connection: Connection ) -> aiohttp.client_reqrep.ClientResponse:
 	#log = logger.getChild( 'LoggingClientResponse_start' )
 	orig_protocol = connection.protocol
 	try:
-		connection._protocol = LoggingProtocol( orig_protocol )
+		connection._protocol = LoggingProtocol( orig_protocol ) # type: ignore
 		return await OriginalClientResponse_start( self, connection )
 	finally:
 		connection._protocol = orig_protocol
 
-async def LoggingClientResponse_read( self ) -> bytes:
+async def LoggingClientResponse_read( self: aiohttp.client_reqrep.ClientResponse ) -> bytes:
 	#log = logger.getChild( 'LoggingClientResponse_read' )
 	data = await OriginalClientResponse_read( self )
 	for line in data.split( b'\n' ):
@@ -58,7 +59,7 @@ async def LoggingClientResponse_read( self ) -> bytes:
 
 def monkey_patch() -> None:
 	assert aiohttp.client_reqrep.StreamWriter == OriginalStreamWriter, 'already monkey-patched'
-	aiohttp.client_reqrep.ClientRequest.send = LoggingClientRequest_send
-	aiohttp.client_reqrep.StreamWriter = LoggingStreamWriter
-	aiohttp.client_reqrep.ClientResponse.start = LoggingClientResponse_start
-	aiohttp.client_reqrep.ClientResponse.read = LoggingClientResponse_read
+	aiohttp.client_reqrep.ClientRequest.send = LoggingClientRequest_send # type: ignore
+	aiohttp.client_reqrep.StreamWriter = LoggingStreamWriter # type: ignore
+	aiohttp.client_reqrep.ClientResponse.start = LoggingClientResponse_start # type: ignore
+	aiohttp.client_reqrep.ClientResponse.read = LoggingClientResponse_read # type: ignore
