@@ -1721,10 +1721,14 @@ class CallState( State ):
 		return CONTINUE
 	
 	async def notify( self, box: int, settings: SETTINGS, msg: MSG ) -> None:
-		state = NotifyState( self.esl, box, msg, settings )
-		delivery = settings.get( 'delivery' ) or {}
-		nodes = delivery.get( 'nodes' ) or []
-		await state.exec_top_actions( nodes )
+		log = logger.getChild( 'CallState.notify' )
+		try:
+			state = NotifyState( self.esl, box, msg, settings )
+			delivery = settings.get( 'delivery' ) or {}
+			nodes = delivery.get( 'nodes' ) or []
+			await state.exec_top_actions( nodes )
+		except Exception:
+			log.exception( 'Unexpected error during voicemail notify:' )
 
 
 #endregion CallState
@@ -1747,9 +1751,9 @@ class NotifyState( State ):
 		if self.state == HUNT: return CONTINUE
 		
 		ec = Email_composer()
-		to: str = expect( str, action.get( 'mailto' ), default = '' )
+		ec.to = expect( str, action.get( 'mailto' ), default = '' )
 		cc = ''
-		bcc = ''
+		bcc: List[str] = []
 		ec.from_ = self.config.email_from
 		ec.subject = expect( str, action.get( 'subject' ), default = '' )
 		ec.text = expect( str, action.get( 'body' ), default = '' )
@@ -1758,7 +1762,7 @@ class NotifyState( State ):
 		if self.msg is not None:
 			file = self.msg.path
 		
-		if to == '':
+		if not ec.to:
 			log.warning( 'cannot send email - no recipient' )
 			return CONTINUE
 		
@@ -1798,7 +1802,7 @@ class NotifyState( State ):
 			assert self.config.smtp_username and self.config.smtp_password
 			smtp.login( self.config.smtp_username, self.config.smtp_password )
 		
-		smtp.sendmail( ec.from_, list( chain( to, cc, bcc )), ec.as_bytes() )
+		smtp.sendmail( ec.from_, list( chain( ec.to, ec.cc, bcc )), ec.as_bytes() )
 		
 		return CONTINUE
 	
