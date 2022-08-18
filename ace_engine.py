@@ -36,6 +36,8 @@ import uuid
 import aiofiles # pip install aiofiles
 import aiohttp # pip install aiohttp
 import pydub # pip install pydub
+if sys.platform != 'win32':
+	from systemd.journal import JournaldLogHandler # pip install systemd
 
 # local imports:
 from ace_fields import Field
