@@ -1647,7 +1647,7 @@ class CallState( State ):
 			if STOP == await self.action_silence( ACTION_SILENCE(
 				type = 'silence',
 				name = '',
-				seconds = 5, # TODO FIXME: customizable
+				seconds = 0.25, # TODO FIXME: customizable
 				divisor = 0,
 			), pagd ):
 				return STOP

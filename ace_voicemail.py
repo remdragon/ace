@@ -1378,7 +1378,7 @@ class Voicemail:
 				if not _on_delete:
 					if self.use_tts:
 						x = TTS()
-						x.say( 'Deleted.' )
+						x.say( 'Marked for deletion.' )
 						_on_delete = [ str( await x.generate() ), SILENCE_1_SECOND ]
 					else:
 						_on_delete = [
@@ -1393,7 +1393,7 @@ class Voicemail:
 				if not _on_undelete:
 					if self.use_tts:
 						x = TTS()
-						x.say( 'Undeleted.' )
+						x.say( 'Canceled delete.' )
 						_on_undelete = [ str( await x.generate() ), SILENCE_1_SECOND ]
 					else:
 						_on_undelete = [ UNDELETED, SILENCE_1_SECOND ]
