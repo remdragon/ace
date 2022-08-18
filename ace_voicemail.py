@@ -664,14 +664,6 @@ class Voicemail:
 		silence_seconds: int = 5
 		priority: str = 'normal'
 		
-		def _guest_save() -> None:
-			if not tmp_name.is_file():
-				log.debug( 'not launching guest_save hook b/c file does not exist: %s', repr( tmp_name ))
-			else:
-				asyncio.ensure_future(
-					self.guest_save( box, settings, stem, priority, notify )
-				)
-		
 		if self.use_tts:
 			x = TTS()
 			x.say( 'To send this message now, press ' )
@@ -713,6 +705,7 @@ class Voicemail:
 				])
 		menu.append( SILENCE_3_SECONDS )
 		
+		deleted: bool = False
 		try:
 			while True:
 				async for event in self.esl.playback( self.uuid, TONE ):
@@ -739,6 +732,7 @@ class Voicemail:
 						# do nothing, let it fall through
 					elif digit == GUEST_DELETE:
 						log.debug( 'deleted message' )
+						deleted = True
 						await self.play_menu([
 							DELETED, #THIS_MSG_WILL_SELF_DESTRUCT_IN_54321, # DELETED
 							SILENCE_1_SECOND,
@@ -768,7 +762,14 @@ class Voicemail:
 						digit = ''
 					count = count + 1
 		finally:
-			_guest_save()
+			if not deleted:
+				log.debug( 'not launching guest_save hook b/c deleted=%r', deleted )
+			elif not tmp_name.is_file():
+				log.debug( 'not launching guest_save hook b/c file does not exist: %s', repr( tmp_name ))
+			else:
+				asyncio.ensure_future(
+					self.guest_save( box, settings, stem, priority, notify )
+				)
 		return True
 
 	async def play_invalid_value( self, digit: Opt[str] ) -> None:
@@ -814,8 +815,11 @@ class Voicemail:
 			log.debug( 'ATTEMPTING TO RENAME %r to %r', str( tmp_name ), str( new_name ))
 			try:
 				await aiofiles.os.rename( tmp_name, new_name )
-			except Exception as e:
-				log.warning( 'UNABLE TO RENAME %r to %r: %r', str( tmp_name ), str( new_name ), e )
+			except FileNotFoundError as e1:
+				log.warning( 'UNABLE TO RENAME %r to %r: %r', str( tmp_name ), str( new_name ), e1 )
+				return
+			except Exception as e2:
+				log.warning( 'UNABLE TO RENAME %r to %r: %r', str( tmp_name ), str( new_name ), e2 )
 				waits += 1
 				log.debug( 'WAITING 1 SECOND' )
 				await asyncio.sleep( 1 )
