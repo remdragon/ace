@@ -50,8 +50,6 @@ import repo
 import smtplib2
 from tts import TTS, TTS_VOICES, tts_voices
 
-if __name__ == '__main__':
-	aiohttp_logging.monkey_patch()
 
 #endregion imports
 #region globals
@@ -2023,6 +2021,7 @@ async def _server(
 def _main(
 	config: Config
 ) -> None:
+	aiohttp_logging.monkey_patch()
 	ace_logging.init( config.loglevels )
 	#print( 'repo_routes=}' )
 	asyncio.run( _server( config ) )
