@@ -374,7 +374,8 @@ class State( metaclass = ABCMeta ):
 			elif isinstance( self, NotifyState ):
 				# voicemail notify context
 				for i in range( 1, len( ar ), 2 ):
-					ar[i] = getattr( self.msg, ar[i], '' )
+					r3 = getattr( self.msg, ar[i], '' )
+					ar[i] = str( r3 ) if r3 is not None else ''
 			else:
 				assert False, f'invalid state={self!r}'
 			s = ''.join( ar )
