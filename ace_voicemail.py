@@ -711,6 +711,8 @@ class Voicemail:
 				async for event in self.esl.playback( self.uuid, TONE ):
 					self._on_event( event )
 				
+				digit = ''
+				
 				log.debug( 'box %r RECORDING', box )
 				async for event in self.esl.record( self.uuid, tmp_name,
 					max_message_time,
@@ -718,8 +720,14 @@ class Voicemail:
 					silence_seconds,
 				):
 					self._on_event( event )
+					if event.event_name == 'DTMF' and event.header( 'DTMF-Digit' ) == '*':
+						deleted = True
+						asyncio.ensure_future( self.guest_delete ( tmp_name ))
+						if await self.login( box, settings ):
+							return await self.admin_main_menu( box, settings )
+						await self.goodbye()
+						return False
 				
-				digit = ''
 				count: int = 1
 				
 				while digit != GUEST_RERECORD:
