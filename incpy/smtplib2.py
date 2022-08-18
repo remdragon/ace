@@ -222,8 +222,9 @@ else:
 	_have_ssl = True
 
 def encode_cram_md5 ( challenge: str, user: str, password: str ) -> bytes:
+	passbytes: bytes = password.encode( 'utf-8' )
 	challenge2: bytes = base64.decodebytes ( challenge.encode ( 'ascii', 'strict' ) )
-	digest: bytes = hmac.HMAC ( password, challenge2 ).hexdigest().encode ( 'ascii' 'strict' ) # type: ignore # mypy bug: too many arguments for HMAC()
+	digest: bytes = hmac.HMAC ( passbytes, challenge2 ).hexdigest().encode ( 'ascii' 'strict' ) # type: ignore # mypy bug: too many arguments for HMAC()
 	response = b' '.join ( [ user.encode ( 'ascii', 'strict' ), digest ] )
 	return encode_base64 ( response )
 
