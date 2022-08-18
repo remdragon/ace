@@ -1628,9 +1628,7 @@ class CallState( State ):
 			# 1) greeting_override == 'A'
 			# 2) default behavior was requested but no greeting behavior was defined in the voicemail box
 			which = ''
-			greeting_branch = { 'name': '', 'nodes': [
-				ACTION_GREETING( type = 'greeting', name = '', box = box, greeting = str( active_greeting ))
-			]}
+			greeting_branch = await _make_greeting_branch( active_greeting )
 		
 		pagd = PAGD(
 			min_digits = 1,
