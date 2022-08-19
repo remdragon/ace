@@ -3,6 +3,7 @@ from __future__ import annotations
 # stdlib imports:
 import asyncio
 import certifi
+import concurrent.futures
 import datetime
 from enum import Enum
 import itertools
@@ -198,8 +199,11 @@ class ESL:
 		async def wait( self: ESL.RequestType, timeout: Opt[Union[int,float]] = None ) -> ESL.RequestType:
 			log = logger.getChild( 'Request.wait' )
 			#log.debug( 'waiting for trigger' )
-			if not await asyncio.wait_for( self.trigger.wait(), timeout = timeout or ESL.request_timeout.total_seconds() ):
-				raise TimeoutError()
+			try:
+				if not await asyncio.wait_for( self.trigger.wait(), timeout = timeout or ESL.request_timeout.total_seconds() ):
+					raise TimeoutError()
+			except concurrent.futures.TimeoutError:
+				raise TimeoutError() from None
 			#log.debug( 'got trigger' )
 			if self.err is not None:
 				raise self.err

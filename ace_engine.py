@@ -1970,10 +1970,13 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 		log.info( 'route %r exited with %r', route, r )
 		
 		if state.hangup_on_exit:
+			await esl.uuid_setvar( uuid, ACE_STATE, STATE_KILL )
 			cause: Final = 'NORMAL_CLEARING'
 			log.debug( 'hanging up call with %r because route exited with %r', cause, r )
-			await esl.uuid_kill( uuid, cause )
-			await esl.uuid_setvar( uuid, ACE_STATE, STATE_KILL )
+			try:
+				await util.hangup( esl, uuid, cause, 'ace_engine._handler' )
+			except TimeoutError:
+				log.warning( 'timeout waiting for hangup request' )
 		else:
 			#cause = 'NORMAL_CLEARING'
 			#log.debug( 'hanging up call with %r because route exited with %r and we have no way to signal inband lua yet', cause, r )

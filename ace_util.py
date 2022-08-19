@@ -24,7 +24,7 @@ async def answer( esl: ESL, uuid: str, source: str ) -> bool:
 	log = logger.getChild( 'answer' )
 	log.info( 'answering from %s', source )
 	
-	# TODO FIXME: there's 2 ways available to us to answer the call.
+	# TODO FIXME: there's 2 ways we can answer the call
 	if True:
 		r = await esl.uuid_answer( uuid )
 		# TODO FIXME: check for -ERR condition? (ESL might throw an error so may not be necessary)
@@ -60,7 +60,7 @@ async def hangup( esl: ESL, uuid: str, cause: CAUSE, source: str ) -> None:
 	log = logger.getChild( 'hangup' )
 	log.info( 'hangup with cause=%r from %r', cause, source )
 	
-	# TODO FIXME: there's 2 way available to use to hangup a call
+	# TODO FIXME: there's 2 way we can hangup a call
 	if True:
 		r = await esl.uuid_kill( uuid, cause )
 		log.debug( 'result: %r', r )
@@ -86,7 +86,7 @@ async def pre_answer( esl: ESL, uuid: str, source: str ) -> bool:
 	log = logger.getChild( 'pre_answer' )
 	log.info( 'ppre-answering from %s', source )
 	
-	# TODO FIXME: there's 2 ways available to us to pre-answer the call.
+	# TODO FIXME: there's 2 ways we can pre-answer the call
 	if True:
 		r = await esl.uuid_pre_answer( uuid )
 		# TODO FIXME: check for -ERR condition? (ESL might throw an error so may not be necessary)
