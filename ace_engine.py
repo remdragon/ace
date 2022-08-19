@@ -1970,7 +1970,10 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 		log.info( 'route %r exited with %r', route, r )
 		
 		if state.hangup_on_exit:
-			await esl.uuid_setvar( uuid, ACE_STATE, STATE_KILL )
+			try:
+				await esl.uuid_setvar( uuid, ACE_STATE, STATE_KILL )
+			except TimeoutError:
+				log.warning( 'timeout waiting for uuid_setvar' )
 			cause: Final = 'NORMAL_CLEARING'
 			log.debug( 'hanging up call with %r because route exited with %r', cause, r )
 			try:

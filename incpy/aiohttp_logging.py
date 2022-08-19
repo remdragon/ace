@@ -51,6 +51,10 @@ class LoggingProtocol:
 	@property
 	def upgraded( self ) -> Any:
 		return self.protocol.upgraded
+	
+	@property
+	def should_close( self ) -> Any:
+		return self.protocol.should_close
 
 async def LoggingClientResponse_start( self: aiohttp.client_reqrep.ClientResponse, connection: Connection ) -> aiohttp.client_reqrep.ClientResponse:
 	#log = logger.getChild( 'LoggingClientResponse_start' )
