@@ -24,6 +24,7 @@ import aiofiles # pip install aiofiles
 
 # local imports:
 import ace_util as util
+from dhms import dhms
 from esl import ESL
 from tts import TTS, TTS_VOICES, tts_voices
 
@@ -437,13 +438,13 @@ class Voicemail:
 				min_digits,
 				max_digits,
 				max_attempts,
-				local_timeout,
+				dhms( local_timeout ),
 				terminators,
 				path,
 				error,
 				digit_regex,
 				variable_name,
-				digit_timeout
+				dhms( digit_timeout ),
 			)
 			digits_: List[str] = []
 			async for event in self.esl.play_and_get_digits( self.uuid,
@@ -466,30 +467,17 @@ class Voicemail:
 		#session:flushDigits()
 		#session:setInputCallback( 'input_callback', '' )
 		digits: Opt[str] = None
-		local_timeout = datetime.timedelta( milliseconds = 1 )
+		timeouts: List[datetime.timedelta] = [ datetime.timedelta( milliseconds = 1 ) ] * len( sounds )
+		timeouts[-1] = timeout
 		for attempt in range( max_attempts ):
-			for i, param in enumerate( sounds ):
-				if isinstance( param, list ):
-					for j, sound in enumerate( param ):
-						if i == len( sounds ) - 1 and j == len( param ) - 1:
-							local_timeout = timeout
-						digits = await _play( sound, local_timeout )
-						if digits:
-							log.debug( 'returning digits=%r', digits )
-							return digits
-				elif isinstance( param, str ):
-					if i == len( sounds ) - 1: local_timeout = timeout
-					digits = await _play( param, local_timeout )
+			for sound, local_timeout in zip( sounds, timeouts ):
+				if isinstance( sound, str ):
+					digits = await _play( sound, local_timeout )
 					if digits:
 						log.debug( 'returning digits=%r', digits )
 						return digits
-				elif isinstance( param, ( int, float )):
-					await asyncio.sleep( param )
 				else:
-					log.error( 'invalid param=%r', param )
-				if digits:
-					log.debug( 'returning digits=%r', digits )
-					return digits
+					log.error( 'invalid sound=%r', sound )
 		digits = ''
 		log.debug( 'returning digits=%r', digits )
 		return digits
@@ -704,6 +692,8 @@ class Voicemail:
 					DIGITS[GUEST_URGENT],
 				])
 		menu.append( SILENCE_3_SECONDS )
+		
+		await self.esl.uuid_setvar( self.uuid, 'playback_terminators', '123456789*#' )
 		
 		deleted: bool = False
 		try:

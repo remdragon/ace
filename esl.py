@@ -578,6 +578,7 @@ class ESL:
 			timeout_milliseconds
 		)
 		
+		log.warning( f'executing play_and_get_digits with {file=}, {timeout_milliseconds=}, {digit_timeout_ms=}' )
 		async for event in self.execute( uuid, 'play_and_get_digits',
 			str( min_digits ),
 			str( max_digits ),
@@ -593,15 +594,19 @@ class ESL:
 			escape = False,
 		):
 			try:
-				event_name = event.event_name
-				if event_name == 'DTMF':
-					dtmf_digit = event.header( 'DTMF-Digit' )
-					log.debug( 'event %s: dtmf_digit=%r', event_name, dtmf_digit )
-					assert dtmf_digit
-					if digits is not None and dtmf_digit not in terminators:
-						digits.append( dtmf_digit )
-				else:
-					log.debug( 'ignoring event_name=%r', event_name )
+				evt_uuid = event.header( 'Unique-ID' )
+				if uuid == evt_uuid:
+					evt_name = event.event_name
+					if evt_name == 'DTMF':
+						dtmf_digit = event.header( 'DTMF-Digit' )
+						log.debug( 'event %s: dtmf_digit=%r', evt_name, dtmf_digit )
+						assert dtmf_digit
+						if digits is not None and dtmf_digit not in terminators:
+							digits.append( dtmf_digit )
+					elif evt_name == 'PLAYBACK_STOP':
+						return
+					#else:
+					#	log.debug( 'ignoring evt_name=%r', evt_name )
 				yield event
 			except Exception:
 				log.exception( 'Unexpected error processing event:' )
@@ -616,6 +621,10 @@ class ESL:
 				yield event
 			except Exception:
 				log.exception( 'Unexpected error processing event:' )
+			evt_uuid = event.header( 'Unique-ID' )
+			if uuid == evt_uuid:
+				if event.event_name == 'PLAYBACK_STOP':
+					return
 	
 	async def pre_answer( self, uuid: str ) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.pre_answer' )
@@ -866,8 +875,8 @@ class ESL:
 					else:
 						log.log( DEBUG9, 'data=%r', data )
 						buf = await self._reader_parse_bytes( buf + data )
-				except ConnectionAbortedError:
-					log.debug( 'got EOF (ConnectionAbortedError)' )
+				except ( ConnectionAbortedError, ConnectionResetError ) as e:
+					log.debug( 'got EOF %r' )
 					await self._event_queue.put( ESL.ErrorEvent( ESL.HardError( 'EOF' )))
 					return
 				except Exception as e:

@@ -44,6 +44,7 @@ from ace_tod import match_tod
 import ace_util as util
 from ace_voicemail import Voicemail, MSG, SETTINGS, SILENCE_1_SECOND
 import aiohttp_logging
+from dhms import dhms
 from email_composer import Email_composer
 from esl import ESL
 import repo
@@ -1023,13 +1024,13 @@ class CallState( State ):
 				min_digits,
 				max_digits,
 				max_attempts,
-				timeout,
+				dhms( timeout ),
 				terminators,
 				sound,
 				error,
 				digit_regex,
 				variable_name,
-				digit_timeout
+				dhms( digit_timeout ),
 			)
 			digits_: List[str] = []
 			async for event in self.esl.play_and_get_digits( self.uuid,
@@ -1926,6 +1927,8 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 		
 		log.debug( 'calling myevents' )
 		await esl.myevents()
+		await esl.filter( 'Unique-ID', uuid )
+		await esl.event_plain_all()
 		
 		#await esl.linger() # TODO FIXME: I'm probably going to want this...
 		
