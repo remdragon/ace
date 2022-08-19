@@ -17,7 +17,10 @@ OriginalStreamWriter = aiohttp.client_reqrep.StreamWriter
 OriginalClientResponse_start = aiohttp.client_reqrep.ClientResponse.start
 OriginalClientResponse_read = aiohttp.client_reqrep.ClientResponse.read
 
-async def LoggingClientRequest_send(self: aiohttp.client_reqrep.ClientRequest, conn: Connection) -> aiohttp.client_reqrep.ClientResponse:
+async def LoggingClientRequest_send(
+	self: aiohttp.client_reqrep.ClientRequest,
+	conn: Connection,
+) -> aiohttp.client_reqrep.ClientResponse:
 	logger.debug( f'requesting {self.method} {self.original_url}' )
 	return await OriginalClientRequest_send( self, conn )
 
@@ -25,8 +28,12 @@ class LoggingStreamWriter( OriginalStreamWriter ):
 	def _write( self, chunk: bytes ) -> None:
 		#log = logger.getChild( 'LoggingStreamWriter._write' )
 		super()._write( chunk )
-		for line in chunk.decode( 'cp437' ).split( '\n' )[:-1]: # -1 because an extra blank lines gets shown otherwise...
-			logger.debug( f'C>{line}' )
+		if logger.isEnabledFor( logging.DEBUG ):
+			data = chunk.decode( 'cp437' )
+			if data[-1] == '\n':
+				data = data[:-1]
+			for line in data.split( '\n' ):
+				logger.debug( f'C>{line}' )
 
 class LoggingProtocol:
 	def __init__( self, protocol: ResponseHandler ) -> None:
@@ -40,6 +47,10 @@ class LoggingProtocol:
 			logger.debug( f'S>{name.decode("cp437")}: {value.decode("cp437")}' )
 		logger.debug( 'S>' ) # show blank line between headers and body
 		return msg, payload
+	
+	@property
+	def upgraded( self ) -> Any:
+		return self.protocol.upgraded
 
 async def LoggingClientResponse_start( self: aiohttp.client_reqrep.ClientResponse, connection: Connection ) -> aiohttp.client_reqrep.ClientResponse:
 	#log = logger.getChild( 'LoggingClientResponse_start' )

@@ -673,7 +673,7 @@ class State( metaclass = ABCMeta ):
 			'Authorization': f'Basic {auth}',
 		}
 		formdata = {
-			'From': self.config.sms_thinq_from,
+			'From': self.config.sms_twilio_from,
 			'To': f'+1{smsto}',
 			'Body': message,
 		}
