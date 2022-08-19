@@ -46,14 +46,14 @@ if True: # for now, run doctest on every import to make sure I don't break somet
 		logging.basicConfig ( level = logging.DEBUG )
 	import doctest
 	fail_count, test_count = doctest.testmod ( sys.modules[__name__] ) # TODO FIXME: does this cause pyinstaller executable bloat?
-	assert not fail_count, f'{fail_count=}'
+	assert not fail_count, f'fail_count={fail_count!r}'
 	if __name__ == '__main__':
-		print ( f'{test_count=} test(s) passed' )
+		print ( f'{test_count!r} test(s) passed' )
 
 if __name__ == '__main__':
 	now = datetime.datetime.now()
 	earlier = now - datetime.timedelta ( hours = 4, minutes = 5, seconds = 6 )
 	positive_delta = now - earlier
-	print ( f'{positive_delta=} -> {dhms(positive_delta)=}' )
+	print ( f'positive_delta={positive_delta!r} -> {dhms(positive_delta)!r}' )
 	negative_delta = earlier - now
-	print ( f'{negative_delta=} -> {dhms(negative_delta)=}' )
+	print ( f'negative_delta={negative_delta!r} -> {dhms(negative_delta)!r}' )

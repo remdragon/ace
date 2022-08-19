@@ -578,7 +578,7 @@ class ESL:
 			timeout_milliseconds
 		)
 		
-		log.warning( f'executing play_and_get_digits with {file=}, {timeout_milliseconds=}, {digit_timeout_ms=}' )
+		log.warning( f'executing play_and_get_digits with file={file}, timeout_milliseconds={timeout_milliseconds!r}, digit_timeout_ms={digit_timeout_ms!r}' )
 		async for event in self.execute( uuid, 'play_and_get_digits',
 			str( min_digits ),
 			str( max_digits ),
