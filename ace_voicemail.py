@@ -709,14 +709,17 @@ class Voicemail:
 					silence_threshold,
 					silence_seconds,
 				):
-					self._on_event( event )
 					if event.event_name == 'DTMF' and event.header( 'DTMF-Digit' ) == '*':
+						log.info( 'guest pressed * during recording' )
 						deleted = True
 						asyncio.ensure_future( self.guest_delete ( tmp_name ))
+						log.info( 'calling login()' )
 						if await self.login( box, settings ):
+							log.info( 'calling admin_main_menu()' )
 							return await self.admin_main_menu( box, settings )
 						await self.goodbye()
 						return False
+					self._on_event( event )
 				
 				count: int = 1
 				
