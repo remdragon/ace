@@ -55,6 +55,9 @@ class LoggingProtocol:
 	@property
 	def should_close( self ) -> Any:
 		return self.protocol.should_close
+	
+	def close( self ) -> Any:
+		return self.protocol.close()
 
 async def LoggingClientResponse_start( self: aiohttp.client_reqrep.ClientResponse, connection: Connection ) -> aiohttp.client_reqrep.ClientResponse:
 	#log = logger.getChild( 'LoggingClientResponse_start' )
