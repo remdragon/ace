@@ -1128,24 +1128,25 @@ def http_did( did: int ) -> Response:
 	name: str = data.get( 'name' ) or ''
 	category: str = data.get( 'category' ) or ''
 	route_: str = str( data.get( 'route' ) or '' )
-	if route_.startswith( 'V' ):
-		try:
-			_ = int( route_[1:] )
-		except ValueError as e:
-			return _http_failure(
-				return_type,
-				f'Bad route: {e!r}',
-				400,
-			)
-	else:
-		try:
-			route = to_optional_int( route_ )
-		except ValueError as e:
-			return _http_failure(
-				return_type,
-				f'Bad route: {e!r}',
-				400,
-			)
+	if route_:
+		if route_.startswith( 'V' ):
+			try:
+				_ = int( route_[1:] )
+			except ValueError as e:
+				return _http_failure(
+					return_type,
+					f'Bad route: {e!r}',
+					400,
+				)
+		else:
+			try:
+				route = to_optional_int( route_ )
+			except ValueError as e:
+				return _http_failure(
+					return_type,
+					f'Bad route: {e!r}',
+					400,
+				)
 	variables = data.get( 'variables', '' )
 	flag = data.get( 'flag', '' )
 	notes = data.get( 'notes', '' )
