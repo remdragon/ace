@@ -1498,8 +1498,8 @@ class CallState( State ):
 		if self.state == HUNT: return CONTINUE
 		
 		seconds = await self.tonumber( action, 'seconds', default = 0 )
-		divisor = await self.tonumber( action, 'divisor', default = 0 )
-		duration = -1 if seconds < 0 else seconds * 1000
+		divisor = await self.toint( action, 'divisor', default = 0 )
+		duration = -1 if seconds < 0 else int( seconds * 1000 )
 		stream = f'silence_stream://{duration!r},{divisor!r}'
 		log.info( '%s', stream )
 		return await self._playback( stream, pagd )
