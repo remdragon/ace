@@ -9,7 +9,9 @@ import logging
 from multiprocessing.synchronize import RLock as MPLock
 from mypy_extensions import TypedDict
 from pathlib import Path
-from typing import Any, cast, Dict, Generic, List, Optional as Opt, TypeVar
+from typing import (
+	Any, cast, Dict, Generic, List, Optional as Opt, TypeVar, TYPE_CHECKING,
+)
 from typing_extensions import Literal # Python 3.7
 
 # local imports:
@@ -17,6 +19,11 @@ from timed_lru_cache import timed_lru_cache
 from tts import TTS, TTS_VOICES, tts_voices
 
 logger = logging.getLogger( __name__ )
+
+if TYPE_CHECKING:
+	FIELD = Field[str]
+else:
+	FIELD = Field # Py37 doesn't support Field[...]
 
 T = TypeVar( 'T' )
 SettingsType = TypeVar( 'SettingsType', bound = 'Settings' )
@@ -29,20 +36,20 @@ class Editor( metaclass = ABCMeta ):
 		return str( value )
 	
 	@abstractmethod
-	def edit( self, settings: SettingsType, fld: Field[str] ) -> str:
+	def edit( self, settings: SettingsType, fld: FIELD ) -> str:
 		cls = type( self )
 		raise NotImplementedError( f'{cls.__module__}.{cls.__qualname__}.get()' )
 	
-	def post( self, settings: SettingsType, fld: Field[str], data: Dict[str,Any] ) -> Any:
+	def post( self, settings: SettingsType, fld: FIELD, data: Dict[str,Any] ) -> Any:
 		return data.get( fld.name )
 
 class BoolEditor( Editor ):
-	def edit( self, settings: SettingsType, fld: Field[str] ) -> str:
+	def edit( self, settings: SettingsType, fld: FIELD ) -> str:
 		value: bool = getattr( settings, fld.name )
 		checked = ' checked' if value else ''
 		return f'<input type="checkbox" id="{fld.name}" name="{fld.name}" value="on"{checked}/>'
 	
-	def post( self, settings: SettingsType, fld: Field[str], data: Dict[str,Any] ) -> Any:
+	def post( self, settings: SettingsType, fld: FIELD, data: Dict[str,Any] ) -> Any:
 		#log = logger.getChild( 'BoolEdior.post' )
 		posted = data.get( fld.name )
 		#log.debug( 'posted=%r', posted )
@@ -53,11 +60,11 @@ class IntEditor( Editor ):
 		self.min = min
 		self.max = max
 	
-	def edit( self, settings: SettingsType, fld: Field[str] ) -> str:
+	def edit( self, settings: SettingsType, fld: FIELD ) -> str:
 		value: int = getattr( settings, fld.name )
 		return f'<input type="number" id="{fld.name}" name="{fld.name}" step="1" min="{self.min}" max="{self.max}" value="{value}"/>'
 	
-	def post( self, settings: SettingsType, fld: Field[str], data: Dict[str,Any] ) -> Any:
+	def post( self, settings: SettingsType, fld: FIELD, data: Dict[str,Any] ) -> Any:
 		value = cast( str, data.get( fld.name ) or '' )
 		try:
 			return int( value )
@@ -65,20 +72,20 @@ class IntEditor( Editor ):
 			return None
 
 class StrEditor( Editor ):
-	def edit( self, settings: SettingsType, fld: Field[str] ) -> str:
+	def edit( self, settings: SettingsType, fld: FIELD ) -> str:
 		value = getattr( settings, fld.name )
 		_value_ = html.escape( value, quote = True )
 		return f'<input type="text" id="{fld.name}" name="{fld.name}" value="{_value_}"/>'
 
 class PasswordEditor( Editor ):
-	def edit( self, settings: SettingsType, fld: Field[str] ) -> str:
+	def edit( self, settings: SettingsType, fld: FIELD ) -> str:
 		return f'<input type="password" id="{fld.name}" name="{fld.name}"/>'
 
 class ChoiceEditor( Editor ):
 	def __init__( self, choices: List[str] ) -> None:
 		self.choices = choices
 	
-	def edit( self, settings: SettingsType, fld: Field[str] ) -> str:
+	def edit( self, settings: SettingsType, fld: FIELD ) -> str:
 		value = getattr( settings, fld.name )
 		options: List[str] = []
 		for choice in self.choices:
@@ -87,7 +94,7 @@ class ChoiceEditor( Editor ):
 		_options_ = '\n'.join( options )
 		return f'<select id="{fld.name}" name="{fld.name}">{_options_}</select>'
 	
-	def post( self, settings: SettingsType, fld: Field[str], data: Dict[str,Any] ) -> Any:
+	def post( self, settings: SettingsType, fld: FIELD, data: Dict[str,Any] ) -> Any:
 		value = super().post( settings, fld, data )
 		assert value in self.choices
 		return value
@@ -100,12 +107,12 @@ class ListEditor( Editor ):
 	def display( self, value: Any ) -> str:
 		return ', '.join( value )
 	
-	def edit( self, settings: SettingsType, fld: Field[str] ) -> str:
+	def edit( self, settings: SettingsType, fld: FIELD ) -> str:
 		value = getattr( settings, fld.name )
 		lines = html.escape( '\n'.join( value ))
 		return f'<textarea id="{fld.name}" name="{fld.name}" rows="{self.rows}" cols="{self.cols}">{lines}</textarea>'
 	
-	def post( self, settings: SettingsType, fld: Field[str], data: Dict[str,Any] ) -> Any:
+	def post( self, settings: SettingsType, fld: FIELD, data: Dict[str,Any] ) -> Any:
 		lines = data.get( fld.name ) or ''
 		return list( filter( None, map( str.strip, lines.replace( '\r', '' ).split( '\n' ))))
 
