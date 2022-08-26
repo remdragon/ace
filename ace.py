@@ -928,7 +928,7 @@ def http_dids() -> Response:
 		'<button id="clear" type="button" onclick="window.location=\'?\'">Clear</button>'
 		'</form>',
 		'</td>',
-		f'<td align="right"><a href="?{prevpage}">&lt;&lt;</a> <a href="?{nextpage}">&gt;&gt;</a></td>',
+		f'<td align="right"><a href="?{prevpage}">&lt;&lt;</a>&nbsp;&nbsp;<a href="?{nextpage}">&gt;&gt;</a></td>',
 		'</tr></table>',
 		
 		'<table class="fancy dids_list">',
