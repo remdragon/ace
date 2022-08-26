@@ -657,46 +657,49 @@ class Voicemail:
 		silence_seconds: int = 5
 		priority: str = 'normal'
 		
-		if self.use_tts:
-			x = self.settings.tts()
-			x.say( 'To send this message now, press ' )
-			x.digits( GUEST_SAVE )
-			x.say( ', to listen to the recording, press ' )
-			x.digits( GUEST_LISTEN )
-			x.say( ', to re-record, press' )
-			x.digits( GUEST_RERECORD )
-			x.say( ', to delete this message, press ' )
-			x.digits( GUEST_DELETE )
-			if boxsettings.get( 'allow_guest_urgent' ):
-				x.say( ', to mark this message urgent, press ' )
-				x.digits( GUEST_URGENT )
-			stream = str( await x.generate() )
-			menu: List[str] = [ stream ]
-		else:
-			menu = [
-				TO_SEND_THIS_MESSAGE_NOW,
-				PRESS,
-				DIGITS[GUEST_SAVE],
-				
-				TO_LISTEN_TO_THE_RECORDING,
-				PRESS,
-				DIGITS[GUEST_LISTEN],
-				
-				TO_RERECORD,
-				PRESS,
-				DIGITS[GUEST_RERECORD],
-				
-				TO_DELETE_THIS_MESSAGE,
-				PRESS,
-				DIGITS[GUEST_DELETE],
-			]
-			if boxsettings.get( 'allow_guest_urgent' ):
-				menu.extend([
-					TO_MARK_THIS_MESSAGE_URGENT,
+		menu: Opt[List[str]] = None
+		async def _menu() -> List[str]:
+			if self.use_tts:
+				x = self.settings.tts()
+				x.say( 'To send this message now, press ' )
+				x.digits( GUEST_SAVE )
+				x.say( ', to listen to the recording, press ' )
+				x.digits( GUEST_LISTEN )
+				x.say( ', to re-record, press' )
+				x.digits( GUEST_RERECORD )
+				x.say( ', to delete this message, press ' )
+				x.digits( GUEST_DELETE )
+				if boxsettings.get( 'allow_guest_urgent' ):
+					x.say( ', to mark this message urgent, press ' )
+					x.digits( GUEST_URGENT )
+				stream = str( await x.generate() )
+				menu: List[str] = [ stream ]
+			else:
+				menu = [
+					TO_SEND_THIS_MESSAGE_NOW,
 					PRESS,
-					DIGITS[GUEST_URGENT],
-				])
-		menu.append( SILENCE_3_SECONDS )
+					DIGITS[GUEST_SAVE],
+					
+					TO_LISTEN_TO_THE_RECORDING,
+					PRESS,
+					DIGITS[GUEST_LISTEN],
+					
+					TO_RERECORD,
+					PRESS,
+					DIGITS[GUEST_RERECORD],
+					
+					TO_DELETE_THIS_MESSAGE,
+					PRESS,
+					DIGITS[GUEST_DELETE],
+				]
+				if boxsettings.get( 'allow_guest_urgent' ):
+					menu.extend([
+						TO_MARK_THIS_MESSAGE_URGENT,
+						PRESS,
+						DIGITS[GUEST_URGENT],
+					])
+			menu.append( SILENCE_3_SECONDS )
+			return menu
 		
 		await self.esl.uuid_setvar( self.uuid, 'playback_terminators', '123456789*#' )
 		
@@ -729,6 +732,8 @@ class Voicemail:
 				count: int = 1
 				
 				while digit != GUEST_RERECORD:
+					if menu is None:
+						menu = await _menu()
 					digit = await self.play_menu( menu )
 					if digit == GUEST_LISTEN:
 						log.debug( 'listening to own message' )
