@@ -315,6 +315,7 @@ def _on_event( event: ESL.Message ) -> None:
 	evt_name = event.event_name
 	if evt_name == 'CHANNEL_HANGUP':
 		uuid = event.header( 'Unique-ID' )
+		log.info( 'caught CHANNEL_HANGUP - raising ChannelHangup' )
 		raise ChannelHangup( uuid )
 	else:
 		log.debug( 'ignoring event %r', evt_name )

@@ -401,23 +401,30 @@ class ESL:
 		}))
 		args_ = re.sub( r'\\{2,}', r'\\', args_ )
 		log.debug( 'r=%r', r )
-		while True: # TODO FIXME: what if we never get CHANNEL_EXECUTE_COMPLETE?
-			async for event in self.events():
-				evt_uuid = event.header( 'Unique-ID' )
-				event_name = event.event_name
-				if uuid == evt_uuid and event_name == 'CHANNEL_EXECUTE_COMPLETE':
-					app2 = event.header( 'Application' )
-					appdata = event.header( 'Application-Data' ) or ''
-					appdata = re.sub( r'\\{2,}', r'\\', appdata )
-					log.debug( 'app=%r app2=%r args_=%r appdata=%r',
-						app, app2, args_, appdata,
-					)
-					if app == app2 and appdata == args_:
-						return
-				try:
-					yield event
-				except Exception:
-					log.exception( 'Unexpected error processing event:' )
+		try:
+			while True: # TODO FIXME: what if we never get CHANNEL_EXECUTE_COMPLETE?
+				async for event in self.events():
+					evt_uuid = event.header( 'Unique-ID' )
+					event_name = event.event_name
+					if uuid == evt_uuid and event_name == 'CHANNEL_EXECUTE_COMPLETE':
+						app2 = event.header( 'Application' )
+						appdata = event.header( 'Application-Data' ) or ''
+						appdata = re.sub( r'\\{2,}', r'\\', appdata )
+						if app == app2 and appdata == args_:
+							log.info( 'exiting on app=%r app2=%r args_=%r appdata=%r',
+								app, app2, args_, appdata,
+							)
+							return
+						else:
+							log.debug( 'ignoring app=%r app2=%r args_=%r appdata=%r',
+								app, app2, args_, appdata,
+							)
+					try:
+						yield event
+					except Exception:
+						log.exception( 'Unexpected error in event handler:' )
+		except Exception:
+			log.exception( 'Unexpected error processing events:' )
 	
 	async def filter( self,
 		key: str,
