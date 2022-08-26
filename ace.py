@@ -958,7 +958,6 @@ def http_dids() -> Response:
 	nextpage = urlencode( { 'did': q_did, 'tf': q_tf, 'acct': q_acct, 'name': q_name, 'route': q_route, 'notes': q_notes, 'limit': q_limit, 'offset': q_offset + q_limit } )
 	return html_page(
 		'<table width="100%"><tr>',
-		f'<td align="left"><a href="?{prevpage}">Prev Page</a></td>',
 		'<td align="center">',
 		'<a href="/dids/0">(Create new DID)</a>',
 		'</td>',
@@ -974,7 +973,7 @@ def http_dids() -> Response:
 		'<button id="clear" type="button" onclick="window.location=\'?\'">Clear</button>'
 		'</form>',
 		'</td>',
-		f'<td align="right"><a href="?{nextpage}">Next Page</a></td>',
+		f'<td align="right"><a href="?{prevpage}">&lt;&lt;</a> <a href="?{nextpage}">&gt;&gt;</a></td>',
 		'</tr></table>',
 		
 		'<table class="fancy dids_list">',
@@ -1127,7 +1126,7 @@ def http_did( did: int ) -> Response:
 	acct: str = data.get( 'acct' ) or ''
 	name: str = data.get( 'name' ) or ''
 	category: str = data.get( 'category' ) or ''
-	route_: str = str( data.get( 'route' ) or '' )
+	route_: str = str( data.get( 'route' ) or '' ).strip()
 	if route_:
 		if route_.startswith( 'V' ):
 			try:
