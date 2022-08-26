@@ -1640,7 +1640,7 @@ class CallState( State ):
 			digit_timeout = datetime.timedelta( seconds = 0.1 ), # TODO FIXME: customizable?
 		)
 		if STOP == await self._exec_branch( which, greeting_branch, pagd, log = log ):
-			return STOP
+			return None
 		if not pagd.digits:
 			if STOP == await self.action_silence( ACTION_SILENCE(
 				type = 'silence',
@@ -1648,8 +1648,8 @@ class CallState( State ):
 				seconds = 0.25, # TODO FIXME: customizable
 				divisor = 0,
 			), pagd ):
-				return STOP
-		return pagd.digits
+				return None
+		return pagd.digits or ''
 	
 	async def action_voicemail( self, action: ACTION_VOICEMAIL, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_voicemail' )
