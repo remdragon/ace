@@ -389,6 +389,8 @@ class State( metaclass = ABCMeta ):
 		else:
 			if expand:
 				value = await self.expand( str( value ))
+			if isinstance( value, ( int, float )):
+				return value
 			try:
 				return int( value )
 			except ValueError:
@@ -407,6 +409,8 @@ class State( metaclass = ABCMeta ):
 		else:
 			if expand:
 				value = await self.expand( str( value ))
+			if isinstance( value, int ):
+				return value
 			try:
 				return int( value )
 			except ValueError:
