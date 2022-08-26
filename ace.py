@@ -12,6 +12,7 @@
 # stdlib imports:
 from __future__ import annotations
 from abc import ABCMeta, abstractmethod
+from dataclasses import asdict, fields
 import datetime
 from enum import Enum
 import html
@@ -19,6 +20,8 @@ import itertools
 import json
 import logging
 import mimetypes
+from multiprocessing import RLock as MPLockFactory
+from multiprocessing.synchronize import RLock as MPLock
 import os
 from pathlib import Path
 import queue
@@ -38,11 +41,14 @@ from typing_extensions import Literal # Python 3.7
 from urllib.parse import urlencode, urlparse
 import uuid
 
-if __name__ == '__main__' and sys.argv[1:] == [ 'requirements' ]:
+def _requirements() -> int:
 	cmd = f'{sys.executable} -m pip install accept-types aiofiles aiohttp aioshutil boto3 flask Flask-Login Flask-Session mypy-extensions pydub PyOpenSSL service_identity tornado tzlocal'
 	print ( cmd )
 	os.system ( cmd )
-	sys.exit ( -1 )
+	return -1
+
+if __name__ == '__main__' and sys.argv[1:] == [ 'requirements' ]:
+	sys.exit( _requirements() )
 
 # 3rd-party imports:
 import accept_types # type: ignore # pip install accept-types
@@ -78,7 +84,9 @@ if __name__ == '__main__':
 import ace_engine
 from ace_fields import Field, ValidationError
 import ace_logging
+import ace_settings
 import auditing
+from coalesce import coalesce
 import repo
 from tts import TTS_VOICES, tts_voices
 
@@ -100,6 +108,8 @@ else:
 	logger.critical(
 		'NON-POSIX IMPLEMENTATION ONLY SUPPORTS A SINGLE HARD-CODED USER FOR NOW'
 	)
+
+g_settings_mplock = MPLockFactory()
 
 
 #endregion globals
@@ -218,6 +228,9 @@ def html_att( text: str ) -> str:
 	return html.escape( text, quote = True )
 
 def html_page( *lines: str, stylesheets: Opt[List[str]] = None, status_code: Opt[int] = None ) -> Response:
+	
+	settings = ace_settings.load()
+	
 	header = [
 		'<!doctype html>',
 		'<html>',
@@ -236,12 +249,13 @@ def html_page( *lines: str, stylesheets: Opt[List[str]] = None, status_code: Opt
 			f'	<li><a href="{url_for("http_flags")}">Flags</a></li>',
 			f'	<li><a href="{url_for("http_routes")}">Routes</a></li>',
 			f'	<li><a href="{url_for("http_voicemails")}">Voicemail</a></li>',
+			f'	<li><a href="{url_for("http_settings")}">Settings</a></li>',
 			f'	<li><a href="{url_for("http_audits")}">Audit</a></li>',
 			f'	<li><a href="{url_for("http_logout")}">Log Out</a></li>',
 			'</ul>',
 		] )
 	header.append( '<div id="content">' )
-	footer = [ f'<br/><br/>{ITAS_MOTD}</div></body></html>' ]
+	footer = [ f'<br/><br/>{settings.motd}</div></body></html>' ]
 	return Response(
 		'\n'.join( header + list( lines ) + footer ),
 		status_code or 200,
@@ -363,58 +377,29 @@ if not cfg_path.is_file():
 		f'ITAS_AUTOBAN_BAD_EXPIRE_MINUTES = {0.5!r}',
 		f'ITAS_AUTOBAN_BAD_COUNT_LOCKOUT = {10!r}',
 		f'ITAS_AUTOBAN_DURATION_MINUTES = {10!r}',
-		f'ITAS_AUDIT_DIR = {"/var/log/itas/ace/"!r}',
+		f'ITAS_AUDIT_DIR = {"/var/log/itas/ace/audit/"!r}',
 		f'ITAS_AUDIT_FILE = {"%Y-%m-%d.log"!r}',
 		f'ITAS_AUDIT_TIME = {"%Y-%m-%d %H:%M:%S.%f %Z%z"!r}',
 		f'ITAS_OWNER_USER = {"www-data"!r}',
 		f'ITAS_OWNER_GROUP = {"www-data"!r}',
-		f'ITAS_VOICE_DELIVER_ANI = {""!r}',
 		f'ITAS_FREESWITCH_JSON_CDR_PATH = {"/var/log/freeswitch/json_cdr"!r}',
-		f'ITAS_FREESWITCH_SOUNDS = {["/usr/share/freeswitch/sounds/en/us/callie"]!r}',
-		f'ITAS_PREANNOUNCE_PATH = {"/usr/share/freeswitch/sounds/preannounce/"!r}',
 		f'ITAS_REPOSITORY_TYPE = {"fs"!r}',
 		f'ITAS_REPOSITORY_FS_PATH = {"/usr/share/itas/ace/"!r}',
 		f'ITAS_REPOSITORY_SQLITE_PATH = {"/usr/share/itas/ace/ace.sqlite"!r}',
 		f'ITAS_FLAGS_PATH = {str(default_data_path)!r}',
-		'ITAS_DID_CATEGORIES = {!r}'.format( [
-			'general',
-			'medical',
-			'shoes',
-		] ),
 		f'ITAS_DID_FIELDS = {[]!r}',
 		f'ITAS_DID_VARIABLES_EXAMPLES = {[]!r}',
-		'ITAS_ANI_OVERRIDES_EXAMPLES = {!r}'.format( [
+		'ITAS_ANI_OVERRIDES_EXAMPLES = {!r}'.format([
 			'# <<< anything after a # is a "comment" and is ignored',
 			'8005551212 6999 # always send calls with this ANI and DID 8005551212 to route 6999',
 			'8005551213 6999 1999-12-31 # send calls with this ANI and DID 8005551213 to route 6999 until Dec 31, 1999 12:00:00 AM',
 			'8005551214 6999 1999-12-31 08:00:00 # send calls with this ANI and DID 8005551214 to route 6999 until Dec 31, 1999 8:00 AM (local time)',
-		] ),
-		f'ITAS_VOICEMAIL_MIN_PIN_LENGTH = {4!r}',
+		]),
 		f'ITAS_VOICEMAIL_BOXES_PATH = {"/usr/share/itas/ace/boxes/"!r}',
 		f'ITAS_VOICEMAIL_MSGS_PATH = {"/usr/share/itas/ace/msgs/"!r}',
-		f'ITAS_VOICEMAIL_USE_TTS = {False!r}',
-		f'ITAS_SMTP_SECURE = {"yes"!r}',
-		f'ITAS_SMTP_HOST = {""!r}',
-		f'ITAS_SMTP_PORT = {465!r}',
-		f'ITAS_SMTP_TIMEOUT_SECONDS = {60!r}',
-		f'ITAS_SMTP_USERNAME = {""!r}',
-		f'ITAS_SMTP_PASSWORD = {""!r}',
-		f'ITAS_SMTP_EMAIL_FROM = {""!r}',
-		f'ITAS_SMS_CARRIER = {""!r}',
-		f'ITAS_SMS_EMULATOR = {False!r}',
-		f'ITAS_SMS_THINQ_ACCOUNT = {""!r}',
-		f'ITAS_SMS_THINQ_USERNAME = {""!r}',
-		f'ITAS_SMS_THINQ_API_TOKEN = {""!r}',
-		f'ITAS_SMS_THINQ_FROM = {""!r}',
-		f'ITAS_SMS_TWILIO_SID = {""!r}',
-		f'ITAS_SMS_TWILIO_TOKEN = {""!r}',
-		f'ITAS_SMS_TWILIO_FROM = {""!r}',
-		f'ITAS_TTS_ACCESS_KEY = {""!r}',
-		f'ITAS_TTS_SECRET_KEY = {""!r}',
-		f'ITAS_TTS_REGION_NAME = {""!r}',
-		f'ITAS_TTS_LOCATION = {"/var/lib/freeswitch/tts/"!r}',
-		f'ITAS_TTS_DEFAULT_VOICE = {"Joanna"!r}',
-		'ITAS_MOTD = {!r}'.format( "Don't Panic!" ),
+		f'ITAS_SETTINGS_PATH = {"/etc/itas/ace/settings.json"!r}',
+		f'ITAS_UI_LOGFILE = {"/var/log/itas/ace/logs/ui.log"!r}',
+		f'ITAS_ENGINE_LOGFILE = {"/var/log/itas/ace/logs/engine.log"!r}',
 		'ITAS_LOGLEVELS = {!r}'.format( {} ),
 	] )
 	with cfg_path.open( 'w' ) as f:
@@ -442,58 +427,24 @@ ITAS_AUDIT_FILE: str = ''
 ITAS_AUDIT_TIME: str = ''
 ITAS_OWNER_USER: str = ''
 ITAS_OWNER_GROUP: str = ''
-ITAS_VOICE_DELIVER_ANI: str = ''
 ITAS_FREESWITCH_JSON_CDR_PATH: str = ''
-ITAS_FREESWITCH_SOUNDS: List[str] = []
-ITAS_PREANNOUNCE_PATH: str = ''
 ITAS_REPOSITORY_TYPE: str = ''
 ITAS_REPOSITORY_FS_PATH: str = ''
 ITAS_REPOSITORY_SQLITE_PATH: str = ''
 ITAS_FLAGS_PATH: str = ''
-ITAS_DID_CATEGORIES: List[str] = []
 ITAS_DID_FIELDS: List[Field] = []
 ITAS_DID_VARIABLES_EXAMPLES: List[str] = []
 ITAS_ANI_OVERRIDES_EXAMPLES: List[str] = []
-ITAS_VOICEMAIL_MIN_PIN_LENGTH: int
 ITAS_VOICEMAIL_BOXES_PATH: str
 ITAS_VOICEMAIL_MSGS_PATH: str
-ITAS_VOICEMAIL_USE_TTS: bool
-ITAS_SMTP_SECURE: Literal['yes','no','starttls']
-ITAS_SMTP_HOST: str
-ITAS_SMTP_PORT: Opt[int]
-ITAS_SMTP_TIMEOUT_SECONDS: int = 60
-ITAS_SMTP_USERNAME: str
-ITAS_SMTP_PASSWORD: str
-ITAS_SMTP_EMAIL_FROM: str = ''
-ITAS_SMS_CARRIER: Literal['','thinq','twilio'] = ''
-ITAS_SMS_EMULATOR: bool = False
-ITAS_SMS_THINQ_ACCOUNT: str = ''
-ITAS_SMS_THINQ_USERNAME: str = ''
-ITAS_SMS_THINQ_API_TOKEN: str = ''
-ITAS_SMS_THINQ_FROM: str = ''
-ITAS_SMS_TWILIO_SID: str = ''
-ITAS_SMS_TWILIO_TOKEN: str = ''
-ITAS_SMS_TWILIO_FROM: str = ''
-ITAS_TTS_ACCESS_KEY: str = ''
-ITAS_TTS_SECRET_KEY: str = ''
-ITAS_TTS_REGION_NAME: str = ''
-ITAS_TTS_LOCATION: str = ''
-ITAS_TTS_DEFAULT_VOICE: TTS_VOICES = 'Joanna'
-ITAS_MOTD: str = ''
+ITAS_SETTINGS_PATH: str
+ITAS_UI_LOGFILE: str = ''
+ITAS_ENGINE_LOGFILE: str = ''
 ITAS_LOGLEVELS: Dict[str,str] = {}
 exec( cfg_raw + '\n' ) # this exec overrides the variables from flask.cfg
-assert ITAS_SMTP_EMAIL_FROM, f'flask.cfg missing ITAS_SMTP_EMAIL_FROM'
-assert ITAS_SMTP_SECURE in ( 'yes', 'no', 'starttls' ), f'flask.cfg has invalid ITAS_SMTP_SECURE={ITAS_SMTP_SECURE!r}'
-assert ITAS_SMS_CARRIER in ( '', 'thinq', 'twilio' ), f'flask.cfg has invalid ITAS_SMS_CARRIER={ITAS_SMS_CARRIER!r}'
-if ITAS_SMS_CARRIER == 'thinq':
-	assert ITAS_SMS_THINQ_ACCOUNT, f'invalid ITAS_SMS_THINQ_ACCOUNT={ITAS_SMS_THINQ_ACCOUNT!r}'
-	assert ITAS_SMS_THINQ_USERNAME, f'invalid ITAS_SMS_THINQ_USERNAME={ITAS_SMS_THINQ_USERNAME!r}'
-	assert ITAS_SMS_THINQ_API_TOKEN, f'invalid ITAS_SMS_THINQ_API_TOKEN={ITAS_SMS_THINQ_API_TOKEN!r}'
-	assert ITAS_SMS_THINQ_FROM, f'invalid ITAS_SMS_THINQ_FROM={ITAS_SMS_THINQ_FROM!r}'
-elif ITAS_SMS_CARRIER == 'twilio':
-	assert ITAS_SMS_TWILIO_SID, f'invalid ITAS_SMS_TWILIO_SID={ITAS_SMS_TWILIO_SID!r}'
-	assert ITAS_SMS_TWILIO_TOKEN, f'invalid ITAS_SMS_TWILIO_TOKEN={ITAS_SMS_TWILIO_TOKEN!r}'
-	assert ITAS_SMS_TWILIO_FROM, f'invalid ITAS_SMS_TWILIO_FROM={ITAS_SMS_TWILIO_FROM!r}'
+assert ITAS_AUDIT_DIR, f'flask.cfg missing ITAS_AUDIT_DIR'
+assert ITAS_UI_LOGFILE, f'flask.cfg missing ITAS_UI_LOGFILE'
+assert ITAS_ENGINE_LOGFILE, f'flask.cfg missing ITAS_ENGINE_LOGFILE'
 # end of flask.cfg variables
 
 app.config.from_object( __name__ )
@@ -783,7 +734,7 @@ def http_login() -> Response:
 
 @app.route( '/reauth', methods = [ 'GET', 'POST' ] )
 @login_required # type: ignore
-def http_reauth() -> Any:
+def http_reauth() -> Response:
 	log = logger.getChild( 'http_reauth' )
 	if request.method == 'POST':
 		confirm_login()
@@ -794,7 +745,7 @@ def http_reauth() -> Any:
 	)
 
 @app.route( '/logout' )
-def http_logout() -> Any:
+def http_logout() -> Response:
 	log = logger.getChild( 'http_logout' )
 	log.debug( 'logging out current user' )
 	return_type = accept_type()
@@ -824,6 +775,9 @@ def http_send_from_directory( filepath: str ) -> Response:
 def http_index() -> Response:
 	#log = logger.getChild( 'http_index' )
 	#return_type = accept_type()
+	
+	settings = ace_settings.load()
+	
 	return html_page(
 		'TODO FIXME',
 	)
@@ -851,7 +805,8 @@ def _iter_sounds( sounds: Path ) -> Iterator[str]:
 def http_sounds() -> Response:
 	return_type = accept_type()
 	sounds: List[Dict[str,str]] = []
-	for path in map( Path, ITAS_FREESWITCH_SOUNDS ):
+	settings = ace_settings.load()
+	for path in map( Path, settings.freeswitch_sounds ):
 		sounds.extend( [
 			{ 'sound': sound }
 			for sound in _iter_sounds( path )
@@ -1000,6 +955,20 @@ def try_post_did( did: int, data: Dict[str,str] ) -> int:
 		data2['tollfree'] = tollfree
 	
 	try:
+		category = data.get( 'category', '' )
+	except Exception as e4:
+		raise ValidationError( f'invalid Category: {e4!r}' ) from None
+	if category:
+		data2['category'] = category
+	
+	try:
+		did_flag = data.get( 'did_flag', '' )
+	except Exception as e6:
+		raise ValidationError( f'invalid DID Flag: {e6!r}' ) from None
+	if did_flag:
+		data2['did_flag'] = did_flag
+	
+	try:
 		acct_ = data.get( 'acct', '' )
 		acct: Opt[int] = int( acct_ ) if acct_ else None
 	except Exception as e2:
@@ -1017,23 +986,16 @@ def try_post_did( did: int, data: Dict[str,str] ) -> int:
 		data2['name'] = name
 	
 	try:
-		category = data.get( 'category', '' )
-	except Exception as e4:
-		raise ValidationError( f'invalid Category: {e4!r}' ) from None
-	if category:
-		data2['category'] = category
+		acct_flag = data.get( 'acct_flag', '' )
+	except Exception as e6:
+		raise ValidationError( f'invalid Acct Flag: {e6!r}' ) from None
+	if acct_flag:
+		data2['acct_flag'] = acct_flag
 	
 	route = data.get( 'route' ) or ''
 	if not valid_destination( route ):
 		raise ValidationError( f'invalid Destination: {route!r}' )
 	data2['route'] = route
-	
-	try:
-		flag = data.get( 'flag', '' )
-	except Exception as e6:
-		raise ValidationError( f'invalid Flag: {e6!r}' ) from None
-	if flag:
-		data2['flag'] = flag
 	
 	for field in ITAS_DID_FIELDS:
 		rawvalue: Opt[str] = data.get( field.field, '' ) or None
@@ -1056,19 +1018,28 @@ def try_post_did( did: int, data: Dict[str,str] ) -> int:
 		data2['notes'] = notes
 	
 	path = did_file_path( did2 )
-	auditdata = ''.join (
-		f'\n\t{k}={v!r}' for k, v in data2.items()
-		if v not in ( None, '' )
-	)
+	with path.open( 'r' ) as f:
+		olddata = json.loads( f.read() )
+	keys = set( olddata.keys() ) | set( data2.keys() )
+	auditdata_: List[str] = []
+	for key in sorted( keys ):
+		oldval = coalesce( olddata.get( key ), '' )
+		newval = coalesce( data2.get( key ), '' )
+		if oldval != newval:
+			auditdata_.append( f'\t{key}: {oldval!r} -> {newval!r}' )
+		else:
+			auditdata_.append( f'\t{key}: {oldval!r} (unchanged)' )
+	auditdata = '\n'.join ( auditdata_ )
 	
 	audit = new_audit()
 	
+	glue = ':\n' if auditdata else ''
 	if did:
-		audit.audit( f'Changed DID {did} at {str(path)!r}:{auditdata}' )
+		audit.audit( f'Changed DID {did} at {str(path)!r}{glue}{auditdata}' )
 	else:
 		if path.exists():
 			raise ValidationError( f'DID already exists: {did2}' )
-		audit.audit( f'Created DID {did2} at {str(path)!r}:{auditdata}' )
+		audit.audit( f'Created DID {did2} at {str(path)!r}{glue}{auditdata}' )
 	with path.open( 'w' ) as f:
 		print( repo.json_dumps( data2 ), file = f )
 	
@@ -1123,9 +1094,10 @@ def http_did( did: int ) -> Response:
 			data = request.args
 	
 	tollfree: str = data.get( 'tollfree' ) or ''
+	category: str = data.get( 'category' ) or ''
 	acct: str = data.get( 'acct' ) or ''
 	name: str = data.get( 'name' ) or ''
-	category: str = data.get( 'category' ) or ''
+	acct_flag = data.get( 'acct_flag', '' )
 	route_: str = str( data.get( 'route' ) or '' ).strip()
 	if route_:
 		if route_.startswith( 'V' ):
@@ -1147,7 +1119,7 @@ def http_did( did: int ) -> Response:
 					400,
 				)
 	variables = data.get( 'variables', '' )
-	flag = data.get( 'flag', '' )
+	did_flag = data.get( 'did_flag', '' )
 	notes = data.get( 'notes', '' )
 	
 	html_rows = [
@@ -1158,8 +1130,10 @@ def http_did( did: int ) -> Response:
 	else:
 		did_html = html_text( str( did ))
 	
+	settings = ace_settings.load()
+	
 	category_options: List[str] = [ '<option value="">(None)</option>' ]
-	for cat in ITAS_DID_CATEGORIES:
+	for cat in settings.did_categories:
 		att = ' selected' if category == cat else ''
 		category_options.append( f'<option{att}>{cat}</option>' )
 	
@@ -1206,7 +1180,8 @@ def http_did( did: int ) -> Response:
 			route_options.insert( 0, f'<option value="{route_}" selected>Route {route_} DOES NOT EXIST</option>' )
 	
 	category_tip = 'All DIDs assigned to the same category will look for a preannounce of "category_{category_name}_{category_flag}.wav"'
-	flag_tip = 'Causes preannounce calculation to look for "{DID}_{didflag}.wav"'
+	acct_flag_tip = 'Causes preannounce calculation to look for "{Acct}_{acct_flag}.wav"'
+	did_flag_tip = 'Causes preannounce calculation to look for "{DID}_{did_flag}.wav"'
 	
 	html_rows.extend( [
 		
@@ -1214,6 +1189,9 @@ def http_did( did: int ) -> Response:
 		f'<b>DID:</b><br/>{did_html}',
 		'</td><td>&nbsp;</td><td valign="top">',
 		f'<b>Toll Free #:</b><br/><input type="text" name="tollfree" value="{html_att(str(tollfree))}" size="15" maxlength="15"/><br/><br/>',
+		'</td><td>&nbsp;</td><td valign="top">',
+		'<b>Category:</b><br/>',
+		f'<span tooltip="{html_att(category_tip)}"><select name="category">{"".join(category_options)}</select></span>',
 		'</td></tr></table>',
 		
 		'<table class="unpadded"><tr><td valign="top">',
@@ -1221,15 +1199,15 @@ def http_did( did: int ) -> Response:
 		'</td><td>&nbsp;</td><td valign="top">',
 		f'<b>Client Name:</b><br/><input type="text" name="name" value="{html_att(name)}" size="31" maxlength="30"/><br/><br/>',
 		'</td><td>&nbsp;</td><td valign="top">',
-		'<b>Category:</b><br/>',
-		f'<span tooltip="{category_tip}"><select name="category">{"".join(category_options)}</select></span>',
+		'<b>Acct Flag:</b><br/>',
+		f'<span tooltip="{html_att(acct_flag_tip)}"><input type="text" name="acct_flag" value="{html_att(str(acct_flag))}" size="31" maxlength="30"/></span>',
 		'</td></tr></table>',
 		
 		'<table class="unpadded"><tr><td valign="top">',
 		f'<b>Destination:</b><br/><select name="route">{"".join(route_options)}</select>',
 		'</td><td>&nbsp;</td><td valign="top">',
 		'<b>DID Flag:</b><br/>',
-		f'<span tooltip="{flag_tip}"><input type="text" name="flag" value="{html_att(str(flag))}" size="31" maxlength="30"/></span>',
+		f'<span tooltip="{html_att(did_flag_tip)}"><input type="text" name="did_flag" value="{html_att(str(did_flag))}" size="31" maxlength="30"/></span>',
 		'</td></tr></table>',
 		'<br/>',
 	])
@@ -1424,17 +1402,28 @@ def try_post_ani( ani: int, data: Dict[str,str] ) -> int:
 		data2['notes'] = notes
 	
 	path = ani_file_path( ani2 )
-	auditdata = ''.join (
-		f'\n\t{k}={v!r}' for k, v in data2.items()
-		if v not in ( None, '' )
-	)
+	with path.open( 'r' ) as f:
+		olddata = json.loads( f.read() )
+	keys = set( olddata.keys() ) | set( data2.keys() )
+	auditdata_: List[str] = []
+	for key in sorted( keys ):
+		oldval = coalesce( olddata.get( key ), '' )
+		newval = coalesce( data2.get( key ), '' )
+		if oldval != newval:
+			auditdata_.append( f'\t{key}: {oldval!r} -> {newval!r}' )
+		else:
+			auditdata_.append( f'\t{key}: {oldval!r} (unchanged)' )
+	auditdata = '\n'.join ( auditdata_ )
+	
 	audit = new_audit()
+	
+	glue = ':\n' if auditdata else ''
 	if ani:
-		audit.audit( f'Changed ANI {ani} at {str(path)!r}:{auditdata}' )
+		audit.audit( f'Changed ANI {ani} at {str(path)!r}{glue}{auditdata}' )
 	else:
 		if path.exists():
 			raise ValidationError( f'ANI already exists: {ani2}' )
-		audit.audit( f'Created ANI {ani2} at {str(path)!r}:{auditdata}' )
+		audit.audit( f'Created ANI {ani2} at {str(path)!r}{glue}{auditdata}' )
 	with path.open( 'w' ) as f:
 		print( repo.json_dumps( data2 ), file = f )
 	
@@ -1632,8 +1621,10 @@ def http_flags() -> Response:
 			'</form><br/>'
 		)
 	
+	settings = ace_settings.load()
+	
 	flag_form( 'global_flag', 'Global Flag:' )
-	for cat in ITAS_DID_CATEGORIES:
+	for cat in settings.did_categories:
 		flag_form( f'category_{cat}', f'Category: {cat}' )
 	
 	return html_page(
@@ -2198,12 +2189,79 @@ def http_voicemail( box: int ) -> Response:
 
 
 #endregion http - voicemail
+#region http - settings
+
+
+@app.route( '/settings' )
+@login_required # type: ignore
+def http_settings() -> Response:
+	return_type = accept_type()
+	
+	settings = ace_settings.load()
+	
+	if return_type == 'application/json':
+		return rest_success([ asdict( settings )])
+	
+	h: List[str] = [
+		'<table class="fancy">',
+		'<tr><th>Field</th><th>Value</th>',
+	]
+	for fld in fields( ace_settings.Settings ):
+		editor: ace_settings.Editor = fld.metadata['editor']
+		value = getattr( settings, fld.name )
+		url = url_for( 'http_settings_id', fld_name = fld.name )
+		h.extend([
+			'<tr><td>',
+			f'<a href="{url}">{fld.metadata["description"]}</a>',
+			'</td><td>',
+			f'<a href="{url}">{editor.display( value )}</a>',
+			'</td></tr>',
+		])
+	h.append( '</table>' )
+	
+	return html_page( *h )
+
+
+@app.route( '/settings/<string:fld_name>', methods = [ 'GET', 'POST' ])
+@login_required # type: ignore
+def http_settings_id( fld_name: str ) -> Response:
+	return_type = accept_type()
+	
+	flds = { fld.name: fld for fld in fields( ace_settings.Settings )}
+	fld = flds[fld_name]
+	editor: ace_settings.Editor = fld.metadata['editor']
+	
+	settings = ace_settings.load()
+	
+	if request.method == 'POST':
+		data = inputs()
+		oldvalue = getattr( settings, fld.name )
+		newvalue = editor.post( settings, fld, data )
+		audit = new_audit()
+		audit.audit( f'Changed Setting {fld.name} from {oldvalue!r} to {newvalue!r}' )
+		setattr( settings, fld.name, newvalue )
+		ace_settings.save( settings )
+		if return_type == 'application/json':
+			rest_success([{ fld.name: newvalue }])
+	
+	return html_page(
+		'<form method="POST">',
+		f'<label for="{fld.name}">{html.escape(fld.metadata["description"])}:<br/>',
+		editor.edit( settings, fld ),
+		'</label>',
+		'<br/><br/>',
+		'<input type="submit" value="Save"/>',
+		'</form>',
+	)
+
+
+#endregion http - settings
 #region http - audits
 
 
 @app.route( '/audit' )
 @login_required # type: ignore
-def http_audits() -> Any:
+def http_audits() -> Response:
 	return_type = accept_type()
 	
 	q_limit = qry_int( 'limit', 20, min = 1, max = 1000 )
@@ -2278,7 +2336,7 @@ def http_audits() -> Any:
 
 @app.route( '/audit/<filename>' )
 @login_required # type: ignore
-def http_audit_item( filename: str ) -> Any:
+def http_audit_item( filename: str ) -> Response:
 	return_type = accept_type()
 	if not valid_audit_filename( filename ):
 		return _http_failure(
@@ -2438,52 +2496,30 @@ def spawn ( target: Callable[...,Any], *args: Any, **kwargs: Any ) -> Thread:
 
 
 if __name__ == '__main__':
-	ace_logging.init( ITAS_LOGLEVELS )
-	cmd = sys.argv[1] if len( sys.argv ) > 1 else ''
+	ace_logging.init( Path( ITAS_UI_LOGFILE ), ITAS_LOGLEVELS )
+	cmd: List[str] = sys.argv[1:2]
 	if cmd:
-		sys.exit( service_command( cmd ))
+		sys.exit( service_command( cmd[0] ))
 	login_manager.init_app( app )
 	
-	assert ITAS_TTS_DEFAULT_VOICE in tts_voices, f'invalid ITAS_TTS_DEFAULT_VOICE={ITAS_TTS_DEFAULT_VOICE!r}'
+	settings_path = Path( ITAS_SETTINGS_PATH )
+	ace_settings.init( settings_path, g_settings_mplock )
+	
+	#assert ITAS_TTS_DEFAULT_VOICE in tts_voices, f'invalid ITAS_TTS_DEFAULT_VOICE={ITAS_TTS_DEFAULT_VOICE!r}'
 	ace_engine.start( ace_engine.Config(
-		repo_anis = REPO_ANIS,
-		repo_dids = REPO_DIDS,
-		repo_routes = REPO_ROUTES,
+		settings_path = settings_path,
+		settings_mplock = g_settings_mplock,
+		repo_anis = repo.AsyncRepository( REPO_ANIS ),
+		repo_dids = repo.AsyncRepository( REPO_DIDS ),
+		repo_routes = repo.AsyncRepository( REPO_ROUTES ),
 		did_fields = ITAS_DID_FIELDS,
 		flags_path = flags_path,
-		preannounce_path = Path( ITAS_PREANNOUNCE_PATH ),
-		vm_min_pin_length = ITAS_VOICEMAIL_MIN_PIN_LENGTH,
 		vm_box_path = voicemail_meta_path,
 		vm_msgs_path = voicemail_msgs_path,
 		owner_user = ITAS_OWNER_USER,
 		owner_group = ITAS_OWNER_GROUP,
-		voice_deliver_ani = ITAS_VOICE_DELIVER_ANI,
 		
-		smtp_secure = ITAS_SMTP_SECURE,
-		smtp_host = ITAS_SMTP_HOST,
-		smtp_port = ITAS_SMTP_PORT,
-		smtp_timeout_seconds = ITAS_SMTP_TIMEOUT_SECONDS,
-		smtp_username = ITAS_SMTP_USERNAME,
-		smtp_password = ITAS_SMTP_PASSWORD,
-		email_from = ITAS_SMTP_EMAIL_FROM,
-		
-		sms_carrier = ITAS_SMS_CARRIER,
-		sms_emulator = ITAS_SMS_EMULATOR,
-		sms_thinq_account = ITAS_SMS_THINQ_ACCOUNT,
-		sms_thinq_username = ITAS_SMS_THINQ_USERNAME,
-		sms_thinq_api_token = ITAS_SMS_THINQ_API_TOKEN,
-		sms_thinq_from = ITAS_SMS_THINQ_FROM,
-		sms_twilio_sid = ITAS_SMS_TWILIO_SID,
-		sms_twilio_token = ITAS_SMS_TWILIO_TOKEN,
-		sms_twilio_from = ITAS_SMS_TWILIO_FROM,
-		
-		vm_use_tts = ITAS_VOICEMAIL_USE_TTS,
-		aws_access_key = ITAS_TTS_ACCESS_KEY,
-		aws_secret_key = ITAS_TTS_SECRET_KEY,
-		aws_region_name = ITAS_TTS_REGION_NAME,
-		tts_location = Path( ITAS_TTS_LOCATION ),
-		tts_default_voice = ITAS_TTS_DEFAULT_VOICE,
-		
+		engine_logfile = Path( ITAS_ENGINE_LOGFILE ),
 		loglevels = ITAS_LOGLEVELS,
 	))
 	

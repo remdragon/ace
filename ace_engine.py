@@ -20,6 +20,7 @@ from itertools import chain
 import json
 import logging
 from multiprocessing import Process
+from multiprocessing.synchronize import RLock as MPLock
 from mypy_extensions import TypedDict
 from pathlib import Path
 import re
@@ -40,9 +41,10 @@ import pydub # pip install pydub
 # local imports:
 from ace_fields import Field
 import ace_logging
+import ace_settings
 from ace_tod import match_tod
 import ace_util as util
-from ace_voicemail import Voicemail, MSG, SETTINGS, SILENCE_1_SECOND
+from ace_voicemail import LoadBoxError, Voicemail, MSG, BOXSETTINGS, SILENCE_1_SECOND
 import aiohttp_logging
 from dhms import dhms
 from email_composer import Email_composer
@@ -57,6 +59,8 @@ from tts import TTS, TTS_VOICES, tts_voices
 
 
 logger = logging.getLogger( __name__ )
+
+SMS_EMULATOR = False # only enable for debugging
 
 GOTO: Final = 'goto'
 EXEC: Final = 'exec'
@@ -225,47 +229,20 @@ class ACTION_WAIT( ACTION ):
 
 @dataclass
 class Config:
-	repo_anis: repo.Repository
-	repo_dids: repo.Repository
-	repo_routes: repo.Repository
+	settings_path: Path
+	settings_mplock: MPLock
+	
+	repo_anis: repo.AsyncRepository
+	repo_dids: repo.AsyncRepository
+	repo_routes: repo.AsyncRepository
 	did_fields: List[Field]
 	flags_path: Path
-	preannounce_path: Path
-	vm_min_pin_length: int
 	vm_box_path: Path
 	vm_msgs_path: Path
 	owner_user: str
 	owner_group: str
-	voice_deliver_ani: str
 	
-	# SMTP stuff:
-	smtp_secure: Literal['yes','no','starttls']
-	smtp_host: str
-	smtp_port: Opt[int]
-	smtp_timeout_seconds: int
-	smtp_username: str
-	smtp_password: str
-	email_from: str
-	
-	# SMS stuff:
-	sms_carrier: Literal['','thinq','twilio']
-	sms_emulator: bool
-	sms_thinq_account: str
-	sms_thinq_username: str
-	sms_thinq_api_token: str
-	sms_thinq_from: str
-	sms_twilio_sid: str
-	sms_twilio_token: str
-	sms_twilio_from: str
-	
-	# TTS stuff:
-	vm_use_tts: bool
-	aws_access_key: str
-	aws_secret_key: str
-	aws_region_name: str
-	tts_location: Path
-	tts_default_voice: TTS_VOICES
-	
+	engine_logfile: Path
 	loglevels: Dict[str,str]
 
 
@@ -338,9 +315,6 @@ def expired( expiration: str ) -> bool:
 
 class State( metaclass = ABCMeta ):
 	config: Config
-	repo_anis: repo.AsyncRepository
-	repo_dids: repo.AsyncRepository
-	repo_routes: repo.AsyncRepository
 	
 	# operational values:
 	route: int
@@ -419,7 +393,7 @@ class State( metaclass = ABCMeta ):
 		raise ValueError( f'Expecting {name!r} of type convertable to int/float but got {value!r}' )
 	
 	async def load_route( self, route: int ) -> Dict[str,Any]:
-		return await self.repo_routes.get_by_id( route )
+		return await self.config.repo_routes.get_by_id( route )
 	
 	async def exec_branch( self, action: ACTION, which: str, pagd: Opt[PAGD], *, log: logging.Logger ) -> RESULT:
 		branch: BRANCH = cast( BRANCH, expect( dict, action.get( which ), default = {} ))
@@ -630,21 +604,21 @@ class State( metaclass = ABCMeta ):
 			i += 1
 		return CONTINUE
 	
-	async def _sms_thinq( self, smsto: str, message: str ) -> RESULT:
+	async def _sms_thinq( self, smsto: str, message: str, settings: ace_settings.Settings ) -> RESULT:
 		log = logger.getChild( 'State._sms_thinq' )
 		
-		url = f'https://api.thinq.com/account/{self.config.sms_thinq_account}/product/origination/sms/send'
-		if self.config.sms_emulator: # enable this for testing with sms_emulators.py
+		url = f'https://api.thinq.com/account/{settings.sms_thinq_account}/product/origination/sms/send'
+		if SMS_EMULATOR: # enable this for testing with sms_emulators.py
 			url = 'http://127.0.0.1:8080/thinq/send'
 		auth = base64.b64encode(
-			f'{self.config.sms_thinq_username}:{self.config.sms_thinq_api_token}'.encode( 'utf-8' )
+			f'{settings.sms_thinq_username}:{settings.sms_thinq_api_token}'.encode( 'utf-8' )
 		).decode( 'us-ascii' )
 		
 		headers = {
 			'Authorization': f'Basic {auth}',
 		}
 		formdata = {
-			'from_did': self.config.sms_thinq_from,
+			'from_did': settings.sms_thinq_from,
 			'to_did': smsto,
 			'message': message,
 		}
@@ -665,21 +639,21 @@ class State( metaclass = ABCMeta ):
 					log.error( 'sms to %r failure: %r', smsto, jdata )
 		return CONTINUE
 	
-	async def _sms_twilio( self, smsto: str, message: str ) -> RESULT:
+	async def _sms_twilio( self, smsto: str, message: str, settings: ace_settings.Settings ) -> RESULT:
 		log = logger.getChild( 'State._sms_twilio' )
 		
-		url = f'https://api.twilio.com/2010-04-01/Accounts/{self.config.sms_twilio_sid}/Messages.json'
-		if self.config.sms_emulator: # enable this for testing with sms_emulators.py
+		url = f'https://api.twilio.com/2010-04-01/Accounts/{settings.sms_twilio_sid}/Messages.json'
+		if SMS_EMULATOR: # enable this for testing with sms_emulators.py
 			url = 'http://127.0.0.1:8080/twilio/send'
 		auth = base64.b64encode(
-			f'{self.config.sms_twilio_sid}:{self.config.sms_twilio_token}'.encode( 'utf-8' )
+			f'{settings.sms_twilio_sid}:{settings.sms_twilio_token}'.encode( 'utf-8' )
 		).decode( 'us-ascii' )
 		
 		headers = {
 			'Authorization': f'Basic {auth}',
 		}
 		formdata = {
-			'From': self.config.sms_twilio_from,
+			'From': settings.sms_twilio_from,
 			'To': f'+1{smsto}',
 			'Body': message,
 		}
@@ -711,8 +685,8 @@ class State( metaclass = ABCMeta ):
 		smsto: str = str( action.get( 'smsto' ) or '' ).strip() # TODO FIXME: thinq expects 'XXXXXXXXXX'
 		message: str = str( action.get( 'message' ) or '' ).strip()
 		if not message:
-			settings = cast( Opt[SETTINGS], getattr( self, 'settings', None ))
-			message = ( settings.get( 'default_sms_message' ) if settings else '' ) or 'You have a new voicemail'
+			boxsettings = cast( Opt[BOXSETTINGS], getattr( self, 'settings', None ))
+			message = ( boxsettings.get( 'default_sms_message' ) if boxsettings else '' ) or 'You have a new voicemail'
 		
 		message = message.replace( '\n', '\\n' )
 		message = await self.expand( message )
@@ -721,12 +695,14 @@ class State( metaclass = ABCMeta ):
 			log.warning( 'cannot send sms - no recipient' )
 			return CONTINUE
 		
-		if self.config.sms_carrier == 'thinq':
-			return await self._sms_thinq( smsto, message )
-		elif self.config.sms_carrier == 'twilio':
-			return await self._sms_twilio( smsto, message )
+		settings = await ace_settings.aload()
+		
+		if settings.sms_carrier == 'thinq':
+			return await self._sms_thinq( smsto, message, settings )
+		elif settings.sms_carrier == 'twilio':
+			return await self._sms_twilio( smsto, message, settings )
 		else:
-			log.error( 'cannot send sms, invalid sms_carrier=%r', self.config.sms_carrier )
+			log.error( 'cannot send sms, invalid sms_carrier=%r', settings.sms_carrier )
 			return CONTINUE
 	
 	async def action_tod( self, action: ACTION_TOD, pagd: Opt[PAGD] ) -> RESULT:
@@ -797,7 +773,7 @@ class CallState( State ):
 		log = logger.getChild( 'CallState.try_ani' )
 		
 		try:
-			data = await self.repo_anis.get_by_id( self.ani )
+			data = await self.config.repo_anis.get_by_id( self.ani )
 		except repo.ResourceNotFound as e:
 			log.debug( 'no config found for ani %r', self.ani )
 			return None
@@ -836,7 +812,7 @@ class CallState( State ):
 	async def try_did( self ) -> Tuple[Opt[Union[int,str]],Opt[Dict[str,Any]]]:
 		log = logger.getChild( 'CallState.try_did' )
 		try:
-			data = await self.repo_dids.get_by_id( self.did )
+			data = await self.config.repo_dids.get_by_id( self.did )
 		except repo.ResourceNotFound as e:
 			log.debug( 'no config found for did %r', self.did )
 			return None, None
@@ -873,7 +849,8 @@ class CallState( State ):
 	
 	async def try_wav( self, filename: str ) -> bool:
 		log = logger.getChild( 'CallState.try_wav' )
-		path = self.config.preannounce_path / f'{filename}.wav'
+		settings = await ace_settings.aload()
+		path = Path( settings.preannounce_path ) / f'{filename}.wav'
 		if not path.is_file():
 			log.debug( 'path not found: %r', str( path ))
 			return False
@@ -898,7 +875,14 @@ class CallState( State ):
 				if await self.try_wav( f'category_{category}_{cat_flag}' ):
 					return
 		
-		did_flag = ( didinfo.get( 'flag' ) or '' ).strip()
+		acct = ( didinfo.get( 'acct' ) or '' ).strip()
+		if acct:
+			acct_flag = ( didinfo.get( 'acct_flag' ) or '' ).strip()
+			if acct_flag:
+				if await self.try_wav( f'{acct}_{acct_flag}' ):
+					return
+		
+		did_flag = ( didinfo.get( 'did_flag' ) or '' ).strip()
 		if did_flag:
 			if await self.try_wav( f'{self.did}_{did_flag}' ):
 				return
@@ -1265,11 +1249,13 @@ class CallState( State ):
 	async def _greeting( self, action: ACTION_GREETING, box: int, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState._greeting' )
 		greeting: int = await self.toint( action, 'greeting', default = 1 )
-		vm = Voicemail( self.esl, self.uuid )
+		settings = await ace_settings.aload()
+		vm = Voicemail( self.esl, self.uuid, settings )
 		if greeting < 1 or greeting > 9:
-			settings = vm.load_box_settings( box )
-			if not settings:
-				log.error( 'invalid box=%r (unable to load settings)', box )
+			try:
+				boxsettings: BOXSETTINGS = await vm.load_box_settings( box )
+			except LoadBoxError as e:
+				log.error( 'invalid box=%r ({e!r})', box )
 				return CONTINUE
 			greeting = await self.toint( action, 'greeting', default = 1 )
 		path = vm.box_greeting_path( box, greeting )
@@ -1386,11 +1372,13 @@ class CallState( State ):
 		log = logger.getChild( 'CallState.action_playtts' )
 		if self.state == HUNT: return CONTINUE
 		
+		settings = await ace_settings.aload()
+		
 		text = await self.expand( action.get( 'text' ) or '' )
 		if not text:
 			log.error( 'tts node has no text prompt' )
 			text = 'Error'
-		tts = TTS( action.get( 'voice' ))
+		tts = settings.tts( action.get( 'voice' ))
 		tts.say( text )
 		stream = await tts.generate()
 		r = await self._playback( str( stream ), pagd )
@@ -1592,11 +1580,11 @@ class CallState( State ):
 		self.hangup_on_exit = False
 		return STOP
 	
-	async def _guest_greeting( self, action: ACTION_VOICEMAIL, box: int, settings: SETTINGS, vm: Voicemail ) -> Opt[str]:
+	async def _guest_greeting( self, action: ACTION_VOICEMAIL, box: int, boxsettings: BOXSETTINGS, vm: Voicemail ) -> Opt[str]:
 		log = logger.getChild( 'CallState._guest_greeting' )
 		
 		try:
-			active_greeting = int( settings.get( 'greeting' ) or '' )
+			active_greeting = int( boxsettings.get( 'greeting' ) or '' )
 		except ValueError:
 			active_greeting = 1
 		
@@ -1626,7 +1614,7 @@ class CallState( State ):
 			if greeting_override:
 				log.warning( 'invalid greeting_override=%r', greeting_override )
 			which = 'greetingBranch'
-			greeting_branch = cast( BRANCH, settings.get( which ) or {} )
+			greeting_branch = cast( BRANCH, boxsettings.get( which ) or {} )
 		
 		if not greeting_branch.get( 'nodes' ):
 			# this can happen if:
@@ -1665,7 +1653,8 @@ class CallState( State ):
 			log.warning( 'invalid box=%r', action.get( 'box' ))
 			return CONTINUE
 		
-		vm = Voicemail( self.esl, self.uuid )
+		settings = await ace_settings.aload()
+		vm = Voicemail( self.esl, self.uuid, settings )
 		
 		_ = await util.answer( self.esl, self.uuid, 'CallState.action_voicemail' )
 		
@@ -1674,28 +1663,28 @@ class CallState( State ):
 				return STOP
 			return CONTINUE
 		
-		settings_: Opt[SETTINGS] = await vm.load_box_settings( box )
-		if settings_ is None:
+		try:
+			boxsettings: BOXSETTINGS = await vm.load_box_settings( box )
+		except LoadBoxError:
 			stream = await vm._the_person_you_are_trying_to_reach_is_not_available_and_does_not_have_voicemail()
 			await vm.play_menu([ stream ])
 			# TODO FIXME: do we want to forceably hangup the call here?
 			# TODO FIXME: or add a "no box" branch to the voicemail node in the editor?
 			await vm.goodbye()
 			return STOP
-		settings: SETTINGS = settings_
 		
-		branches: BRANCHES = settings.get( 'branches' ) or {}
+		branches: BRANCHES = boxsettings.get( 'branches' ) or {}
 		digit: Opt[str] = None
 		while True: # this loop only exists to serve replay of greeting in the case of "invalid entry"
 			if not digit:
-				digit = await self._guest_greeting( action, box, settings, vm )
+				digit = await self._guest_greeting( action, box, boxsettings, vm )
 			if digit is None:
 				return STOP
 			if digit == '*':
 				# user pressed * during the above recording, time to try to log them into their box
-				if await vm.login( box, settings ):
+				if await vm.login( box, boxsettings ):
 					log.debug( 'login success, calling admin_main_menu for box=%r', box )
-					await vm.admin_main_menu( box, settings )
+					await vm.admin_main_menu( box, boxsettings )
 					log.debug( 'back from admin_main_menu from box=%r', box )
 				log.debug( 'hanging up and terminating script' )
 				await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'CallState.action_voicemail' )
@@ -1716,17 +1705,17 @@ class CallState( State ):
 			# no diversions selected, record message:
 			if digit and digit != '#':
 				log.warning( 'invalid digit=%r', digit )
-			if await vm.guest( self.did, self.ani, box, settings, self.notify ):
+			if await vm.guest( self.did, self.ani, box, boxsettings, self.notify ):
 				await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'CallState.action_voicemail' )
 			return STOP
 		
 		return CONTINUE
 	
-	async def notify( self, box: int, settings: SETTINGS, msg: MSG ) -> None:
+	async def notify( self, box: int, boxsettings: BOXSETTINGS, msg: MSG ) -> None:
 		log = logger.getChild( 'CallState.notify' )
 		try:
-			state = NotifyState( self.esl, box, msg, settings )
-			delivery = settings.get( 'delivery' ) or {}
+			state = NotifyState( self.esl, box, msg, boxsettings )
+			delivery = boxsettings.get( 'delivery' ) or {}
 			nodes = delivery.get( 'nodes' ) or []
 			await state.exec_top_actions( nodes )
 		except Exception:
@@ -1738,11 +1727,11 @@ class CallState( State ):
 
 
 class NotifyState( State ):
-	def __init__( self, esl: ESL, box: int, msg: MSG, settings: SETTINGS ) -> None:
+	def __init__( self, esl: ESL, box: int, msg: MSG, boxsettings: BOXSETTINGS ) -> None:
 		super().__init__( esl )
 		self.box = box
 		self.msg = msg
-		self.settings = settings
+		self.boxsettings = boxsettings
 	
 	async def can_continue( self ) -> bool:
 		return self.msg.status == 'new' and self.msg.path.is_file()
@@ -1752,11 +1741,13 @@ class NotifyState( State ):
 		log = logger.getChild( 'NotifyState.action_email' )
 		if self.state == HUNT: return CONTINUE
 		
+		settings = await ace_settings.aload()
+		
 		ec = Email_composer()
 		ec.to = expect( str, action.get( 'mailto' ), default = '' )
 		cc = ''
 		bcc: List[str] = []
-		ec.from_ = self.config.email_from
+		ec.from_ = settings.smtp_email_from
 		ec.subject = expect( str, action.get( 'subject' ), default = '' )
 		ec.text = expect( str, action.get( 'body' ), default = '' )
 		fmt: str = expect( str, action.get( 'format' ), default = '' )
@@ -1770,13 +1761,13 @@ class NotifyState( State ):
 			return CONTINUE
 		
 		
-		if self.settings:
+		if self.boxsettings:
 			if not ec.subject:
-				ec.subject = self.settings.get( 'default_email_subject' ) or ''
+				ec.subject = self.boxsettings.get( 'default_email_subject' ) or ''
 			if not ec.text:
-				ec.text = self.settings.get( 'default_email_body' ) or ''
+				ec.text = self.boxsettings.get( 'default_email_body' ) or ''
 			if not fmt:
-				fmt = self.settings.get( 'format' ) or ''
+				fmt = self.boxsettings.get( 'format' ) or ''
 		if not fmt:
 			fmt = 'mp3'
 		
@@ -1793,22 +1784,22 @@ class NotifyState( State ):
 			with file.open( 'rb' ) as f:
 				ec.attach( f, file.name, content_type )
 		
-		if self.config.smtp_secure == 'yes':
+		if settings.smtp_secure == 'yes':
 			smtp: Union[smtplib2.SMTP,smtplib2.SMTP_SSL] = smtplib2.SMTP_SSL(
-				self.config.smtp_host,
-				self.config.smtp_port or 465,
-				timeout = self.config.smtp_timeout_seconds,
+				settings.smtp_host,
+				settings.smtp_port or 465,
+				timeout = settings.smtp_timeout_seconds,
 			)
 		else:
 			smtp = smtplib2.SMTP(
-				self.config.smtp_host,
-				self.config.smtp_port or 587,
-				timeout = self.config.smtp_timeout_seconds,
+				settings.smtp_host,
+				settings.smtp_port or 587,
+				timeout = settings.smtp_timeout_seconds,
 			)
 		
-		if self.config.smtp_username or self.config.smtp_password:
-			assert self.config.smtp_username and self.config.smtp_password
-			smtp.login( self.config.smtp_username, self.config.smtp_password )
+		if settings.smtp_username or settings.smtp_password:
+			assert settings.smtp_username and settings.smtp_password
+			smtp.login( settings.smtp_username, settings.smtp_password )
 		
 		smtp.sendmail( ec.from_, list( chain( ec.to, ec.cc, bcc )), ec.as_bytes() )
 		
@@ -1821,9 +1812,11 @@ class NotifyState( State ):
 		if timeout.total_seconds() <= 0:
 			timeout = datetime.timedelta( seconds = 60 )
 		
+		settings = await ace_settings.aload()
+		
 		dest = f'loopback/{number}/default'
 		cid_name = str( action.get( 'cid_name' ) or '' ).strip() or f'VMBox {self.box}'
-		cid_num = str( action.get( 'cid_num' ) or '' ).strip() or self.config.voice_deliver_ani
+		cid_num = str( action.get( 'cid_num' ) or '' ).strip() or settings.voice_deliver_ani
 		context = str( action.get( 'context' ) or '' ).strip() or 'default'
 		trusted = expect( bool, action.get( 'trusted' ))
 		
@@ -1865,8 +1858,9 @@ class NotifyState( State ):
 		if not answered:
 			return False, reason
 		
-		vm = Voicemail( self.esl, origination_uuid )
-		await vm.voice_deliver( self.box, self.msg, trusted, self.settings )
+		settings = await ace_settings.aload()
+		vm = Voicemail( self.esl, origination_uuid, settings )
+		await vm.voice_deliver( self.box, self.msg, trusted, self.boxsettings )
 		
 		return True, None
 	
@@ -1967,7 +1961,7 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 			}
 		else:
 			try:
-				routedata = state.config.repo_routes.get_by_id( route )
+				routedata = await state.config.repo_routes.get_by_id( route )
 			except repo.ResourceNotFound:
 				log.error( 'route does not exist: route=%r', route )
 				await util.hangup( esl, uuid, 'UNALLOCATED_NUMBER', 'ace_engine._handler#3' )
@@ -2007,22 +2001,12 @@ async def _server(
 	util.on_event = _on_event
 	
 	State.config = config
-	State.repo_anis = repo.AsyncRepository( config.repo_anis )
-	State.repo_dids = repo.AsyncRepository( config.repo_dids )
-	State.repo_routes = repo.AsyncRepository( config.repo_routes )
 	
-	TTS.aws_access_key = config.aws_access_key
-	TTS.aws_secret_key = config.aws_secret_key
-	TTS.aws_region_name = config.aws_region_name
-	TTS.tts_location = config.tts_location
-	TTS.tts_default_voice = config.tts_default_voice
 	await Voicemail.init(
 		box_path = config.vm_box_path,
 		msgs_path = config.vm_msgs_path,
 		owner_user = config.owner_user,
 		owner_group = config.owner_group,
-		min_pin_length = config.vm_min_pin_length,
-		use_tts = config.vm_use_tts,
 		on_event = _on_event,
 	)
 	server = await asyncio.start_server( _handler, '127.0.0.1', 8022 )
@@ -2033,7 +2017,8 @@ def _main(
 	config: Config
 ) -> None:
 	aiohttp_logging.monkey_patch()
-	ace_logging.init( config.loglevels )
+	ace_logging.init( config.engine_logfile, config.loglevels )
+	ace_settings.init( config.settings_path, config.settings_mplock )
 	#print( 'repo_routes=}' )
 	asyncio.run( _server( config ) )
 

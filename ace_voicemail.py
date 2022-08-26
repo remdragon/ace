@@ -23,6 +23,7 @@ from uuid import uuid4
 import aiofiles # pip install aiofiles
 
 # local imports:
+import ace_settings
 import ace_util as util
 from dhms import dhms
 from esl import ESL
@@ -32,7 +33,16 @@ logger = logging.getLogger( __name__ )
 
 CONF_VOICEMAIL_NAME = False
 
-class SETTINGS( TypedDict ):
+class LoadBoxError( Exception ):
+	pass
+
+class BoxNotFound( LoadBoxError ):
+	pass
+
+class BoxCorrupted( LoadBoxError ):
+	pass
+
+class BOXSETTINGS( TypedDict ):
 	type: Literal['root_voicemail']
 	greeting: Opt[int]
 	max_greeting_seconds: Opt[int]
@@ -47,8 +57,8 @@ class SETTINGS( TypedDict ):
 	greetingBranch: Dict[str,Any]
 
 g_base = Path( '/usr/share/itas/ace/voicemail' )
-g_meta_base: Path = g_base / 'meta' 
-g_msgs_base: Path = g_base / 'msgs'
+g_box_path: Path = g_base / 'meta' 
+g_msgs_path: Path = g_base / 'msgs'
 
 SILENCE_1_SECOND = 'silence_stream://1000' # 1000
 SILENCE_2_SECONDS = 'silence_stream://2000' # 2000
@@ -375,9 +385,12 @@ class Voicemail:
 	min_pin_length: int = 4
 	use_tts: bool = False
 	
-	def __init__( self, esl: ESL, uuid: str ) -> None:
+	def __init__( self, esl: ESL, uuid: str, settings: ace_settings.Settings ) -> None:
+		self.min_pin_length = settings.vm_min_pin_length
+		self.use_tts = settings.vm_use_tts
 		self.esl = esl
 		self.uuid = uuid
+		self.settings = settings
 	
 	_event_handler: Opt[EventHandler] = None
 	
@@ -391,23 +404,18 @@ class Voicemail:
 		msgs_path: Path,
 		owner_user: str,
 		owner_group: str,
-		min_pin_length: int,
-		use_tts: bool,
 		on_event: Callable[[ESL.Message],None],
 	) -> None:
-		global g_meta_base, g_msgs_base
-		g_meta_base = box_path
-		g_msgs_base = msgs_path
-		await util.mkdirp( g_meta_base )
-		await util.chown( g_meta_base, owner_user, owner_group )
-		await util.chmod( g_meta_base, 0o775 )
+		global g_box_path, g_msgs_path
+		g_box_path = box_path
+		g_msgs_path = msgs_path
+		await util.mkdirp( g_box_path )
+		await util.chown( g_box_path, owner_user, owner_group )
+		await util.chmod( g_box_path, 0o775 )
 		
-		await util.mkdirp( g_msgs_base )
-		await util.chown( g_msgs_base, owner_user, owner_group )
-		await util.chmod( g_msgs_base, 0o775 )
-		
-		Voicemail.min_pin_length = min_pin_length
-		Voicemail.use_tts = use_tts
+		await util.mkdirp( g_msgs_path )
+		await util.chown( g_msgs_path, owner_user, owner_group )
+		await util.chmod( g_msgs_path, 0o775 )
 		
 		class X( EventHandler ):
 			def handle_event( self, event: ESL.Message ) -> None:
@@ -550,50 +558,47 @@ class Voicemail:
 			digit_timeout,
 		)
 	
-	async def load_file_into_memory( self, path: Path ) -> Opt[str]:
-		if not path.is_file():
-			return None
+	async def load_file_into_memory( self, path: Path ) -> str:
 		async with aiofiles.open( str( path ), 'r' ) as f:
 			content = await f.read()
 		return content
 	
-	def box_meta_path( self, box: int ) -> Path:
-		return g_meta_base / str( box )
+	def box_path( self, box: int ) -> Path:
+		return g_box_path / str( box )
 	
-	def box_msgs_path( self, box: int ) -> Path:
-		return g_msgs_base / str( box )
+	def msgs_path( self, box: int ) -> Path:
+		return g_msgs_path / str( box )
 	
 	def box_settings_path( self, box: int ) -> Path:
-		return g_meta_base / f'{box}.box'
+		return g_box_path / f'{box}.box'
 	
 	def box_greeting_path( self, box: int, greeting: Union[int,str] ) -> Opt[Path]:
 		# NOTE: greeting can be a temporary suffix when recording a new greeting that hasn't been accepted yet
 		if greeting == 0: return None
-		return self.box_meta_path( box ) / f'greeting{greeting}.wav'
+		return self.box_path( box ) / f'greeting{greeting}.wav'
 	
-	async def load_box_settings( self, box: int ) -> Opt[SETTINGS]:
+	async def load_box_settings( self, box: int ) -> BOXSETTINGS:
 		log = logger.getChild( 'Voicemail.load_box_settings' )
 		path = self.box_settings_path( box )
-		raw = await self.load_file_into_memory( path )
-		if raw is None:
-			log.debug( 'load_box_settings failed b/c file does not exist: %r', str( path ))
-			return None
 		try:
-			result: SETTINGS = json.loads( raw )
-		except Exception as e:
-			log.warning( 'Could not parse json at %r: %r', str( path ), e )
-			return None
+			raw = await self.load_file_into_memory( path )
+		except FileNotFoundError as e1:
+			raise BoxNotFound( box ).with_traceback( e1.__traceback__ ) from None
+		try:
+			result: BOXSETTINGS = json.loads( raw )
+		except json.decoder.JSONDecodeError as e2:
+			raise BoxCorrupted( box ).with_traceback( e2.__traceback__ ) from None
 		return result
 	
-	async def save_box_settings( self, box: int, settings: SETTINGS ) -> None:
+	async def save_box_settings( self, box: int, boxsettings: BOXSETTINGS ) -> None:
 			path: Path = self.box_settings_path( box )
-			raw: str = json.dumps( settings )
+			raw: str = json.dumps( boxsettings )
 			async with aiofiles.open( str( path ), 'w' ) as f:
 				await f.write( raw )
 	
 	async def goodbye( self ) -> None:
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'Goodbye.' )
 			stream: str = str( await x.generate() )
 		else:
@@ -603,7 +608,7 @@ class Voicemail:
 	
 	async def _the_person_you_are_trying_to_reach_is_not_available_and_does_not_have_voicemail( self ) -> str:
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'The person you are trying to reach is not available and does not have a voicemail setup' )
 			return str( await x.generate() )
 		else:
@@ -611,7 +616,7 @@ class Voicemail:
 	
 	async def _record_your_message_at_the_tone_press_any_key_or_stop_talking_to_end_the_recording( self ) -> str:
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'Record your message at the tone. Press any key, or stop talking, to end the recording.' )
 			return str( await x.generate() )
 		else:
@@ -619,7 +624,7 @@ class Voicemail:
 	
 	async def _the_person_at_extension_is_not_available_record_at_the_tone( self, box: int ) -> List[str]:
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'The person at ' )
 			x.digits( box )
 			x.say( ' is not available. Record your message at the tone. Press any key, or stop talking, to end the recording.' )
@@ -634,12 +639,12 @@ class Voicemail:
 		playlist.append( await self._record_your_message_at_the_tone_press_any_key_or_stop_talking_to_end_the_recording() )
 		return playlist
 	
-	async def guest( self, did: str, ani: str, box: int, settings: SETTINGS, notify: Callable[[int,SETTINGS,MSG],Coroutine[Any,Any,None]], greeting_override: Opt[int] = None ) -> bool:
+	async def guest( self, did: str, ani: str, box: int, boxsettings: BOXSETTINGS, notify: Callable[[int,BOXSETTINGS,MSG],Coroutine[Any,Any,None]], greeting_override: Opt[int] = None ) -> bool:
 		log = logger.getChild( 'Voicemail.guest' )
 		
 		now: str = datetime.datetime.now().strftime( '%Y-%m-%d-%H-%M-%S' )
 		uuid: str = str( uuid4() ).replace( '-', '' )
-		folder: Path = self.box_msgs_path( box )
+		folder: Path = self.msgs_path( box )
 		#log.debug( 'mkdirp( %s )', repr( folder ))
 		await util.mkdirp( folder )
 		#log.debug( 'mkdirp( %s ) -> %s, %s', repr( folder ), repr( ok ), repr( err ))
@@ -647,13 +652,13 @@ class Voicemail:
 		base_name: Path = folder / stem
 		tmp_name: Path = folder / f'{stem}-tmp.wav'
 		
-		max_message_time = datetime.timedelta( seconds = settings.get( 'max_message_seconds' ) or 120 )
+		max_message_time = datetime.timedelta( seconds = boxsettings.get( 'max_message_seconds' ) or 120 )
 		silence_threshold: int = 30
 		silence_seconds: int = 5
 		priority: str = 'normal'
 		
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'To send this message now, press ' )
 			x.digits( GUEST_SAVE )
 			x.say( ', to listen to the recording, press ' )
@@ -662,7 +667,7 @@ class Voicemail:
 			x.digits( GUEST_RERECORD )
 			x.say( ', to delete this message, press ' )
 			x.digits( GUEST_DELETE )
-			if settings.get( 'allow_guest_urgent' ):
+			if boxsettings.get( 'allow_guest_urgent' ):
 				x.say( ', to mark this message urgent, press ' )
 				x.digits( GUEST_URGENT )
 			stream = str( await x.generate() )
@@ -685,7 +690,7 @@ class Voicemail:
 				PRESS,
 				DIGITS[GUEST_DELETE],
 			]
-			if settings.get( 'allow_guest_urgent' ):
+			if boxsettings.get( 'allow_guest_urgent' ):
 				menu.extend([
 					TO_MARK_THIS_MESSAGE_URGENT,
 					PRESS,
@@ -714,9 +719,9 @@ class Voicemail:
 						deleted = True
 						asyncio.ensure_future( self.guest_delete ( tmp_name ))
 						log.info( 'calling login()' )
-						if await self.login( box, settings ):
+						if await self.login( box, boxsettings ):
 							log.info( 'calling admin_main_menu()' )
-							return await self.admin_main_menu( box, settings )
+							return await self.admin_main_menu( box, boxsettings )
 						await self.goodbye()
 						return False
 					self._on_event( event )
@@ -751,7 +756,7 @@ class Voicemail:
 						])
 						await self.goodbye()
 						return False
-					elif digit == GUEST_URGENT and settings.get( 'allow_guest_urgent' ):
+					elif digit == GUEST_URGENT and boxsettings.get( 'allow_guest_urgent' ):
 						log.debug( 'marked message urgent' )
 						priority = 'urgent'
 						await self.play_menu([
@@ -769,13 +774,13 @@ class Voicemail:
 				log.debug( 'not launching guest_save hook b/c file does not exist: %s', repr( tmp_name ))
 			else:
 				asyncio.ensure_future(
-					self.guest_save( box, settings, stem, priority, notify )
+					self.guest_save( box, boxsettings, stem, priority, notify )
 				)
 		return True
 
 	async def play_invalid_value( self, digit: Opt[str] ) -> None:
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'Invalid selection, please try again' )
 			stream: str = str( await x.generate() )
 		else:
@@ -800,10 +805,10 @@ class Voicemail:
 			stream = random.choice( options )
 		await self.play_menu([ stream, SILENCE_1_SECOND ])
 	
-	async def guest_save( self, box: int, settings: SETTINGS, file: str, priority: str, notify: Callable[[int,SETTINGS,MSG],Coroutine[Any,Any,None]] ) -> None:
+	async def guest_save( self, box: int, boxsettings: BOXSETTINGS, file: str, priority: str, notify: Callable[[int,BOXSETTINGS,MSG],Coroutine[Any,Any,None]] ) -> None:
 		log = logger.getChild( 'Voicemail.guest_save' )
 		log.debug( 'guest_save_hook: file=%r', file )
-		msgs_path: Path = self.box_msgs_path( box )
+		msgs_path: Path = self.msgs_path( box )
 		base_name: Path = msgs_path / file
 		tmp_file: str = f'{file}-tmp.wav'
 		new_file: str = f'{file}-{priority}-new.wav'
@@ -830,7 +835,7 @@ class Voicemail:
 				
 				msg = self.parse_recording_path( msgs_path, new_name.name )
 				
-				asyncio.ensure_future( notify( box, settings, msg ))
+				asyncio.ensure_future( notify( box, boxsettings, msg ))
 				return
 		log.warning( 'GIVING UP TRYING TO RENAME FILE' )
 	
@@ -853,7 +858,7 @@ class Voicemail:
 	
 	async def _please_enter_your_mailbox_followed_by_pound( self ) -> List[str]:
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'Please enter your mailbox number followed by pound' )
 			return [ str( await x.generate() )]
 		else:
@@ -861,7 +866,7 @@ class Voicemail:
 	
 	async def _please_enter_your_password_followed_by_pound( self ) -> List[str]:
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'Please enter your password followed by pound' )
 			return [ str( await x.generate() )]
 		else:
@@ -869,7 +874,7 @@ class Voicemail:
 	
 	async def _login_incorrect( self ) -> List[str]:
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'Login incorrect' )
 			return [ str( await x.generate() ), SILENCE_2_SECONDS ]
 		else:
@@ -877,20 +882,20 @@ class Voicemail:
 	
 	async def too_many_failed_attempts( self ) -> str:
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'Too many failed attempts' )
 			stream: str = str( await x.generate() )
 		else:
 			stream = TOO_MANY_FAILED_ATTEMPTS
 		return await self.play_menu([ stream ])
 	
-	async def login( self, box: int, settings: SETTINGS, playlist: Opt[List[str]] = None ) -> Opt[bool]:
+	async def login( self, box: int, boxsettings: BOXSETTINGS, playlist: Opt[List[str]] = None ) -> Opt[bool]:
 		log = logger.getChild( 'Voicemail.login' )
 		if playlist is None:
 			playlist = await self._please_enter_your_password_followed_by_pound()
 		incorrect: List[str] = []
 		await util.answer( self.esl, self.uuid, 'ace_voicemail.Voicemail.login' )
-		pin: str = settings['pin']
+		pin: str = boxsettings['pin']
 		digits: Opt[str] = ''
 		for i in range( 3 ):
 			if digits == '':
@@ -927,14 +932,16 @@ class Voicemail:
 			pin: Opt[str] = await self.play_pin( password_prompt )
 			if pin is None:
 				return False
-			settings: Opt[SETTINGS] = await self.load_box_settings( box )
-			pwd: Opt[str] = None
-			if settings is not None: pwd = settings['pin']
+			try:
+				boxsettings: Opt[BOXSETTINGS] = await self.load_box_settings( box )
+			except Exception:
+				boxsettings = None
+			pwd: Opt[str] = None if boxsettings is None else boxsettings['pin']
 			log.debug( 'box=%r, pin=%r, pwd=%r',
 				box, pin, pwd,
 			)
-			if settings is not None and pin == pwd:
-				return await self.admin_main_menu( box, settings )
+			if boxsettings is not None and pin == pwd:
+				return await self.admin_main_menu( box, boxsettings )
 			if incorrect is None: incorrect = await self._login_incorrect()
 			await self.play_menu( incorrect )
 		await self.too_many_failed_attempts()
@@ -943,7 +950,7 @@ class Voicemail:
 	
 	async def _main_menu( self ) -> List[str]:
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'Welcome to your voicemail.' )
 			x.say( 'To listen to new messages, press ' )
 			x.digits( MAIN_NEW_MSGS )
@@ -995,7 +1002,7 @@ class Voicemail:
 	
 	async def _for_the_main_menu_press( self ) -> List[str]:
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'For the main menu, press ' )
 			x.digits( LISTEN_MAIN_MENU )
 			x.say( '.' )
@@ -1007,9 +1014,8 @@ class Voicemail:
 				DIGITS[LISTEN_MAIN_MENU],
 			]
 	
-	async def admin_main_menu( self, box: int, settings: SETTINGS ) -> bool:
+	async def admin_main_menu( self, box: int, boxsettings: BOXSETTINGS ) -> bool:
 		log = logger.getChild( 'Voicemail.admin_main_menu' )
-		assert settings # this function should be called with settings already loaded...
 		log.debug( 'generating main menu' )
 		menu = await self._main_menu()
 		while True:
@@ -1019,24 +1025,24 @@ class Voicemail:
 			if digit is None:
 				return False
 			elif digit == MAIN_NEW_MSGS:
-				await self.admin_listen_new( box, settings )
+				await self.admin_listen_new( box, boxsettings )
 			elif digit == MAIN_SAVED_MSGS:
-				await self.admin_listen_saved( box, settings )
+				await self.admin_listen_saved( box, boxsettings )
 			elif digit == MAIN_GREETING:
-				await self.admin_greetings( box, settings )
+				await self.admin_greetings( box, boxsettings )
 			elif CONF_VOICEMAIL_NAME and digit == MAIN_NAME:
-				await self.admin_change_name( box, settings )
+				await self.admin_change_name( box, boxsettings )
 			elif digit == MAIN_PASSWORD:
-				await self.admin_change_password( box, settings )
+				await self.admin_change_password( box, boxsettings )
 			else:
 				await self.play_invalid_value( digit )
 				digit = ''
 	
-	async def voice_deliver( self, box: int, msg: MSG, trusted: bool, settings: SETTINGS ) -> None:
+	async def voice_deliver( self, box: int, msg: MSG, trusted: bool, boxsettings: BOXSETTINGS ) -> None:
 		log = logger.getChild( 'ace_voicemail.Voicemail.voice_deliver' )
 		
 		try:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'You have a new message in your voicemail box number ' )
 			x.digits( box )
 			if trusted:
@@ -1051,25 +1057,25 @@ class Voicemail:
 				if not digits:
 					return
 			else:
-				if not await self.login( box, settings, [ intro ] ): # TODO FIXME: make this optional...
+				if not await self.login( box, boxsettings, [ intro ] ): # TODO FIXME: make this optional...
 					return
 			
 			prevnext: bool = False
 			digit: Opt[str] = await self.admin_listen_msg( msg, None, prevnext )
 		
 			if digit == LISTEN_MAIN_MENU:
-				await self.admin_main_menu( box, settings )
+				await self.admin_main_menu( box, boxsettings )
 		finally:
 			msgs: List[MSG] = [ msg ]
 			await self.admin_listen_finalize( msgs )
 	
-	async def admin_listen_new( self, box: int, settings: SETTINGS ) -> None:
-		await self.admin_listen( box, settings,
+	async def admin_listen_new( self, box: int, boxsettings: BOXSETTINGS ) -> None:
+		await self.admin_listen( box, boxsettings,
 			'*-new.wav', 'urgent new', 'new', URGENT_NEW, NEW,
 		)
 	
-	async def admin_listen_saved( self, box: int, settings: Opt[SETTINGS] ) -> None:
-		await self.admin_listen( box, settings,
+	async def admin_listen_saved( self, box: int, boxsettings: BOXSETTINGS ) -> None:
+		await self.admin_listen( box, boxsettings,
 			'*-saved.wav', 'urgent saved', 'saved', URGENT_SAVED, SAVED,
 		)
 	
@@ -1096,7 +1102,7 @@ class Voicemail:
 	
 	async def _no_more_messages( self ) -> str:
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'No more messages' )
 			return str( await x.generate() )
 		else:
@@ -1104,16 +1110,14 @@ class Voicemail:
 	
 	async def admin_listen( self,
 		box: int,
-		settings: Opt[SETTINGS],
+		boxsettings: BOXSETTINGS,
 		mask: str,
 		urgent_x: str,
 		nonurgent_x: str,
 		URGENT_X: str,
 		NONURGENT_X: str,
 	) -> None:
-		if settings is None:
-			settings = await self.load_box_settings( box )
-		msgs_path: Path = self.box_msgs_path( box )
+		msgs_path: Path = self.msgs_path( box )
 		files: List[Path] = []
 		async for file in util.glob( msgs_path, mask ):
 			files.append( file )
@@ -1132,7 +1136,7 @@ class Voicemail:
 		msgs = list( itertools.chain( urgent, normal ))
 		
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'You have ' )
 			x.digits( len( urgent ))
 			x.say( f' {urgent_x} messages and ' )
@@ -1207,7 +1211,7 @@ class Voicemail:
 		envelope = None
 		async def _envelope() -> List[str]:
 			if self.use_tts:
-				x = TTS()
+				x = self.settings.tts()
 				x.say( 'Message from ' )
 				x.digits( msg.ani )
 				return [ str( await x.generate() )]
@@ -1220,7 +1224,7 @@ class Voicemail:
 		msgsounds: List[str] = []
 		if msg_num is not None:
 			if self.use_tts:
-				x = TTS()
+				x = self.settings.tts()
 				x.say( 'Message number ' )
 				x.digits( msg_num )
 				msgsounds.append( str( await x.generate() ))
@@ -1229,7 +1233,7 @@ class Voicemail:
 				msgsounds.extend( number_audio( msg_num ))
 		if msg.priority == 'urgent':
 			if self.use_tts:
-				x = TTS()
+				x = self.settings.tts()
 				x.say( 'urgent' )
 				msgsounds.append( str( await x.generate() ))
 			else:
@@ -1243,7 +1247,7 @@ class Voicemail:
 			
 			if msg.status != 'delete':
 				if self.use_tts:
-					x = TTS()
+					x = self.settings.tts()
 					x.say( 'To repeat this message, press ' )
 					x.digits( LISTEN_REPEAT )
 					x.say( '. To save this message, press ' )
@@ -1263,7 +1267,7 @@ class Voicemail:
 			
 			if msg.status == 'delete':
 				if self.use_tts:
-					x = TTS()
+					x = self.settings.tts()
 					x.say( 'To undelete this message, press ' )
 					x.digits( LISTEN_UNDELETE )
 					x.say( '.' )
@@ -1276,7 +1280,7 @@ class Voicemail:
 					])
 			else:
 				if self.use_tts:
-					x = TTS()
+					x = self.settings.tts()
 					x.say( 'To delete this message, press ' )
 					x.digits( LISTEN_DELETE )
 					x.say( '.' )
@@ -1290,7 +1294,7 @@ class Voicemail:
 				
 				if msg.priority != 'urgent':
 					if self.use_tts:
-						x = TTS()
+						x = self.settings.tts()
 						x.say( 'To mark this message urgent, press ' )
 						x.digits( LISTEN_MARK_URGENT )
 						x.say( '.' )
@@ -1303,7 +1307,7 @@ class Voicemail:
 						])
 			
 				if self.use_tts:
-					x = TTS()
+					x = self.settings.tts()
 					x.say( 'To hear the message envelope, press ' )
 					x.digits( LISTEN_ENVELOPE )
 					x.say( '.' )
@@ -1317,7 +1321,7 @@ class Voicemail:
 			
 			if prevnext:
 				if self.use_tts:
-					x = TTS()
+					x = self.settings.tts()
 					x.say( 'To play the next message, press ' )
 					x.digits( LISTEN_NEXT_MSG )
 					x.say( '. To play the previous message, press ' )
@@ -1336,7 +1340,7 @@ class Voicemail:
 					])
 			menu.extend( await self._for_the_main_menu_press() )
 			
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'If you are finished, simply hangup' )
 			menu.append( str( await x.generate() ))
 			
@@ -1370,7 +1374,7 @@ class Voicemail:
 				msg.status = 'saved'
 				if not _on_save:
 					if self.use_tts:
-						x = TTS()
+						x = self.settings.tts()
 						x.say( 'Saved.' )
 						_on_save = [ str( await x.generate() ), SILENCE_1_SECOND ]
 					else:
@@ -1382,7 +1386,7 @@ class Voicemail:
 				msg.status = 'delete'
 				if not _on_delete:
 					if self.use_tts:
-						x = TTS()
+						x = self.settings.tts()
 						x.say( 'Marked for deletion.' )
 						_on_delete = [ str( await x.generate() ), SILENCE_1_SECOND ]
 					else:
@@ -1397,7 +1401,7 @@ class Voicemail:
 				msg.status = msg.old_status
 				if not _on_undelete:
 					if self.use_tts:
-						x = TTS()
+						x = self.settings.tts()
 						x.say( 'Cancelled delete.' )
 						_on_undelete = [ str( await x.generate() ), SILENCE_1_SECOND ]
 					else:
@@ -1409,7 +1413,7 @@ class Voicemail:
 				msg.priority = 'urgent'
 				if not _on_urgent:
 					if self.use_tts:
-						x = TTS()
+						x = self.settings.tts()
 						x.say( 'Marked urgent.' )
 						_on_urgent = [ str( await x.generate() ), SILENCE_1_SECOND ]
 					else:
@@ -1421,7 +1425,7 @@ class Voicemail:
 				msg.status = 'new'
 				if _on_new is None:
 					if self.use_tts:
-						x = TTS()
+						x = self.settings.tts()
 						x.say( 'Marked new.' )
 						_on_new = [ await x.generate(), SILENCE_1_SECOND ]
 					else:
@@ -1473,13 +1477,11 @@ class Voicemail:
 							str( msg.path ), str( new_path ), e
 						)
 	
-	async def admin_greetings( self, box: int, settings: SETTINGS ) -> None:
+	async def admin_greetings( self, box: int, boxsettings: BOXSETTINGS ) -> None:
 		log = logger.getChild( 'Voicemail.admin_greetings' )
-		if settings is None:
-			settings = await self.load_box_settings( box )
 		
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'Choose a greeting between 1 and 9. To return to the previous menu, press star.' )
 			menu: List[str] = [ str( await x.generate() ), SILENCE_3_SECONDS ]
 		else:
@@ -1495,7 +1497,7 @@ class Voicemail:
 			digit: str = await self.play_menu( menu )
 			if digit in '123456789':
 				greeting = int( digit ) # TODO FIXME: ValueEror
-				await self.admin_greeting( box, settings, greeting )
+				await self.admin_greeting( box, boxsettings, greeting )
 			elif digit == '*':
 				log.info( 'box %r user cancelled with *', box )
 				return
@@ -1505,25 +1507,25 @@ class Voicemail:
 	
 	async def _error_greeting_file_missing( self ) -> str:
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'Error, greeting file missing' )
 			return str( await x.generate() )
 		else:
 			return ERROR
 	
-	async def record_greeting( self, box: int, settings: SETTINGS, greeting: int, path: Path ) -> bool:
+	async def record_greeting( self, box: int, boxsettings: BOXSETTINGS, greeting: int, path: Path ) -> bool:
 		log = logger.getChild( 'Voicemail.record_greeting' )
-		meta_path = self.box_meta_path( box )
+		box_path = self.box_path( box )
 		try:
-			await util.mkdirp( meta_path )
+			await util.mkdirp( box_path )
 		except Exception as e:
-			log.error( 'Error creating %r: %r', str( meta_path ), e)
+			log.error( 'Error creating %r: %r', str( box_path ), e)
 		async def _record() -> Path:
 			tmp_uuid: str = str( uuid4() )
 			tmp_path: Opt[Path] = self.box_greeting_path( box, f'-tmp-{tmp_uuid}' )
 			assert tmp_path is not None # this should only happen if greeting == 0
 			if self.use_tts:
-				x = TTS()
+				x = self.settings.tts()
 				x.say( 'Record your greeting at the tone, press any key or stop talking to end the recording.' )
 				stream: str = str( await x.generate() )
 			else:
@@ -1535,7 +1537,7 @@ class Voicemail:
 			log.debug( 'box %r RECORDING GREETING %r to %r',
 				box, greeting, str( path ),
 			)
-			max_greeting_length = datetime.timedelta( seconds = settings.get( 'max_greeting_seconds' ) or 120 )
+			max_greeting_length = datetime.timedelta( seconds = boxsettings.get( 'max_greeting_seconds' ) or 120 )
 			silence_threshold: int = 30
 			silence_seconds: int = 5
 			async for event in self.esl.record( self.uuid, tmp_path, max_greeting_length, silence_threshold, silence_seconds ):
@@ -1557,7 +1559,7 @@ class Voicemail:
 		
 		tmp_path: Path = await _record()
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'Press ' )
 			x.digits( RECORD_SAVE )
 			x.say( ' to save the greeting, press ' )
@@ -1616,13 +1618,13 @@ class Voicemail:
 	
 	async def _an_error_has_occurred_please_contact_the_administrator( self ) -> str:
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'An error has occurred, please contact the administrator' )
 			return str( await x.generate() )
 		else:
 			return AN_ERROR_HAS_OCCURRED_PLEASE_CONTACT_THE_ADMINISTRATOR
 	
-	async def admin_greeting( self, box: int, settings: SETTINGS, greeting: int ) -> bool:
+	async def admin_greeting( self, box: int, boxsettings: BOXSETTINGS, greeting: int ) -> bool:
 		log = logger.getChild( 'Voicemail.admin_greeting' )
 		log.info( 'box %r greeting %r', box, greeting )
 		assert greeting >= 1 and greeting <= 9
@@ -1630,12 +1632,12 @@ class Voicemail:
 		assert path is not None
 		if not path.is_file():
 			log.info( 'box %r greeting %r greeting does not exist on entry - auto-recording 1st time', box, greeting )
-			if not await self.record_greeting( box, settings, greeting, path ):
+			if not await self.record_greeting( box, boxsettings, greeting, path ):
 				log.info( 'box %r greeting %r session !ready during recording', box, greeting )
 				return False
 		
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'To listen to greeting ' )
 			x.digits( greeting )
 			x.say( ', press ' )
@@ -1694,18 +1696,18 @@ class Voicemail:
 					stream = await self._error_greeting_file_missing()
 				digit = await self.play_menu( [ stream, SILENCE_1_SECOND ])
 			elif digit == GREETING_RECORD:
-				if not await self.record_greeting( box, settings, greeting, path ):
+				if not await self.record_greeting( box, boxsettings, greeting, path ):
 					log.info( 'box %r greeting %r session !ready during recording',
 						box, greeting
 					)
 					return False
 				digit = ''
 			elif digit == GREETING_CHOOSE:
-				settings['greeting'] = int( greeting ) # TODO FIXME: ValueError
-				await self.save_box_settings( box, settings )
+				boxsettings['greeting'] = int( greeting ) # TODO FIXME: ValueError
+				await self.save_box_settings( box, boxsettings )
 				
 				if self.use_tts:
-					x = TTS()
+					x = self.settings.tts()
 					x.say( 'Greeting ' )
 					x.digits( greeting )
 					x.say( ' activated.' )
@@ -1730,7 +1732,7 @@ class Voicemail:
 					stream = await self._an_error_has_occurred_please_contact_the_administrator()
 				else:
 					if self.use_tts:
-						x = TTS()
+						x = self.settings.tts()
 						x.say( 'Deleted.' )
 						stream = str( await x.generate() )
 					else:
@@ -1752,13 +1754,13 @@ class Voicemail:
 		)
 		return False
 	
-	async def admin_change_name( self, box: int, settings: SETTINGS ) -> bool:
+	async def admin_change_name( self, box: int, boxsettings: BOXSETTINGS ) -> bool:
 		cls = type( self )
 		raise NotImplementedError( f'{cls.__module__}.{cls.__qualname__}.admin_change_name()' )
 	
-	async def admin_change_password( self, box: int, settings: SETTINGS ) -> bool:
+	async def admin_change_password( self, box: int, boxsettings: BOXSETTINGS ) -> bool:
 		if self.use_tts:
-			x = TTS()
+			x = self.settings.tts()
 			x.say( 'Please enter your new password and press pound,' )
 			x.say( 'or to cancel press star.' )
 			menu: List[str] = [ str( await x.generate() )]
@@ -1781,7 +1783,7 @@ class Voicemail:
 				return True
 			elif len( digits ) < self.min_pin_length:
 				if self.use_tts:
-					x = TTS()
+					x = self.settings.tts()
 					x.say( 'The password you entered is below the minimum length of ' )
 					x.digits( self.min_pin_length )
 					x.say( ', please try again' )
@@ -1796,11 +1798,11 @@ class Voicemail:
 					]
 				digits = await self.play_menu( playlist )
 			else:
-				settings['pin'] = digits
-				await self.save_box_settings( box, settings )
+				boxsettings['pin'] = digits
+				await self.save_box_settings( box, boxsettings )
 				
 				if self.use_tts:
-					x = TTS()
+					x = self.settings.tts()
 					x.say( 'Your password has been changed.' )
 					stream: str = str( await x.generate() )
 				else:
