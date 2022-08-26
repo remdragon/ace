@@ -1200,8 +1200,11 @@ def http_did( did: int ) -> Response:
 			found = True
 		lbl = boxdata.get( 'name' ) or '(Unnamed)'
 		route_options.append( f'<option value="{key}"{att}>VM {box} {lbl}</option>' )
-	if not found:
-		route_options.insert( 0, f'<option value="{route}" selected>{route} DOES NOT EXIST</option>' )
+	if not found and route_:
+		if route_.startswith( 'V' ):
+			route_options.insert( 0, f'<option value="{route_}" selected>Voicemail {route_} DOES NOT EXIST</option>' )
+		else:
+			route_options.insert( 0, f'<option value="{route_}" selected>Route {route_} DOES NOT EXIST</option>' )
 	
 	category_tip = 'All DIDs assigned to the same category will look for a preannounce of "category_{category_name}_{category_flag}.wav"'
 	flag_tip = 'Causes preannounce calculation to look for "{DID}_{didflag}.wav"'
