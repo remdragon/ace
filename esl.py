@@ -390,7 +390,7 @@ class ESL:
 	async def event_plain_all( self ) -> ESL.Request:
 		return await self._send( ESL.Request( self, 'event plain all' ))
 	
-	async def execute( self, uuid: str, app: str, *args: str, escape: bool = True ) -> AsyncIterator[ESL.Message]:
+	async def execute( self, uuid: str, app: str, *args: str, escape: bool = True, playback_stop: bool = False ) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.execute' )
 		assert isinstance( app, str ) and len( app ), f'invalid app={app!r}'
 		args_ = ' '.join( map( self.escape, args ) if escape else args )
@@ -406,19 +406,22 @@ class ESL:
 				async for event in self.events():
 					evt_uuid = event.header( 'Unique-ID' )
 					event_name = event.event_name
-					if uuid == evt_uuid and event_name == 'CHANNEL_EXECUTE_COMPLETE':
-						app2 = event.header( 'Application' )
-						appdata = event.header( 'Application-Data' ) or ''
-						appdata = re.sub( r'\\{2,}', r'\\', appdata )
-						if app == app2 and appdata == args_:
-							log.info( 'exiting on app=%r app2=%r args_=%r appdata=%r',
-								app, app2, args_, appdata,
-							)
-							return
-						else:
-							log.debug( 'ignoring app=%r app2=%r args_=%r appdata=%r',
-								app, app2, args_, appdata,
-							)
+					if uuid == evt_uuid:
+						if event_name == 'CHANNEL_EXECUTE_COMPLETE' or (
+							playback_stop and event_name == 'PLAYBACK_STOP'
+						):
+							app2 = event.header( 'Application' )
+							appdata = event.header( 'Application-Data' ) or ''
+							appdata = re.sub( r'\\{2,}', r'\\', appdata )
+							if app == app2 and appdata == args_:
+								log.info( 'exiting on app=%r app2=%r args_=%r appdata=%r',
+									app, app2, args_, appdata,
+								)
+								return
+							else:
+								log.debug( 'ignoring app=%r app2=%r args_=%r appdata=%r',
+									app, app2, args_, appdata,
+								)
 					try:
 						yield event
 					except Exception:
@@ -601,6 +604,7 @@ class ESL:
 			self.escape( str( digit_timeout_ms ) ),
 			self.escape( transfer_on_failure or '' ),
 			escape = False,
+			playback_stop = True,
 		):
 			try:
 				evt_uuid = event.header( 'Unique-ID' )
@@ -612,8 +616,6 @@ class ESL:
 						assert dtmf_digit
 						if digits is not None and dtmf_digit not in terminators:
 							digits.append( dtmf_digit )
-					elif evt_name == 'PLAYBACK_STOP':
-						return
 					#else:
 					#	log.debug( 'ignoring evt_name=%r', evt_name )
 				yield event
@@ -625,15 +627,11 @@ class ESL:
 	) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.playback' )
 		assert isinstance( stream, str ) and len( stream ), f'invalid stream={stream!r}'
-		async for event in self.execute( uuid, 'playback', stream, escape = False ):
+		async for event in self.execute( uuid, 'playback', stream, escape = False, playback_stop = True ):
 			try:
 				yield event
 			except Exception:
 				log.exception( 'Unexpected error processing event:' )
-			evt_uuid = event.header( 'Unique-ID' )
-			if uuid == evt_uuid:
-				if event.event_name == 'PLAYBACK_STOP':
-					return
 	
 	async def pre_answer( self, uuid: str ) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.pre_answer' )
