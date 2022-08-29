@@ -1230,8 +1230,8 @@ class Voicemail:
 		if msg_num is not None:
 			if self.use_tts:
 				x = self.settings.tts()
-				x.say( 'Message number ' )
-				x.digits( msg_num )
+				x.say( f'Message number {msg_num}' )
+				#x.digits( msg_num )
 				msgsounds.append( str( await x.generate() ))
 			else:
 				msgsounds.append( MESSAGE_NUMBER )

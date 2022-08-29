@@ -23,7 +23,7 @@ logger = logging.getLogger( __name__ )
 if TYPE_CHECKING:
 	FIELD = Field[str]
 else:
-	FIELD = Field # Py37 doesn't support Field[...]
+	FIELD = Field # Py37 doesn't support Field[...] but mypy requires it
 
 T = TypeVar( 'T' )
 SettingsType = TypeVar( 'SettingsType', bound = 'Settings' )

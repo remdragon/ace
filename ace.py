@@ -2203,7 +2203,7 @@ def http_settings() -> Response:
 		return rest_success([ asdict( settings )])
 	
 	h: List[str] = [
-		'<table class="fancy">',
+		'<table class="fancy" style="width:auto">',
 		'<tr><th>Field</th><th>Value</th>',
 	]
 	for fld in fields( ace_settings.Settings ):
@@ -2211,9 +2211,9 @@ def http_settings() -> Response:
 		value = getattr( settings, fld.name )
 		url = url_for( 'http_settings_id', fld_name = fld.name )
 		h.extend([
-			'<tr><td>',
+			'<tr><th style="text-align:left">',
 			f'<a href="{url}">{fld.metadata["description"]}</a>',
-			'</td><td>',
+			'</th><td style="text-align:left">',
 			f'<a href="{url}">{editor.display( value )}</a>',
 			'</td></tr>',
 		])
