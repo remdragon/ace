@@ -333,9 +333,9 @@ QA = f'{Q}{A}'
 QC4 = f'{Q}{C4}'
 HF4 = f'{H}{F4}'
 QE = f'{Q}{E}'
-QF = f'{Q}{F4}'
+QF4 = f'{Q}{F4}'
 HE = f'{H}{E}'
-TONE_FUN = f'tone_stream://{QA};{QA};{QA};{QE};{QF}:{QF4}:{HE}'
+TONE_FUN = f'tone_stream://{QA};{QA};{QA};{QE};{QF4}:{QF4}:{HE}'
 TONE_BORING = f'tone_stream://{HF4}'
 TONE = TONE_BORING
 
