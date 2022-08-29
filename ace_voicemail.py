@@ -746,30 +746,46 @@ class Voicemail:
 					elif digit == GUEST_DELETE:
 						log.debug( 'deleted message' )
 						deleted = True
-						await self.play_menu([
-							DELETED, #THIS_MSG_WILL_SELF_DESTRUCT_IN_54321, # DELETED
-							SILENCE_1_SECOND,
-							GOODBYE,
-							SILENCE_2_SECONDS,
-						])
+						playlist: List[str]
+						if self.use_tts:
+							x = self.settings.tts()
+							x.say( 'Deleted. Please call back to leave another message. Goodbye.' ) # TODO FIXME: offer to take a new message.
+							# TODO FIXME: "Deleted. To record a message, press 1. To end this call, simply hang up"
+							playlist = [ str( await x.generate() )]
+						else:
+							playlist = [
+								DELETED,
+								SILENCE_1_SECOND,
+								GOODBYE,
+							]
+						playlist.append( SILENCE_2_SECONDS )
+						await self.play_menu( playlist )
 						asyncio.ensure_future( self.guest_delete ( tmp_name ))
 						await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'ace_voicemail.Voicemail.guest' )
 						return False
 					elif digit == GUEST_SAVE or count >= 10:
 						log.debug( 'guest saved message' )
-						await self.play_menu([
-							SAVED,
-							SILENCE_1_SECOND,
-						])
+						if self.use_tts:
+							x = self.settings.tts()
+							x.say( 'Saved' )
+							playlist = [ str( await x.generate() )]
+						else:
+							playlist = [ SAVED ]
+						playlist.append( SILENCE_1_SECOND )
+						await self.play_menu( playlist )
 						await self.goodbye()
 						return False
 					elif digit == GUEST_URGENT and boxsettings.get( 'allow_guest_urgent' ):
 						log.debug( 'marked message urgent' )
 						priority = 'urgent'
-						await self.play_menu([
-							MARKED_URGENT,
-							SILENCE_1_SECOND,
-						])
+						if self.use_tts:
+							x = self.settings.tts()
+							x.say( 'Marked urgent.' )
+							playlist = [ str( await x.generate() )]
+						else:
+							playlist = [ MARKED_URGENT ]
+						playlist.append( SILENCE_1_SECOND )
+						await self.play_menu( playlist )
 					elif digit is not None and digit != '':
 						await self.play_invalid_value( digit )
 						digit = ''
