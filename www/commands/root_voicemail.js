@@ -15,7 +15,7 @@ Configuration settings here or right-click on the delivery node to configuration
 <br/>
 If user doesn't press any digits, timeout plays a beep and records a message<br/>
 <br/>
-Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${did}`
+Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${did} \${checkin}`
 	
 	greeting_subtree_help = 'Add nodes here to define what the caller hears when entering the voicemail box'
 	digit_subtree_help = 'If this digit is pressed during the greeting, do this instead'
@@ -56,6 +56,7 @@ Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${
 		key: 'greeting',
 		type: 'int',
 		label: 'Greeting:',
+		size: 2,
 		tooltip: 'greeting # to play (1-9) - can be changed from the voicemail admin menu',
 	},{
 		key: 'allow_guest_urgent',
@@ -75,11 +76,10 @@ Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${
 		size: 4,
 	},{
 		key: 'default_email_subject',
-		size: 40,
+		size: 60,
 		label: 'Default Email Subject:',
 	},{
 		key: 'default_email_body',
-		size: 40,
 		label: 'Default Email Body:',
 		input: 'textarea',
 		cols: 60,

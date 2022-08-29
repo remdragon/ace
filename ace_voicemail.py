@@ -741,7 +741,7 @@ class Voicemail:
 						log.debug( 'listening to own message' )
 						await self.play_menu([ str( tmp_name )]) # TODO FIXME: collect digit?
 					elif digit == GUEST_RERECORD:
-						log.debug( 'rerecording' )
+						log.debug( 're-recording' )
 						if self.use_tts:
 							x = self.settings.tts()
 							x.say( 'Record your message at the tone, press any key or stop talking to end the recording.' )
@@ -755,19 +755,22 @@ class Voicemail:
 						deleted = True
 						if self.use_tts:
 							x = self.settings.tts()
-							x.say( 'Deleted. Please call back to leave another message. Goodbye.' ) # TODO FIXME: offer to take a new message.
-							# TODO FIXME: "Deleted. To record a message, press 1. To end this call, simply hang up"
+							x.say( f"Deleted. To re-record, press {GUEST_RERECORD}. To end this call, simply hang up." )
 							playlist = [ str( await x.generate() )]
 						else:
 							playlist = [
 								DELETED,
 								SILENCE_1_SECOND,
-								GOODBYE,
+								TO_RERECORD,
+								PRESS,
+								DIGITS[GUEST_RERECORD],
 							]
 						playlist.append( SILENCE_2_SECONDS )
-						await self.play_menu( playlist )
+						digit = await self.play_menu( playlist, max_attempts = 3 )
 						asyncio.ensure_future( self.guest_delete ( tmp_name ))
-						await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'ace_voicemail.Voicemail.guest' )
+						if digit == GUEST_RERECORD:
+							break
+						await self.goodbye()
 						return False
 					elif digit == GUEST_SAVE or count >= 10:
 						log.debug( 'guest saved message' )
@@ -806,7 +809,7 @@ class Voicemail:
 					self.guest_save( box, boxsettings, stem, priority, notify )
 				)
 		return True
-
+	
 	async def play_invalid_value( self, digit: Opt[str] ) -> None:
 		if self.use_tts:
 			x = self.settings.tts()

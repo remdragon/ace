@@ -9,7 +9,7 @@ export default class Email extends UINode {
 <br/>
 This command only works for voicemail notify, it does nothing if invoked in a route<br/>
 <br/>
-Subject/Body support placeholders like \${box} \${ani} \${did}`
+Subject/Body support placeholders like \${box} \${ani} \${did} \${checkin}`
 	
 	get label()
 	{
@@ -34,6 +34,7 @@ Subject/Body support placeholders like \${box} \${ani} \${did}`
 	},{
 		key: 'subject',
 		label: 'Subject:',
+		size: 60,
 		placeholder: '(Using default email subject)',
 		tooltip: 'If left blank, the box default is used',
 	},{

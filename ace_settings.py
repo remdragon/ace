@@ -99,6 +99,16 @@ class ChoiceEditor( Editor ):
 		assert value in self.choices
 		return value
 
+class MultiLineEditor( Editor ):
+	def __init__( self, cols: int, rows: int ) -> None:
+		self.cols = cols
+		self.rows = rows
+	
+	def edit( self, settings: SettingsType, fld: FIELD ) -> str:
+		value = getattr( settings, fld.name )
+		_value_ = html.escape( value )
+		return f'<textarea id="{fld.name}" name="{fld.name}" rows="{self.rows}" cols="{self.cols}">{_value_}</textarea>'
+
 class ListEditor( Editor ):
 	def __init__( self, cols: int, rows: int ) -> None:
 		self.cols = cols
@@ -133,6 +143,10 @@ class Settings:
 	))
 	preannounce_path: str = field( default = '/usr/share/freeswitch/sounds/preannounce/', metadata = SettingMeta(
 		description = 'PreAnnounce Recordings Path',
+		editor = StrEditor(),
+	))
+	vm_checkin: str = field( default = '', metadata = SettingMeta(
+		description = 'VM Checkin Number',
 		editor = StrEditor(),
 	))
 	vm_min_pin_length: int = field( default = 4, metadata = SettingMeta(
@@ -175,6 +189,14 @@ class Settings:
 		description = 'SMTP Email From',
 		editor = StrEditor(),
 	))
+	smtp_email_subject: str = field( default = 'New ${box} VM message from ${ani}', metadata = SettingMeta(
+		description = 'SMTP Default Email Subject',
+		editor = StrEditor(),
+	))
+	smtp_email_body: str = field( default = 'You have a new VM message from ${ani}.\n\nPlease listen to the attached file to hear your message.', metadata = SettingMeta(
+		description = 'SMTP Default Email Subject',
+		editor = MultiLineEditor( cols = 60, rows = 10 ),
+	))
 	sms_carrier: Literal['','thinq','twilio'] = field( default = '', metadata = SettingMeta(
 		description = 'SMS Carrier',
 		editor = ChoiceEditor([ '', 'thinq', 'twilio' ]),
@@ -205,6 +227,10 @@ class Settings:
 	))
 	sms_twilio_from: str = field( default = '', metadata = SettingMeta(
 		description = 'SMS Twilio From SMS #',
+		editor = StrEditor(),
+	))
+	sms_message: str = field( default = 'New VM Message from ${ani} Pls call ${did} to check your VM', metadata = SettingMeta(
+		description = 'SMS Default Message',
 		editor = StrEditor(),
 	))
 	tts_aws_access_key: str = field( default = '', metadata = SettingMeta(

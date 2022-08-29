@@ -682,20 +682,25 @@ class State( metaclass = ABCMeta ):
 		log = logger.getChild( 'State.action_sms' )
 		if self.state == HUNT: return CONTINUE
 		
+		settings = await ace_settings.aload()
+		
 		smsto: str = str( action.get( 'smsto' ) or '' ).strip() # TODO FIXME: thinq expects 'XXXXXXXXXX'
 		message: str = str( action.get( 'message' ) or '' ).strip()
 		if not message:
 			boxsettings = cast( Opt[BOXSETTINGS], getattr( self, 'settings', None ))
-			message = ( boxsettings.get( 'default_sms_message' ) if boxsettings else '' ) or 'You have a new voicemail'
+			if boxsettings:
+				message = ( boxsettings.get( 'default_sms_message' ) or '' ).strip()
+			if not message:
+				message = ( settings.sms_message or '' ).strip()
+				if not message:
+					message = 'New VM Message from ${ani} Pls call ${did} to check your VM'
 		
-		message = message.replace( '\n', '\\n' )
+		message = message.replace( '\n', '\\n' ) # TODO FIXME: why is this necessary?
 		message = await self.expand( message )
 		
 		if not smsto:
 			log.warning( 'cannot send sms - no recipient' )
 			return CONTINUE
-		
-		settings = await ace_settings.aload()
 		
 		if settings.sms_carrier == 'thinq':
 			return await self._sms_thinq( smsto, message, settings )
@@ -1714,7 +1719,8 @@ class CallState( State ):
 	async def notify( self, box: int, boxsettings: BOXSETTINGS, msg: MSG ) -> None:
 		log = logger.getChild( 'CallState.notify' )
 		try:
-			state = NotifyState( self.esl, box, msg, boxsettings )
+			settings = await ace_settings.aload()
+			state = NotifyState( self.esl, box, msg, boxsettings, settings.vm_checkin )
 			delivery = boxsettings.get( 'delivery' ) or {}
 			nodes = delivery.get( 'nodes' ) or []
 			await state.exec_top_actions( nodes )
@@ -1727,11 +1733,12 @@ class CallState( State ):
 
 
 class NotifyState( State ):
-	def __init__( self, esl: ESL, box: int, msg: MSG, boxsettings: BOXSETTINGS ) -> None:
+	def __init__( self, esl: ESL, box: int, msg: MSG, boxsettings: BOXSETTINGS, checkin: str ) -> None:
 		super().__init__( esl )
 		self.box = box
 		self.msg = msg
 		self.boxsettings = boxsettings
+		self.checkin = checkin
 	
 	async def can_continue( self ) -> bool:
 		return self.msg.status == 'new' and self.msg.path.is_file()
@@ -1762,10 +1769,18 @@ class NotifyState( State ):
 		
 		
 		if self.boxsettings:
-			if not ec.subject:
+			if not ec.subject.strip():
 				ec.subject = self.boxsettings.get( 'default_email_subject' ) or ''
-			if not ec.text:
+				if not ec.subject.strip():
+					ec.subject = settings.smtp_email_subject or ''
+					if not ec.subject.strip():
+						ec.subject = 'New ${box} VM message from ${ani}'
+			if not ec.text.strip():
 				ec.text = self.boxsettings.get( 'default_email_body' ) or ''
+				if not ec.text.strip():
+					ec.text = settings.smtp_email_body or ''
+					if not ec.text.strip():
+						ec.text = 'You have a new VM message from ${ani}.\n\nPlease listen to the attached file to hear your message.'
 			if not fmt:
 				fmt = self.boxsettings.get( 'format' ) or ''
 		if not fmt:
