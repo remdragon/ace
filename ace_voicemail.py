@@ -325,16 +325,18 @@ def number_audio( value: int ) -> List[str]:
 Q = '%(150,100,'
 H = '%(400,100,'
 A = '440)'
-C = '261.63)'
+C4 = '261.63)'
+C5 = '523.25)'
 E = '329.63)'
 F = '369.99)'
 QA = f'{Q}{A}'
-QC = f'{Q}{C}'
+QC4 = f'{Q}{C4}'
+HC5 = f'{H}{C5}'
 QE = f'{Q}{E}'
 QF = f'{Q}{F}'
 HE = f'{H}{E}'
 TONE_FUN = f'tone_stream://{QA};{QA};{QA};{QE};{QF}:{QF}:{HE}'
-TONE_BORING = f'tone_stream://{QC}'
+TONE_BORING = f'tone_stream://{HC5}'
 TONE = TONE_BORING
 
 @dataclass
