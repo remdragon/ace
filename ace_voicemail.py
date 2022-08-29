@@ -1546,6 +1546,9 @@ class Voicemail:
 			silence_threshold: int = 30
 			silence_seconds: int = 5
 			async for event in self.esl.record( self.uuid, tmp_path, max_greeting_length, silence_threshold, silence_seconds ):
+				if event.event_name == 'DTMF' and ( event.header( 'DTMF-Digit' ) or '' ).strip():
+					log.info( 'user pressed key to end recording' )
+					break
 				self._on_event( event )
 			log.debug( 'box %r RECORDED GREETING %r to %r',
 				box, greeting, str( path )
