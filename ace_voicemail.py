@@ -742,11 +742,17 @@ class Voicemail:
 						await self.play_menu([ str( tmp_name )]) # TODO FIXME: collect digit?
 					elif digit == GUEST_RERECORD:
 						log.debug( 'rerecording' )
-						# do nothing, let it fall through
+						if self.use_tts:
+							x = self.settings.tts()
+							x.say( 'Record your message at the tone, press any key or stop talking to end the recording.' )
+							playlist: List[str] = [ str( await x.generate() )]
+						else:
+							playlist = [ RECORD_YOUR_MESSAGE_AT_THE_TONE_PRESS_ANY_KEY_OR_STOP_TALKING_TO_END_THE_RECORDING ]
+						await self.play_menu( playlist )
+						# do nothing else, let it fall through
 					elif digit == GUEST_DELETE:
 						log.debug( 'deleted message' )
 						deleted = True
-						playlist: List[str]
 						if self.use_tts:
 							x = self.settings.tts()
 							x.say( 'Deleted. Please call back to leave another message. Goodbye.' ) # TODO FIXME: offer to take a new message.
