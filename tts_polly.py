@@ -41,6 +41,9 @@ class TTS:
 	def say( self, text: str ) -> None:
 		self.text.append( text )
 	
+	def number( self, number: Union[int,str] ) -> None:
+		self.say( f'<say-as interpret-as="number">{number}</say-as>' )
+	
 	def digits( self, digits: Union[int,str] ) -> None:
 		self.say( f'<say-as interpret-as="digits">{digits}</say-as>' )
 	

@@ -1170,9 +1170,9 @@ class Voicemail:
 		if self.use_tts:
 			x = self.settings.tts()
 			x.say( 'You have ' )
-			x.digits( len( urgent ))
+			x.number( len( urgent ))
 			x.say( f' {urgent_x} messages and ' )
-			x.digits( len( normal ))
+			x.number( len( normal ))
 			x.say( f' {nonurgent_x} messages.' )
 			intro: List[str] = [ str( await x.generate() )]
 		else:
@@ -1257,8 +1257,8 @@ class Voicemail:
 		if msg_num is not None:
 			if self.use_tts:
 				x = self.settings.tts()
-				x.say( f'Message number {msg_num}' )
-				#x.digits( msg_num )
+				x.say( 'Message number' )
+				x.number( msg_num )
 				msgsounds.append( str( await x.generate() ))
 			else:
 				msgsounds.append( MESSAGE_NUMBER )
@@ -1744,7 +1744,7 @@ class Voicemail:
 				if self.use_tts:
 					x = self.settings.tts()
 					x.say( 'Greeting ' )
-					x.digits( greeting )
+					x.number( greeting )
 					x.say( ' activated.' )
 					playlist: List[str] = [ str( await x.generate() )]
 				else:
