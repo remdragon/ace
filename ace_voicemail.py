@@ -1535,7 +1535,7 @@ class Voicemail:
 				stream: str = str( await x.generate() )
 			else:
 				stream = RECORD_YOUR_GREETING_AT_THE_TONE_PRESS_ANY_KEY_OR_STOP_TALKING_TO_END_THE_RECORDING
-			_ = await self.play_menu([ stream, SILENCE_1_SECOND ])
+			_ = await self.play_menu([ stream ])
 			async for event in self.esl.playback( self.uuid, TONE ):
 				self._on_event( event )
 			
