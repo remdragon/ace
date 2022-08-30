@@ -13,16 +13,17 @@ if sys.platform != 'win32':
 		JournaldLogHandler = None
 
 def init( logfile: Path, loglevels: Dict[str,str] ) -> None:
+	FORMAT = '%(asctime)s [%(name)s] %(levelname)s: %(message)s'
 	logging.basicConfig(
 		level = logging.DEBUG,
 		#level = DEBUG9,
-		format = '%(asctime)s:%(levelname)s:%(name)s:%(message)s',
+		format = FORMAT,
 	)
 	
 	if sys.platform != 'win32' and JournaldLogHandler:
 		journald_handler = JournaldLogHandler()
 		journald_handler.setFormatter(
-			logging.Formatter( '[%(levelname)s] %(message)s' )
+			logging.Formatter( FORMAT )
 		)
 		logging.getLogger( '' ).addHandler( journald_handler )
 	
@@ -33,6 +34,8 @@ def init( logfile: Path, loglevels: Dict[str,str] ) -> None:
 		interval = 1,
 		backupCount = 14,
 	)
+	formatter = logging.Formatter( FORMAT )
+	trfh.setFormatter( formatter )
 	logging.getLogger( '' ).addHandler( trfh )
 	
 	for name, level in loglevels.items():
