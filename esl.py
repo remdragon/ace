@@ -511,6 +511,9 @@ class ESL:
 	#	packet = await self._waitfor( b'\n\n' )
 	#	log.warn( f'packet={packet!r}' )
 	
+	async def log( self, level: str, msg: str ) -> ESL.Request:
+		return await self._send( ESL.Request( self, f'api log {level} {msg}' ))
+	
 	async def lua( self,
 		script: str, # freeswitch lua interface can't handle this being quoted...
 		*args: str,
@@ -799,9 +802,9 @@ class ESL:
 	) -> ESL.Request:
 		assert is_valid_uuid( uuid ), f'invalid uuid={uuid!r}'
 		assert isinstance( key, str ) and ' ' not in key, f'invalid key={key!r}'
-		assert isinstance( val, str ) and ' ' not in val, f'invalid val={val!r}'
+		assert isinstance( val, str ), f'invalid val={val!r}'
 		return await self._send( ESL.Request( self,
-			f'api uuid_setvar {uuid} {key} {val}'
+			f'api uuid_setvar {uuid} {key} {self.escape(val)}'
 		))
 	
 	async def uuid_transfer( self,

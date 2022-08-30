@@ -33,6 +33,7 @@ def init( logfile: Path, loglevels: Dict[str,str] ) -> None:
 		interval = 1,
 		backupCount = 14,
 	)
+	logging.getLogger( '' ).addHandler( trfh )
 	
 	for name, level in loglevels.items():
 		assert level.isnumeric() or level in ( 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL' ), f'invalid level={level!r}'

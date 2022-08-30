@@ -313,6 +313,21 @@ def expired( expiration: str ) -> bool:
 #region State
 
 
+def _parse_csv_to_list( data: Opt[str] ) -> List[Dict[str,str]]:
+	log = logger.getChild( '_parse_csv_to_list' )
+	rows: List[Dict[str,str]] = []
+	lines = re.split( r'\r\n?|\n\r?', ( data or '' ).strip() )
+	log.warning( 'lines=%r', lines )
+	if lines and lines[-1].startswith( '+OK' ):
+		lines = lines[:-1]
+	if lines:
+		hdrs = lines[0].split( ',' )
+		for line in lines[1:]:
+			row = { key: val for key, val in zip( hdrs, line.split( ',' ))}
+			rows.append( row )
+	return rows
+
+
 class State( metaclass = ABCMeta ):
 	config: Config
 	
@@ -338,8 +353,35 @@ class State( metaclass = ABCMeta ):
 				r1 = await self.esl.global_getvar( ar[i] )
 				ar[i] = r1.value
 			s = ''.join( ar )
-			ar = re.split( r'\${([^}]+)}', s )
 			
+			out: List[str] = []
+			while m := re.search( r'\${([A-Za-z]+)\(([^\(\){}]*)\)}', s ):
+				log.debug( 'm.group(1)=%r m.group(2)=%r', m.group(1), m.group(2) )
+				start = m.start()
+				end = m.end()
+				if start:
+					out.append( s[:start] )
+				try:
+					args = json.loads( f'[{m.group(2)}]' )
+				except Exception as e1:
+					log.exception( 'Error parsing argument list %r:', m.group(2) )
+					out.append( f'?{e1!r}?' )
+				func = getattr( self, f'_api_{m.group(1)}', None )
+				log.debug( 'func=%r args=%r', func, args )
+				if not func:
+					out.append( f'?{m.group(1)}?' )
+				else:
+					try:
+						out.append( str( await func( *args )))
+					except Exception as e2:
+						log.exception( 'Error calling %r with args=%r:', func, args )
+						out.append( f'?{e2!r}?' )
+				s = s[end:]
+			if out:
+				out.append( s )
+				s = ''.join( out )
+			
+			ar = re.split( r'\${([^}]+)}', s )
 			if isinstance( self, CallState ):
 				# call context
 				for i in range( 1, len( ar ), 2 ):
@@ -355,6 +397,30 @@ class State( metaclass = ABCMeta ):
 			s = ''.join( ar )
 		log.debug( 'output=%r', s )
 		return s
+	
+	async def _AgentsInGate( self, gate: int ) -> List[Dict[str,str]]:
+		r = await self.esl.lua( 'itas/acd.lua', 'nolog', 'agent', 'list', 'gate', str( gate ))
+		body = r.reply.body if r.reply else ''
+		return _parse_csv_to_list( body )
+	
+	async def _api_AgentsInGate( self, gate: int ) -> int:
+		agents = await self._AgentsInGate( gate )
+		return len( agents )
+	
+	async def _api_AgentsReady( self, gate: int ) -> int:
+		agents = await self._AgentsInGate( gate )
+		return len([ agent for agent in agents if agent['state'] == 'READY' ])
+	
+	async def _api_EstWait( self, gate: int, limit: int ) -> int:
+		log = logger.getChild( 'State._api_EstWait' )
+		r = await self.esl.lua( 'itas/acd.lua', 'nolog', 'gate', 'estwait', str( gate ), str( limit ))
+		body = r.reply.body if r.reply else ''
+		try:
+			estwait = int( body[3:].strip() ) if body else 0
+		except Exception:
+			log.exception( 'Error parsing estwait body %r:', body )
+			estwait = 0
+		return estwait
 	
 	async def tonumber( self, data: Map[str,Any], name: str, *, expand: bool = False, default: Opt[Union[int,float]] = None ) -> Union[int,float]:
 		value = data.get( name )
@@ -548,11 +614,10 @@ class State( metaclass = ABCMeta ):
 		log = logger.getChild( 'State.action_log' )
 		if self.state == HUNT: return CONTINUE
 		
-		raise NotImplementedError( 'how to invoke freeswitch logging via ESL?' )
-		#level
-		#level = getattr( logging, action.get( 'level' ) or 'DEBUG', logging.DEBUG )
-		#text = await self.expand( action.get( 'text' ) or '?' )
-		#log.log( level, text )
+		level = action.get( 'level' ) or 'DEBUG'
+		text = await self.expand( action.get( 'text' ) or '?' )
+		log.debug( 'level=%r text=%r', level, text )
+		await self.esl.log( level, text )
 		
 		return CONTINUE
 	
@@ -849,7 +914,8 @@ class CallState( State ):
 			async with aiofiles.open( str( flag_path ), 'r' ) as f:
 				flag = await f.read()
 		except FileNotFoundError as e:
-			raise repo.ResourceNotFound( str( flag_path )).with_traceback( e.__traceback__ ) from None
+			#raise repo.ResourceNotFound( str( flag_path )).with_traceback( e.__traceback__ ) from None
+			return None
 		return flag.strip() or None
 	
 	async def try_wav( self, filename: str ) -> bool:
@@ -880,7 +946,7 @@ class CallState( State ):
 				if await self.try_wav( f'category_{category}_{cat_flag}' ):
 					return
 		
-		acct = ( didinfo.get( 'acct' ) or '' ).strip()
+		acct = str( didinfo.get( 'acct' ) or '' ).strip()
 		if acct:
 			acct_flag = ( didinfo.get( 'acct_flag' ) or '' ).strip()
 			if acct_flag:
