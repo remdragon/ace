@@ -776,11 +776,11 @@ class Voicemail:
 						log.debug( 'guest saved message' )
 						if self.use_tts:
 							x = self.settings.tts()
-							x.say( 'Saved' )
+							x.say( 'Your message will be delivered.' )
 							playlist = [ str( await x.generate() )]
 						else:
 							playlist = [ SAVED ]
-						playlist.append( SILENCE_1_SECOND )
+						#playlist.append( SILENCE_1_SECOND )
 						await self.play_menu( playlist )
 						await self.goodbye()
 						return False
@@ -940,6 +940,10 @@ class Voicemail:
 				return True
 			if not incorrect: incorrect = await self._login_incorrect()
 			digits = await self.play_menu( incorrect )
+		# if user entered a pin on the last incorrect, let's check if they happened to enter the pin...
+		if pin is not None and digits == str( pin ):
+			log.debug( 'correct pin received - login successful' )
+			return True
 		await self.too_many_failed_attempts()
 		await self.goodbye()
 		log.debug( 'login failure due to too many failed attempts' )
