@@ -1541,10 +1541,17 @@ class Voicemail:
 				await self.play_invalid_value( digit )
 				digit = ''
 	
-	async def _error_greeting_file_missing( self ) -> str:
+	async def _error_greeting_file_missing( self, box: int, greeting: int ) -> str:
 		if self.use_tts:
 			x = self.settings.tts()
-			x.say( 'Error, greeting file missing' )
+			x.say( 'Error, box' )
+			x.digits( box )
+			if greeting < 0:
+				x.say( 'temporary greeting' )
+			else:
+				x.say( 'greeting' )
+				x.digits( greeting )
+			x.say( 'is missing.' )
 			return str( await x.generate() )
 		else:
 			return ERROR
@@ -1641,7 +1648,7 @@ class Voicemail:
 			elif digit == RECORD_REVIEW:
 				stream: str = str( tmp_path )
 				if not tmp_path.is_file():
-					stream = await self._error_greeting_file_missing()
+					stream = await self._error_greeting_file_missing( box, -1 )
 				_ = await self.play_menu([ stream, SILENCE_1_SECOND ])
 				digit = ''
 			elif digit == RECORD_REDO:
@@ -1732,7 +1739,7 @@ class Voicemail:
 			elif digit == GREETING_LISTEN:
 				stream = str( path )
 				if not path.is_file():
-					stream = await self._error_greeting_file_missing()
+					stream = await self._error_greeting_file_missing( box, greeting )
 				digit = await self.play_menu( [ stream, SILENCE_1_SECOND ])
 			elif digit == GREETING_RECORD:
 				if not await self.record_greeting( box, boxsettings, greeting, path ):

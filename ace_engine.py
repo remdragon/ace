@@ -1333,10 +1333,12 @@ class CallState( State ):
 				return CONTINUE
 			greeting = await self.toint( action, 'greeting', default = 1 )
 		path = vm.box_greeting_path( box, greeting )
-		if not path or not path.is_file():
+		if path and path.is_file():
+			sound: str = str( path )
+		else:
 			log.error( 'invalid or non-existing greeting path: %r', path )
-			return CONTINUE
-		return await self._playback( str( path ), pagd )
+			sound = await vm._error_greeting_file_missing( box, greeting )
+		return await self._playback( sound, pagd )
 	
 	async def action_greeting( self, action: ACTION_GREETING, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_greeting' )
