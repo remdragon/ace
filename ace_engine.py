@@ -1749,41 +1749,41 @@ class CallState( State ):
 			await vm.goodbye()
 			return STOP
 		
-		branches: BRANCHES = boxsettings.get( 'branches' ) or {}
-		digit: Opt[str] = None
-		while True: # this loop only exists to serve replay of greeting in the case of "invalid entry"
-			if not digit:
-				digit = await self._guest_greeting( action, box, boxsettings, vm )
-			if digit is None:
-				return STOP
-			if digit == '*':
-				# user pressed * during the above recording, time to try to log them into their box
-				if await vm.login( box, boxsettings ):
-					log.debug( 'login success, calling admin_main_menu for box=%r', box )
-					await vm.admin_main_menu( box, boxsettings )
-					log.debug( 'back from admin_main_menu from box=%r', box )
-				log.debug( 'hanging up and terminating script' )
-				await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'CallState.action_voicemail' )
-				return STOP
-			if digit and digit in '1234567890':
-				branch = branches.get( digit )
-				if branch:
-					old_box: Opt[int] = self.box
-					try:
-						self.box = box
+		old_box: Opt[int] = self.box
+		try:
+			self.box = box
+			branches: BRANCHES = boxsettings.get( 'branches' ) or {}
+			digit: Opt[str] = None
+			while True: # this loop only exists to serve replay of greeting in the case of "invalid entry"
+				if not digit:
+					digit = await self._guest_greeting( action, box, boxsettings, vm )
+				if digit is None:
+					return STOP
+				if digit == '*':
+					# user pressed * during the above recording, time to try to log them into their box
+					if await vm.login( box, boxsettings ):
+						log.debug( 'login success, calling admin_main_menu for box=%r', box )
+						await vm.admin_main_menu( box, boxsettings )
+						log.debug( 'back from admin_main_menu from box=%r', box )
+					log.debug( 'hanging up and terminating script' )
+					await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'CallState.action_voicemail' )
+					return STOP
+				if digit and digit in '1234567890':
+					branch = branches.get( digit )
+					if branch:
 						r = await self._exec_branch( digit, branch, None, log = log )
-					finally:
-						self.box = old_box
-					return r
-				else:
-					digit = await vm.play_menu([ 'ivr/ivr-that_was_an_invalid_entry.wav' ])
-					continue
-			# no diversions selected, record message:
-			if digit and digit != '#':
-				log.warning( 'invalid digit=%r', digit )
-			if await vm.guest( self.did, self.ani, box, boxsettings, self.notify ):
-				await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'CallState.action_voicemail' )
-			return STOP
+						return r
+					else:
+						digit = await vm.play_menu([ 'ivr/ivr-that_was_an_invalid_entry.wav' ])
+						continue
+				# no diversions selected, record message:
+				if digit and digit != '#':
+					log.warning( 'invalid digit=%r', digit )
+				if await vm.guest( self.did, self.ani, box, boxsettings, self.notify ):
+					await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'CallState.action_voicemail' )
+				return STOP
+		finally:
+			self.box = old_box
 		
 		return CONTINUE
 	
