@@ -908,9 +908,9 @@ class Voicemail:
 		if self.use_tts:
 			x = self.settings.tts()
 			x.say( 'Login incorrect' )
-			return [ str( await x.generate() ), SILENCE_2_SECONDS ]
+			return [ str( await x.generate() ) ]
 		else:
-			return [ LOGIN_INCORRECT, SILENCE_2_SECONDS ]
+			return [ LOGIN_INCORRECT ]
 	
 	async def too_many_failed_attempts( self ) -> str:
 		if self.use_tts:

@@ -356,7 +356,7 @@ class State( metaclass = ABCMeta ):
 			
 			out: List[str] = []
 			while m := re.search( r'\${([A-Za-z]+)\(([^\(\){}]*)\)}', s ):
-				log.debug( 'm.group(1)=%r m.group(2)=%r', m.group(1), m.group(2) )
+				#log.debug( 'm.group(1)=%r m.group(2)=%r', m.group(1), m.group(2) )
 				start = m.start()
 				end = m.end()
 				if start:
@@ -367,7 +367,7 @@ class State( metaclass = ABCMeta ):
 					log.exception( 'Error parsing argument list %r:', m.group(2) )
 					out.append( f'?{e1!r}?' )
 				func = getattr( self, f'_api_{m.group(1)}', None )
-				log.debug( 'func=%r args=%r', func, args )
+				#log.debug( 'func=%r args=%r', func, args )
 				if not func:
 					out.append( f'?{m.group(1)}?' )
 				else:
@@ -411,14 +411,14 @@ class State( metaclass = ABCMeta ):
 		agents = await self._AgentsInGate( gate )
 		return len([ agent for agent in agents if agent['state'] == 'READY' ])
 	
-	async def _api_EstWait( self, gate: int, limit: int ) -> int:
+	async def _api_EstWait( self, gate: int, limit: int = 10 ) -> int:
 		log = logger.getChild( 'State._api_EstWait' )
 		r = await self.esl.lua( 'itas/acd.lua', 'nolog', 'gate', 'estwait', str( gate ), str( limit ))
 		body = r.reply.body if r.reply else ''
 		try:
 			estwait = int( body[3:].strip() ) if body else 0
-		except Exception:
-			log.exception( 'Error parsing estwait body %r:', body )
+		except Exception as e:
+			log.exception( 'Error parsing estwait body %r: %r', body, e )
 			estwait = 0
 		return estwait
 	

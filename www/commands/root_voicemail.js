@@ -55,7 +55,7 @@ Email Subject/Body and SMS Message support placeholders like \${box} \${ani} \${
 	},{
 		key: 'greeting',
 		type: 'int',
-		label: 'Greeting:',
+		label: 'Active Greeting:',
 		size: 2,
 		tooltip: 'greeting # to play (1-9) - can be changed from the voicemail admin menu',
 	},{
