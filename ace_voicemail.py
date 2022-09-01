@@ -520,12 +520,12 @@ class Voicemail:
 		min_digits: int = 2
 		max_digits: int = 20
 		max_attempts: int = 3
-		timeout = datetime.timedelta( seconds = 3 )
+		timeout = datetime.timedelta( seconds = 10 )
 		terminators: str = '#'
 		error: str = ''
 		digit_regex: str = ''
 		variable_name: str = ''
-		digit_timeout = datetime.timedelta( seconds = 3 )
+		digit_timeout = datetime.timedelta( seconds = 5 )
 		return await self.play( sounds,
 			min_digits,
 			max_digits,
@@ -543,11 +543,11 @@ class Voicemail:
 		min_digits: int = 1
 		max_digits: int = 20
 		max_attempts: int = 1
-		timeout = datetime.timedelta( seconds = 3 )
+		timeout = datetime.timedelta( seconds = 10 )
 		terminators: str = '#'
 		error: str = ''
 		variable_name: str = ''
-		digit_timeout = datetime.timedelta( seconds = 3 )
+		digit_timeout = datetime.timedelta( seconds = 5 )
 		return await self.play( sounds,
 			min_digits,
 			max_digits,
