@@ -355,7 +355,10 @@ class State( metaclass = ABCMeta ):
 			s = ''.join( ar )
 			
 			out: List[str] = []
-			while m := re.search( r'\${([A-Za-z]+)\(([^\(\){}]*)\)}', s ):
+			while True:
+				m = re.search( r'\${([A-Za-z]+)\(([^\(\){}]*)\)}', s )
+				if not m:
+					break
 				#log.debug( 'm.group(1)=%r m.group(2)=%r', m.group(1), m.group(2) )
 				start = m.start()
 				end = m.end()
