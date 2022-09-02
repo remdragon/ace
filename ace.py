@@ -1985,6 +1985,8 @@ def http_voicemails() -> Response:
 		
 		with path_.open( 'w' ) as f:
 			f.write( repo.json_dumps( settings ))
+		chown( str( path_ ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
+		os.chmod( str( path_ ), 0o770 )
 		
 		auditdata = ''.join (
 			f'\n\t{k}={v!r}' for k, v in settings.items()

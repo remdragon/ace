@@ -386,6 +386,8 @@ class EventHandler( metaclass = ABCMeta ):
 class Voicemail:
 	min_pin_length: int = 4
 	use_tts: bool = False
+	owner_user: str
+	owner_group: str
 	
 	def __init__( self, esl: ESL, uuid: str, settings: ace_settings.Settings ) -> None:
 		self.min_pin_length = settings.vm_min_pin_length
@@ -411,6 +413,9 @@ class Voicemail:
 		global g_box_path, g_msgs_path
 		g_box_path = box_path
 		g_msgs_path = msgs_path
+		
+		Voicemail.owner_user = owner_user
+		Voicemail.owner_group = owner_group
 		
 		async def _make_and_own( path: Path ) -> None:
 			await util.mkdirp( path )
@@ -567,7 +572,7 @@ class Voicemail:
 			content = await f.read()
 		return content
 	
-	def box_path( self, box: int ) -> PurePosixPath:
+	def grts_path( self, box: int ) -> PurePosixPath:
 		return g_box_path / str( box )
 	
 	def msgs_path( self, box: int ) -> PurePosixPath:
@@ -579,7 +584,7 @@ class Voicemail:
 	def box_greeting_path( self, box: int, greeting: Union[int,str] ) -> Opt[PurePosixPath]:
 		# NOTE: greeting can be a temporary suffix when recording a new greeting that hasn't been accepted yet
 		if greeting == 0: return None
-		return self.box_path( box ) / f'greeting{greeting}.wav'
+		return self.grts_path( box ) / f'greeting{greeting}.wav'
 	
 	async def load_box_settings( self, box: int ) -> BOXSETTINGS:
 		log = logger.getChild( 'Voicemail.load_box_settings' )
@@ -649,8 +654,12 @@ class Voicemail:
 		now: str = datetime.datetime.now().strftime( '%Y-%m-%d-%H-%M-%S' )
 		uuid: str = str( uuid4() ).replace( '-', '' )
 		folder = self.msgs_path( box )
-		#log.debug( 'mkdirp( %s )', repr( folder ))
-		await util.mkdirp( Path( folder ))
+		folder_ = Path( folder )
+		if not folder_.is_dir():
+			#log.debug( 'mkdirp( %s )', repr( folder ))
+			await util.mkdirp( folder_ )
+			await util.chown( folder_, self.owner_user, self.owner_group )
+			await util.chmod( folder_, 0o770 )
 		#log.debug( 'mkdirp( %s ) -> %s, %s', repr( folder ), repr( ok ), repr( err ))
 		stem: str = f'{box}-{now}-{did}-{ani}-{uuid}'
 		base_name = folder / stem
@@ -1562,11 +1571,17 @@ class Voicemail:
 	
 	async def record_greeting( self, box: int, boxsettings: BOXSETTINGS, greeting: int, path: PurePosixPath ) -> bool:
 		log = logger.getChild( 'Voicemail.record_greeting' )
-		box_path = self.box_path( box )
-		try:
-			await util.mkdirp( Path( box_path ))
-		except Exception as e:
-			log.error( 'Error creating %r: %r', str( box_path ), e)
+		grts_path = self.grts_path( box )
+		grts_path_ = Path( grts_path )
+		if not grts_path_.is_dir():
+			try:
+				await util.mkdirp( grts_path_ )
+			except Exception as e:
+				# TODO FIXME: play ERROR and return
+				log.error( 'Error creating %r: %r', str( grts_path ), e )
+				return True
+			await util.chown( grts_path_, self.owner_user, self.owner_group )
+			await util.chmod( grts_path_, 0o770 )
 		async def _record() -> PurePosixPath:
 			tmp_uuid: str = str( uuid4() )
 			tmp_path: Opt[PurePosixPath] = self.box_greeting_path( box, f'-tmp-{tmp_uuid}' )
