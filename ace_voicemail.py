@@ -494,6 +494,7 @@ class Voicemail:
 		return digits
 	
 	async def play_menu( self, sounds: List[str], max_attempts: int = 1 ) -> str:
+		assert len( sounds ), f'invalid sounds={sounds!r}'
 		min_digits: int = 1
 		max_digits: int = 1
 		if max_attempts < 1:
@@ -981,7 +982,7 @@ class Voicemail:
 			)
 			if boxsettings is not None and pin == pwd:
 				return await self.admin_main_menu( box, boxsettings )
-			if incorrect is None: incorrect = await self._login_incorrect()
+			if not incorrect: incorrect = await self._login_incorrect()
 			await self.play_menu( incorrect )
 		await self.too_many_failed_attempts()
 		await self.goodbye()
