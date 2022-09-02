@@ -22,7 +22,7 @@ import logging
 from multiprocessing import Process
 from multiprocessing.synchronize import RLock as MPLock
 from mypy_extensions import TypedDict
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import sys
 import time
@@ -237,8 +237,8 @@ class Config:
 	repo_routes: repo.AsyncRepository
 	did_fields: List[Field]
 	flags_path: Path
-	vm_box_path: Path
-	vm_msgs_path: Path
+	vm_box_path: PurePosixPath
+	vm_msgs_path: PurePosixPath
 	owner_user: str
 	owner_group: str
 	
@@ -1333,7 +1333,7 @@ class CallState( State ):
 				return CONTINUE
 			greeting = await self.toint( action, 'greeting', default = 1 )
 		path = vm.box_greeting_path( box, greeting )
-		if path and path.is_file():
+		if path and Path( path ).is_file():
 			sound: str = str( path )
 		else:
 			log.error( 'invalid or non-existing greeting path: %r', path )
@@ -1666,7 +1666,7 @@ class CallState( State ):
 		
 		async def _make_greeting_branch( greeting: int ) -> BRANCH:
 			path = vm.box_greeting_path( box, greeting )
-			if path is None or not path.is_file():
+			if path is None or not Path( path ).is_file():
 				playlist = await vm._the_person_at_extension_is_not_available_record_at_the_tone( box )
 				greeting_branch = BRANCH( name = '', nodes = cast( ACTIONS, list(
 					ACTION_PLAYBACK( type = 'playback', name = '', sound = sound ) for sound in playlist
@@ -1812,7 +1812,7 @@ class NotifyState( State ):
 		self.checkin = checkin
 	
 	async def can_continue( self ) -> bool:
-		return self.msg.status == 'new' and self.msg.path.is_file()
+		return self.msg.status == 'new' and Path( self.msg.path ).is_file()
 	
 	async def action_email( self, action: ACTION_EMAIL, pagd: Opt[PAGD] ) -> RESULT:
 		# TODO FIXME: might we have a use for this in CallState too?
@@ -1832,7 +1832,7 @@ class NotifyState( State ):
 		file: Opt[Path] = None
 		content_type = 'audio/wav'
 		if self.msg is not None:
-			file = self.msg.path
+			file = Path( self.msg.path )
 		
 		if not ec.to:
 			log.warning( 'cannot send email - no recipient' )
@@ -1966,13 +1966,12 @@ class NotifyState( State ):
 		if self.state == HUNT: return CONTINUE
 		
 		number = str( action.get( 'number' ) or '' ).strip()
-		path = self.msg.path
 		
 		if not number:
 			log.error( 'cannot voice deliver - no number' )
 			return CONTINUE
 		
-		if not self.msg.path.is_file():
+		if not Path( self.msg.path ).is_file():
 			log.warning( 'cannot voice deliver - wave file no longer exists' )
 			return CONTINUE
 		

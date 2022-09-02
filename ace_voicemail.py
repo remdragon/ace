@@ -11,7 +11,7 @@ import json
 import logging
 import math
 from mypy_extensions import TypedDict
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import random
 from typing import (
 	Any, Callable, cast, Coroutine, Dict, List, Optional as Opt, Tuple, Union,
@@ -56,9 +56,9 @@ class BOXSETTINGS( TypedDict ):
 	branches: Dict[str,Any]
 	greetingBranch: Dict[str,Any]
 
-g_base = Path( '/usr/share/itas/ace/voicemail' )
-g_box_path: Path = g_base / 'meta' 
-g_msgs_path: Path = g_base / 'msgs'
+g_base = PurePosixPath( '/usr/share/itas/ace/voicemail' )
+g_box_path: PurePosixPath = g_base / 'meta' 
+g_msgs_path: PurePosixPath = g_base / 'msgs'
 
 SILENCE_1_SECOND = 'silence_stream://1000' # 1000
 SILENCE_2_SECONDS = 'silence_stream://2000' # 2000
@@ -341,9 +341,9 @@ TONE = TONE_BORING
 
 @dataclass
 class MSG:
-	folder: Path
+	folder: PurePosixPath
 	file: str
-	path: Path
+	path: PurePosixPath
 	box: int
 	year: int
 	month: int
@@ -360,7 +360,7 @@ class MSG:
 	old_priority: Opt[Literal['normal','urgent']] = None
 	old_status: Opt[Literal['new','saved','delete']] = None
 	
-	def to_path( self ) -> Path:
+	def to_path( self ) -> PurePosixPath:
 		parts: List[str] = [
 			str( self.box ),
 			str( self.year ),
@@ -402,8 +402,8 @@ class Voicemail:
 	
 	@staticmethod
 	async def init( *,
-		box_path: Path,
-		msgs_path: Path,
+		box_path: PurePosixPath,
+		msgs_path: PurePosixPath,
 		owner_user: str,
 		owner_group: str,
 		on_event: Callable[[ESL.Message],None],
@@ -411,13 +411,14 @@ class Voicemail:
 		global g_box_path, g_msgs_path
 		g_box_path = box_path
 		g_msgs_path = msgs_path
-		await util.mkdirp( g_box_path )
-		await util.chown( g_box_path, owner_user, owner_group )
-		await util.chmod( g_box_path, 0o775 )
 		
-		await util.mkdirp( g_msgs_path )
-		await util.chown( g_msgs_path, owner_user, owner_group )
-		await util.chmod( g_msgs_path, 0o775 )
+		async def _make_and_own( path: Path ) -> None:
+			await util.mkdirp( path )
+			await util.chown( path, owner_user, owner_group )
+			await util.chmod( path, 0o775 )
+		
+		await _make_and_own( Path( g_box_path ))
+		await _make_and_own( Path( g_msgs_path ))
 		
 		class X( EventHandler ):
 			def handle_event( self, event: ESL.Message ) -> None:
@@ -565,16 +566,16 @@ class Voicemail:
 			content = await f.read()
 		return content
 	
-	def box_path( self, box: int ) -> Path:
+	def box_path( self, box: int ) -> PurePosixPath:
 		return g_box_path / str( box )
 	
-	def msgs_path( self, box: int ) -> Path:
+	def msgs_path( self, box: int ) -> PurePosixPath:
 		return g_msgs_path / str( box )
 	
-	def box_settings_path( self, box: int ) -> Path:
+	def box_settings_path( self, box: int ) -> PurePosixPath:
 		return g_box_path / f'{box}.box'
 	
-	def box_greeting_path( self, box: int, greeting: Union[int,str] ) -> Opt[Path]:
+	def box_greeting_path( self, box: int, greeting: Union[int,str] ) -> Opt[PurePosixPath]:
 		# NOTE: greeting can be a temporary suffix when recording a new greeting that hasn't been accepted yet
 		if greeting == 0: return None
 		return self.box_path( box ) / f'greeting{greeting}.wav'
@@ -583,7 +584,7 @@ class Voicemail:
 		log = logger.getChild( 'Voicemail.load_box_settings' )
 		path = self.box_settings_path( box )
 		try:
-			raw = await self.load_file_into_memory( path )
+			raw = await self.load_file_into_memory( Path( path ))
 		except FileNotFoundError as e1:
 			raise BoxNotFound( box ).with_traceback( e1.__traceback__ ) from None
 		try:
@@ -593,7 +594,7 @@ class Voicemail:
 		return result
 	
 	async def save_box_settings( self, box: int, boxsettings: BOXSETTINGS ) -> None:
-			path: Path = self.box_settings_path( box )
+			path: PurePosixPath = self.box_settings_path( box )
 			raw: str = json.dumps( boxsettings )
 			async with aiofiles.open( str( path ), 'w' ) as f:
 				await f.write( raw )
@@ -646,13 +647,13 @@ class Voicemail:
 		
 		now: str = datetime.datetime.now().strftime( '%Y-%m-%d-%H-%M-%S' )
 		uuid: str = str( uuid4() ).replace( '-', '' )
-		folder: Path = self.msgs_path( box )
+		folder = self.msgs_path( box )
 		#log.debug( 'mkdirp( %s )', repr( folder ))
-		await util.mkdirp( folder )
+		await util.mkdirp( Path( folder ))
 		#log.debug( 'mkdirp( %s ) -> %s, %s', repr( folder ), repr( ok ), repr( err ))
 		stem: str = f'{box}-{now}-{did}-{ani}-{uuid}'
-		base_name: Path = folder / stem
-		tmp_name: Path = folder / f'{stem}-tmp.wav'
+		base_name = folder / stem
+		tmp_name = folder / f'{stem}-tmp.wav'
 		
 		max_message_time = datetime.timedelta( seconds = boxsettings.get( 'max_message_seconds' ) or 120 )
 		silence_threshold: int = 30
@@ -802,7 +803,7 @@ class Voicemail:
 		finally:
 			if deleted:
 				log.debug( 'not launching guest_save hook b/c deleted=%r', deleted )
-			elif not tmp_name.is_file():
+			elif not Path( tmp_name ).is_file():
 				log.debug( 'not launching guest_save hook b/c file does not exist: %s', repr( tmp_name ))
 			else:
 				asyncio.ensure_future(
@@ -815,6 +816,8 @@ class Voicemail:
 			x = self.settings.tts()
 			x.say( 'Invalid selection, please try again' )
 			stream: str = str( await x.generate() )
+		elif True:
+			stream = THAT_WAS_AN_INVALID_ENTRY
 		else:
 			options: List[str] = [
 				IM_SORRY,
@@ -840,12 +843,12 @@ class Voicemail:
 	async def guest_save( self, box: int, boxsettings: BOXSETTINGS, file: str, priority: str, notify: Callable[[int,BOXSETTINGS,MSG],Coroutine[Any,Any,None]] ) -> None:
 		log = logger.getChild( 'Voicemail.guest_save' )
 		log.debug( 'guest_save_hook: file=%r', file )
-		msgs_path: Path = self.msgs_path( box )
-		base_name: Path = msgs_path / file
+		msgs_path: PurePosixPath = self.msgs_path( box )
+		base_name: PurePosixPath = msgs_path / file
 		tmp_file: str = f'{file}-tmp.wav'
 		new_file: str = f'{file}-{priority}-new.wav'
-		tmp_name: Path = msgs_path / tmp_file
-		new_name: Path = msgs_path / new_file
+		tmp_name: PurePosixPath = msgs_path / tmp_file
+		new_name: PurePosixPath = msgs_path / new_file
 		ok = False
 		reason = ''
 		waits = 0
@@ -871,7 +874,7 @@ class Voicemail:
 				return
 		log.warning( 'GIVING UP TRYING TO RENAME FILE' )
 	
-	async def guest_delete( self, tmp_name: Path ) -> None:
+	async def guest_delete( self, tmp_name: PurePosixPath ) -> None:
 		log = logger.getChild( 'Voicemail.guest_delete' )
 		log.debug( 'tmp_name=%r', tmp_name )
 		waits: int = 0
@@ -1115,7 +1118,7 @@ class Voicemail:
 			'*-saved.wav', 'urgent saved', 'saved', URGENT_SAVED, SAVED,
 		)
 	
-	def parse_recording_path( self, msgs_path: Path, file: str ) -> MSG:
+	def parse_recording_path( self, msgs_path: PurePosixPath, file: str ) -> MSG:
 		parts = file.split( '-' )
 		msg = MSG(
 			file = file,
@@ -1153,9 +1156,9 @@ class Voicemail:
 		URGENT_X: str,
 		NONURGENT_X: str,
 	) -> None:
-		msgs_path: Path = self.msgs_path( box )
+		msgs_path: PurePosixPath = self.msgs_path( box )
 		files: List[Path] = []
-		async for file in util.glob( msgs_path, mask ):
+		async for file in util.glob( Path( msgs_path ), mask ):
 			files.append( file )
 		urgent: List[MSG] = []
 		normal: List[MSG] = []
@@ -1556,16 +1559,16 @@ class Voicemail:
 		else:
 			return ERROR
 	
-	async def record_greeting( self, box: int, boxsettings: BOXSETTINGS, greeting: int, path: Path ) -> bool:
+	async def record_greeting( self, box: int, boxsettings: BOXSETTINGS, greeting: int, path: PurePosixPath ) -> bool:
 		log = logger.getChild( 'Voicemail.record_greeting' )
 		box_path = self.box_path( box )
 		try:
-			await util.mkdirp( box_path )
+			await util.mkdirp( Path( box_path ))
 		except Exception as e:
 			log.error( 'Error creating %r: %r', str( box_path ), e)
-		async def _record() -> Path:
+		async def _record() -> PurePosixPath:
 			tmp_uuid: str = str( uuid4() )
-			tmp_path: Opt[Path] = self.box_greeting_path( box, f'-tmp-{tmp_uuid}' )
+			tmp_path: Opt[PurePosixPath] = self.box_greeting_path( box, f'-tmp-{tmp_uuid}' )
 			assert tmp_path is not None # this should only happen if greeting == 0
 			if self.use_tts:
 				x = self.settings.tts()
@@ -1577,6 +1580,8 @@ class Voicemail:
 			async for event in self.esl.playback( self.uuid, TONE ):
 				self._on_event( event )
 			
+			await self.esl.uuid_setvar( self.uuid, 'playback_terminators', '123456789*#' )
+			
 			log.debug( 'box %r RECORDING GREETING %r to %r',
 				box, greeting, str( path ),
 			)
@@ -1584,26 +1589,28 @@ class Voicemail:
 			silence_threshold: int = 30
 			silence_seconds: int = 5
 			async for event in self.esl.record( self.uuid, tmp_path, max_greeting_length, silence_threshold, silence_seconds ):
-				if event.event_name == 'DTMF' and ( event.header( 'DTMF-Digit' ) or '' ).strip():
-					log.info( 'user pressed key to end recording' )
-					break
+				#if event.event_name == 'DTMF' and ( event.header( 'DTMF-Digit' ) or '' ).strip():
+				#	log.info( 'user pressed key to end recording' )
+				#	break
 				self._on_event( event )
 			log.debug( 'box %r RECORDED GREETING %r to %r',
 				box, greeting, str( path )
 			)
 			return tmp_path
 		
-		async def _remove_tmp_path( tmp_path: Path ) -> None:
+		async def _remove_tmp_path( tmp_path: PurePosixPath ) -> None:
 			log = logger.getChild( 'Voicemail.record_greeting._remove_tmp_path' )
-			if tmp_path is not None and tmp_path.is_file():
-				try:
-					await aiofiles.os.remove( tmp_path )
-				except Exception as e:
-					log.error( 'box %r greeting %r error deleting tmp_path=%r: %s'
-						, box, greeting, str( tmp_path ), e
-					)
+			if tmp_path is not None:
+				tmp_path_ = Path( tmp_path )
+				if tmp_path_.is_file():
+					try:
+						await aiofiles.os.remove( tmp_path_ )
+					except Exception as e:
+						log.error( 'box %r greeting %r error deleting tmp_path=%r: %s'
+							, box, greeting, str( tmp_path ), e
+						)
 		
-		tmp_path: Path = await _record()
+		tmp_path: PurePosixPath = await _record()
 		if self.use_tts:
 			x = self.settings.tts()
 			x.say( 'Press ' )
@@ -1631,23 +1638,28 @@ class Voicemail:
 			if digit is None: # session went !ready...
 				return False
 			if digit == RECORD_SAVE:
-				if path.is_file():
+				path_ = Path( path )
+				if path_.is_file():
 					try:
-						await aiofiles.os.remove( path )
+						await aiofiles.os.remove( path_ )
 					except Exception as e1:
 						log.error( 'record_greeting: box %r greeting %r unable to delete old greeting: %r'
 							, box, greeting, e1
 						)
-				try:
-					await aiofiles.os.rename( tmp_path, path )
-				except Exception as e2:
-					log.error( 'record_greeting: box %r greeting %r could not rename %r to %r: %r'
-						, box, greeting, str( tmp_path ), str( path ), e2
-					)
-				return True
+				for i in range( 10 ):
+					try:
+						await aiofiles.os.rename( tmp_path, path )
+					except Exception as e2:
+						log.error( 'record_greeting: box %r greeting %r could not rename %r to %r: %r'
+							, box, greeting, str( tmp_path ), str( path ), e2
+						)
+						await asyncio.sleep( 0.5 )
+					else:
+						return True
+				digit = await self.play_menu([ ERROR ])
 			elif digit == RECORD_REVIEW:
 				stream: str = str( tmp_path )
-				if not tmp_path.is_file():
+				if not Path( tmp_path ).is_file():
 					stream = await self._error_greeting_file_missing( box, -1 )
 				_ = await self.play_menu([ stream, SILENCE_1_SECOND ])
 				digit = ''
@@ -1661,6 +1673,7 @@ class Voicemail:
 				return True
 			else:
 				await self.play_invalid_value( digit )
+				digit = ''
 	
 	async def _an_error_has_occurred_please_contact_the_administrator( self ) -> str:
 		if self.use_tts:
@@ -1674,9 +1687,10 @@ class Voicemail:
 		log = logger.getChild( 'Voicemail.admin_greeting' )
 		log.info( 'box %r greeting %r', box, greeting )
 		assert greeting >= 1 and greeting <= 9
-		path: Opt[Path] = self.box_greeting_path( box, greeting )
+		path: Opt[PurePosixPath] = self.box_greeting_path( box, greeting )
 		assert path is not None
-		if not path.is_file():
+		path_ = Path( path )
+		if not path_.is_file():
 			log.info( 'box %r greeting %r greeting does not exist on entry - auto-recording 1st time', box, greeting )
 			if not await self.record_greeting( box, boxsettings, greeting, path ):
 				log.info( 'box %r greeting %r session !ready during recording', box, greeting )
@@ -1738,7 +1752,7 @@ class Voicemail:
 				return False
 			elif digit == GREETING_LISTEN:
 				stream = str( path )
-				if not path.is_file():
+				if not path_.is_file():
 					stream = await self._error_greeting_file_missing( box, greeting )
 				digit = await self.play_menu( [ stream, SILENCE_1_SECOND ])
 			elif digit == GREETING_RECORD:

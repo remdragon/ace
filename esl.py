@@ -8,12 +8,12 @@ import datetime
 from enum import Enum
 import itertools
 import logging
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import re
 import ssl
 from typing import (
-	Any, AsyncIterator, Dict, Iterator, List, Optional as Opt, overload, Tuple,
-	TypeVar, Union,
+	Any, AsyncIterator, Callable, Dict, Iterator, List, Optional as Opt,
+	overload, Tuple, TypeVar, Union,
 )
 from typing_extensions import AsyncIterator, Literal
 from urllib.parse import unquote as urllib_unquote
@@ -390,17 +390,18 @@ class ESL:
 	async def event_plain_all( self ) -> ESL.Request:
 		return await self._send( ESL.Request( self, 'event plain all' ))
 	
-	async def execute( self, uuid: str, app: str, *args: str, escape: bool = True, playback_stop: bool = False ) -> AsyncIterator[ESL.Message]:
+	async def execute( self, uuid: str, app: str, *args: str, escape: bool = True, playback_stop: Callable[[],bool] = lambda: False ) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.execute' )
 		assert isinstance( app, str ) and len( app ), f'invalid app={app!r}'
 		args_ = ' '.join( map( self.escape, args ) if escape else args )
+		log.debug( 'executing app=%r args=%r', app, args_ )
 		r = await self._send( ESL.Request( self, 'sendmsg', {
 			'call-command': 'execute',
 			'execute-app-name': app,
 			'execute-app-arg': args_,
 		}))
 		args_ = re.sub( r'\\{2,}', r'\\', args_ )
-		log.debug( 'r=%r', r )
+		log.debug( '%r -> %r', app, r.reply )
 		try:
 			while True: # TODO FIXME: what if we never get CHANNEL_EXECUTE_COMPLETE?
 				async for event in self.events():
@@ -408,14 +409,19 @@ class ESL:
 					event_name = event.event_name
 					if uuid == evt_uuid:
 						if event_name == 'CHANNEL_EXECUTE_COMPLETE' or (
-							playback_stop and event_name == 'PLAYBACK_STOP'
+							event_name == 'PLAYBACK_STOP' and playback_stop()
 						):
-							app2 = event.header( 'Application' )
-							appdata = event.header( 'Application-Data' ) or ''
+							app2 = event.header( 'Application' ) or event.header( 'variable_current_application' )
+							appdata = event.header( 'Application-Data' ) or event.header( 'variable_current_application_data' ) or ''
+							if not app2 or not appdata:
+								hdrs = [
+									f'{k}: {v!r}' for k, v in event.headers.items()
+								]
+								log.debug( 'Event Headers:\n%s', '\n'.join( hdrs ))
 							appdata = re.sub( r'\\{2,}', r'\\', appdata )
 							if app == app2 and appdata == args_:
-								log.info( 'exiting on app=%r app2=%r args_=%r appdata=%r',
-									app, app2, args_, appdata,
+								log.info( 'exiting %s on app=%r app2=%r args_=%r appdata=%r',
+									event_name, app, app2, args_, appdata,
 								)
 								return
 							else:
@@ -593,6 +599,9 @@ class ESL:
 			timeout_milliseconds
 		)
 		
+		def _playback_stop() -> bool:
+			return not digits
+		
 		log.warning( f'executing play_and_get_digits with file={file}, timeout_milliseconds={timeout_milliseconds!r}, digit_timeout_ms={digit_timeout_ms!r}' )
 		async for event in self.execute( uuid, 'play_and_get_digits',
 			str( min_digits ),
@@ -607,7 +616,7 @@ class ESL:
 			self.escape( str( digit_timeout_ms ) ),
 			self.escape( transfer_on_failure or '' ),
 			escape = False,
-			playback_stop = True,
+			playback_stop = _playback_stop,
 		):
 			try:
 				evt_uuid = event.header( 'Unique-ID' )
@@ -630,7 +639,12 @@ class ESL:
 	) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.playback' )
 		assert isinstance( stream, str ) and len( stream ), f'invalid stream={stream!r}'
-		async for event in self.execute( uuid, 'playback', stream, escape = False, playback_stop = True ):
+		async for event in self.execute( uuid,
+			'playback',
+			stream,
+			escape = False,
+			playback_stop = lambda: True,
+		):
 			try:
 				yield event
 			except Exception:
@@ -646,14 +660,14 @@ class ESL:
 	
 	async def record( self,
 		uuid: str,
-		path: Path,
+		path: PurePosixPath,
 		time_limit: Opt[datetime.timedelta] = None,
 		silence_threshold: int = 30,
 		silence_hits: int = 5,
 	) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.record' )
-		assert isinstance( path, Path ), f'invalid path={path!r}'
-		assert path.parent.is_dir(), f'path.parent={path.parent!r} does not exist'
+		assert isinstance( path, PurePosixPath ), f'invalid path={path!r}'
+		assert Path( path.parent ).is_dir(), f'path.parent={path.parent!r} does not exist'
 		assert time_limit is None or ( isinstance( time_limit, datetime.timedelta ) and time_limit.total_seconds() > 0 ), f'invalid time_limit={time_limit!r}'
 		assert isinstance( silence_threshold, int ) and silence_threshold > 0, f'invalid silence_threshold={silence_threshold!r}'
 		assert isinstance( silence_hits, int ) and silence_hits > 0, f'invalid silence_hits={silence_hits!r}'
@@ -886,7 +900,7 @@ class ESL:
 						log.log( DEBUG9, 'data=%r', data )
 						buf = await self._reader_parse_bytes( buf + data )
 				except ( ConnectionAbortedError, ConnectionResetError ) as e:
-					log.debug( 'got EOF %r' )
+					log.debug( 'got EOF %r', e )
 					await self._event_queue.put( ESL.ErrorEvent( ESL.HardError( 'EOF' )))
 					return
 				except Exception as e:

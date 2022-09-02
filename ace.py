@@ -23,7 +23,7 @@ import mimetypes
 from multiprocessing import RLock as MPLockFactory
 from multiprocessing.synchronize import RLock as MPLock
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import queue
 import random
 import re
@@ -95,6 +95,12 @@ from tts import TTS_VOICES, tts_voices
 
 
 DEBUG9 = 9
+
+DID_MAX_LENGTH = 10
+ANI_MAX_LENGTH = 20
+CPN_MAX_LENGTH = 30
+ACCT_NUM_MAX_LENGTH = 4
+ACCT_NAME_MAX_LENGTH = 30
 
 SESSION_USERDATA = 'userdata'
 etc_path = Path( '/etc/itas/ace/' )
@@ -552,20 +558,20 @@ os.chmod( str( anis_path ), 0o775 )
 def ani_file_path( ani: int ) -> Path:
 	return anis_path / f'{ani}.ani'
 
-voicemail_meta_path = Path( ITAS_VOICEMAIL_BOXES_PATH )
-voicemail_meta_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
+voicemail_meta_path = PurePosixPath( ITAS_VOICEMAIL_BOXES_PATH )
+Path( voicemail_meta_path ).mkdir( mode = 0o775, parents = True, exist_ok = True )
 chown( str( voicemail_meta_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
 os.chmod( str( anis_path ), 0o775 )
-def voicemail_settings_path( box: Union[int,str] ) -> Path:
+def voicemail_settings_path( box: Union[int,str] ) -> PurePosixPath:
 	return voicemail_meta_path / f'{box}.box'
-def voicemail_greeting_path( box: int, greeting: int ) -> Path:
+def voicemail_greeting_path( box: int, greeting: int ) -> PurePosixPath:
 	return voicemail_meta_path / f'{box}' / f'greeting{greeting}.wav'
 
-voicemail_msgs_path = Path( ITAS_VOICEMAIL_MSGS_PATH )
-voicemail_msgs_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
+voicemail_msgs_path = PurePosixPath( ITAS_VOICEMAIL_MSGS_PATH )
+Path( voicemail_msgs_path ).mkdir( mode = 0o775, parents = True, exist_ok = True )
 chown( str( voicemail_msgs_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
 os.chmod( str( anis_path ), 0o775 )
-def voicemail_box_msgs_path( box: int ) -> Path:
+def voicemail_box_msgs_path( box: int ) -> PurePosixPath:
 	return voicemail_msgs_path / str( box )
 
 
@@ -612,7 +618,21 @@ REPO_JSON_CDR = REPO_FACTORY_NOFS( repo_config, 'cdr', '.cdr', [
 	repo.SqlDateTime( 'start_stamp', null = False ),
 	repo.SqlDateTime( 'answered_stamp', null = True ),
 	repo.SqlDateTime( 'end_stamp', null = False ),
-	repo.SqlJson( 'json', null = False )
+	repo.SqlJson( 'json', null = False ),
+], auditing = False )
+
+# CAR = Caller Activity Report
+REPO_CAR = REPO_FACTORY_NOFS( repo_config, 'car', '.car', [
+	repo.SqlInteger( 'id', null = False, size = 16, auto = True, primary = True ),
+	repo.SqlVarChar( 'call_uuid', size = 36, null = False ),
+	repo.SqlVarChar( 'did', size = DID_MAX_LENGTH, null = False ),
+	repo.SqlVarChar( 'ani', size = ANI_MAX_LENGTH, null = False ),
+	repo.SqlVarChar( 'cpn', size = CPN_MAX_LENGTH, null = False ),
+	repo.SqlVarChar( 'acct_num', size = ACCT_NUM_MAX_LENGTH, null = False ),
+	repo.SqlVarChar( 'acct_name', size = ACCT_NAME_MAX_LENGTH, null = False ),
+	repo.SqlDateTime( 'start', null = False ),
+	repo.SqlDateTime( 'end', null = False ),
+	repo.SqlJson( 'json',  null = False ),
 ], auditing = False )
 
 #endregion repo config
@@ -1126,7 +1146,7 @@ def http_did( did: int ) -> Response:
 		'<form method="POST" enctype="application/x-www-form-urlencoded">',
 	]
 	if not did:
-		did_html = f'<input type="text" name="did" value="{html_att(data.get("did",""))}" size="11" maxlength="10"/>'
+		did_html = f'<input type="text" name="did" value="{html_att(data.get("did",""))}" size="{DID_MAX_LENGTH+1!r}" maxlength="{DID_MAX_LENGTH!r}"/>'
 	else:
 		did_html = html_text( str( did ))
 	
@@ -1195,9 +1215,9 @@ def http_did( did: int ) -> Response:
 		'</td></tr></table>',
 		
 		'<table class="unpadded"><tr><td valign="top">',
-		f'<b>Account #:</b><br/><input type="text" name="acct" value="{html_att(str(acct))}" size="5" maxlength="4"/><br/><br/>',
+		f'<b>Account #:</b><br/><input type="text" name="acct" value="{html_att(str(acct))}" size="{ACCT_NUM_MAX_LENGTH+1!r}" maxlength="{ACCT_NUM_MAX_LENGTH!r}"/><br/><br/>',
 		'</td><td>&nbsp;</td><td valign="top">',
-		f'<b>Client Name:</b><br/><input type="text" name="name" value="{html_att(name)}" size="31" maxlength="30"/><br/><br/>',
+		f'<b>Client Name:</b><br/><input type="text" name="name" value="{html_att(name)}" size="{ACCT_NAME_MAX_LENGTH+1!r}" maxlength="{ACCT_NAME_MAX_LENGTH!r}"/><br/><br/>',
 		'</td><td>&nbsp;</td><td valign="top">',
 		'<b>Acct Flag:</b><br/>',
 		f'<span tooltip="{html_att(acct_flag_tip)}"><input type="text" name="acct_flag" value="{html_att(str(acct_flag))}" size="31" maxlength="30"/></span>',
@@ -1884,7 +1904,7 @@ def route_delete( route: int ) -> Response:
 			raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by route {route2!r}' )
 	
 	# check if route is referenced by a voicemail box
-	for file in voicemail_settings_path( 1 ).parent.glob( '*.box' ):
+	for file in Path( voicemail_settings_path( 1 )).parent.glob( '*.box' ):
 		with file.open( 'r' ) as f:
 			raw = f.read()
 		box_settings = json.loads( raw ) if raw else {}
@@ -1938,8 +1958,9 @@ def http_voicemails() -> Response:
 				400,
 			)
 		
-		path = voicemail_settings_path( box )
-		if path.is_file():
+		path: PurePosixPath = voicemail_settings_path( box )
+		path_ = Path( path )
+		if path_.is_file():
 			return _http_failure(
 				return_type,
 				f'voicemail box number {box!r} already exists',
@@ -1962,7 +1983,7 @@ def http_voicemails() -> Response:
 				'format': 'mp3',
 			}
 		
-		with path.open( 'w' ) as f:
+		with path_.open( 'w' ) as f:
 			f.write( repo.json_dumps( settings ))
 		
 		auditdata = ''.join (
@@ -1990,7 +2011,7 @@ def http_voicemails() -> Response:
 	try:
 		path = voicemail_settings_path( '*' )
 		boxes: List[Dict[str,Any]] = []
-		for box_path in path.parent.glob( path.name ):
+		for box_path in Path( path.parent ).glob( path.name ):
 			with box_path.open( 'r' ) as f:
 				settings = json.loads( f.read() )
 			boxid = int( box_path.stem )
@@ -2073,6 +2094,8 @@ voicemail_id_html = '''
 <div class="tree-editor">
 	<div class="tree">
 		<div id="div_tree"></div>
+		<!--br/><br/>
+		<div>Statistics (TODO FIXME will go here):</div-->
 	</div>
 	<div class="details">
 		<div id="div_details">
@@ -2122,7 +2145,7 @@ def http_voicemail( box: int ) -> Response:
 					405,
 				)
 		
-		path = voicemail_settings_path( box )
+		path = Path( voicemail_settings_path( box ))
 		if not path.is_file():
 			raise HttpFailure( 'Voicemail box not found', 404 )
 		if request.method == 'GET':
@@ -2151,18 +2174,18 @@ def http_voicemail( box: int ) -> Response:
 			
 			return rest_success( [ settings ] )
 		elif request.method == 'DELETE':
-			msgs_path = voicemail_box_msgs_path( box )
+			msgs_path = Path( voicemail_box_msgs_path( box ))
 			log.warning( f'msgs_path={msgs_path!r}' )
-			if msgs_path.exists():
+			if msgs_path.is_dir():
 				try:
 					shutil.rmtree( str( msgs_path ))
 				except OSError as e1:
 					log.exception( 'Could not delete box %r messages:', box )
 					return rest_failure( f'Could not delete box {box!r} messages: {e1!r}' )
 			
-			greetings_path = voicemail_greeting_path( box, 1 ).parent
+			greetings_path = Path( voicemail_greeting_path( box, 1 )).parent
 			log.warning( f'greetings_path={greetings_path!r}' )
-			if greetings_path.exists():
+			if greetings_path.is_dir():
 				try:
 					shutil.rmtree( str( greetings_path ))
 				except OSError as e2:
