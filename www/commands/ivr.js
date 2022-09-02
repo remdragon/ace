@@ -165,38 +165,46 @@ Note that this branch does not execute after the last attempt. Instead the failu
 
 	reorder()
 	{
+		//console.log( 'ivr.reorder running' )
 		let treenode = this.treenode
 		const domNodes = treenode.childNodes.sort(( a, b ) =>
 		{
+			let a_label = a.uinode._label
+			let b_label = b.uinode._label
+			let result = 0
 			// greeting is always at the top:
-			if( a.text === GREETING_LABEL )
-				return -1
-			if( b.text === GREETING_LABEL )
-				return 1
+			if( a_label === GREETING_LABEL )
+				result = -1
+			else if( b_label === GREETING_LABEL )
+				result = 1
 			
 			// invalid is always right below greeting
-			if( a.text === INVALID_LABEL )
-				return -1
-			if( b.text === INVALID_LABEL )
-				return 1
+			else if( a_label === INVALID_LABEL )
+				result = -1
+			else if( b_label === INVALID_LABEL )
+				result = 1
 			
 			// timeout is always right below invalid
-			if( a.text === TIMEOUT_LABEL )
-				return -1
-			if( b.text === TIMEOUT_LABEL )
-				return 1
+			else if( a_label === TIMEOUT_LABEL )
+				result = -1
+			else if( b_label === TIMEOUT_LABEL )
+				result = 1
 			
 			// failure is always the very bottom
-			if( a.text === FAILURE_LABEL )
-				return 1
-			if( b.text === FAILURE_LABEL )
-				return -1
-			
-			// what's left is the digits branches:
-			const aValue = parseInt( a.text )
-			const bValue = parseInt( b.text )
-			
-			return aValue - bValue
+			else if( a_label === FAILURE_LABEL )
+				result = 1
+			else if( b_label === FAILURE_LABEL )
+				result = -1
+			else
+			{
+				// what's left is the digits branches:
+				const aValue = parseInt( a_label )
+				const bValue = parseInt( b_label )
+				
+				result = aValue - bValue
+			}
+			//console.log( 'ivr.reorder:', a_label, ' vs ', b_label, ' -> ', result )
+			return result
 		})
 		
 		const ulNode = treenode.childNodes[0].elementLi.parentNode
