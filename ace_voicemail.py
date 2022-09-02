@@ -63,6 +63,7 @@ g_msgs_path: PurePosixPath = g_base / 'msgs'
 SILENCE_1_SECOND = 'silence_stream://1000' # 1000
 SILENCE_2_SECONDS = 'silence_stream://2000' # 2000
 SILENCE_3_SECONDS = 'silence_stream://3000' # 3000
+SILENCE_10_SECONDS = 'silence_stream://10000' # 10000
 
 GUEST_SAVE = '1'
 GUEST_LISTEN = '2'
@@ -905,17 +906,17 @@ class Voicemail:
 		if self.use_tts:
 			x = self.settings.tts()
 			x.say( 'Please enter your mailbox number followed by pound' )
-			return [ str( await x.generate() )]
+			return [ str( await x.generate() ), SILENCE_10_SECONDS ]
 		else:
-			return [ PLEASE_ENTER_YOUR_ID_FOLLOWED_BY, POUND ]
+			return [ PLEASE_ENTER_YOUR_ID_FOLLOWED_BY, POUND, SILENCE_10_SECONDS ]
 	
 	async def _please_enter_your_password_followed_by_pound( self ) -> List[str]:
 		if self.use_tts:
 			x = self.settings.tts()
 			x.say( 'Please enter your password followed by pound' )
-			return [ str( await x.generate() )]
+			return [ str( await x.generate() ), SILENCE_10_SECONDS]
 		else:
-			return [ PLEASE_ENTER_YOUR_PASSWORD_FOLLOWED_BY, POUND ]
+			return [ PLEASE_ENTER_YOUR_PASSWORD_FOLLOWED_BY, POUND, SILENCE_10_SECONDS ]
 	
 	async def _login_incorrect( self ) -> List[str]:
 		if self.use_tts:
