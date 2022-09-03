@@ -406,6 +406,11 @@ class State( metaclass = ABCMeta ):
 		body = r.reply.body if r.reply else ''
 		return _parse_csv_to_list( body )
 	
+	async def _CallsInGate( self, gate: int ) -> List[Dict[str,str]]:
+		r = await self.esl.lua( 'itas/acd.lua', 'nolog', 'call', 'list', 'gate', str( gate ))
+		body = r.reply.body if r.reply else ''
+		return _parse_csv_to_list( body )
+	
 	async def _api_AgentsInGate( self, gate: int ) -> int:
 		agents = await self._AgentsInGate( gate )
 		return len( agents )
@@ -413,6 +418,10 @@ class State( metaclass = ABCMeta ):
 	async def _api_AgentsReady( self, gate: int ) -> int:
 		agents = await self._AgentsInGate( gate )
 		return len([ agent for agent in agents if agent['state'] == 'READY' ])
+	
+	async def _api_CallsInQueue( self, gate: int ) -> int:
+		calls = await self._CallsInGate( gate )
+		return len( calls )
 	
 	async def _api_EstWait( self, gate: int, limit: int = 10 ) -> int:
 		log = logger.getChild( 'State._api_EstWait' )

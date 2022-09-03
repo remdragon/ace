@@ -583,6 +583,8 @@ class ESL:
 		digit_timeout: Opt[datetime.timedelta] = None,
 		transfer_on_failure: Opt[str] = None,
 		digits: Opt[list[str]] = None,
+		*,
+		playback_stop: bool = True,
 	) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.play_and_get_digits' )
 		assert min_digits >= 0, f'invalid min_digits={min_digits!r}'
@@ -600,7 +602,7 @@ class ESL:
 		)
 		
 		def _playback_stop() -> bool:
-			return not digits
+			return not digits and playback_stop
 		
 		log.warning( f'executing play_and_get_digits with file={file}, timeout_milliseconds={timeout_milliseconds!r}, digit_timeout_ms={digit_timeout_ms!r}' )
 		async for event in self.execute( uuid, 'play_and_get_digits',
@@ -633,6 +635,47 @@ class ESL:
 				yield event
 			except Exception:
 				log.exception( 'Unexpected error processing event:' )
+	
+	async def play_and_get_digits2( self,
+		uuid: str,
+		min_digits: int,
+		max_digits: int,
+		tries: int,
+		timeout: datetime.timedelta,
+		terminators: str,
+		files: List[str],
+		invalid_file: Opt[str] = None,
+		var_name: Opt[str] = None,
+		regexp: Opt[str] = None,
+		digit_timeout: Opt[datetime.timedelta] = None,
+		transfer_on_failure: Opt[str] = None,
+		digits: Opt[list[str]] = None,
+	) -> AsyncIterator[ESL.Message]:
+		log = logger.getChild( 'ESL.play_and_get_digits2' )
+		assert len( files ), f'invalid files={files!r}'
+		last: List[bool] = [ False ] * len ( files )
+		last[-1] = True
+		for file, is_last in zip( files, last ):
+			async for event in self.play_and_get_digits(
+				uuid,
+				min_digits,
+				max_digits,
+				tries,
+				timeout,
+				terminators,
+				file,
+				invalid_file,
+				var_name,
+				regexp,
+				digit_timeout,
+				transfer_on_failure,
+				digits,
+				playback_stop = not is_last,
+			):
+				try:
+					yield event
+				except Exception:
+					log.exception( 'Unexpected error processing event:' )
 	
 	async def playback( self, uuid: str, stream: str, *,
 		event_lock: bool = False,
