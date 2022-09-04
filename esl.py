@@ -44,10 +44,13 @@ class ESL:
 	_requests: asyncio.Queue[ESL.Request]
 	request_timeout = datetime.timedelta( seconds = 10 )
 	
-	class Disconnect( Exception ):
-		pass
-	
 	class Error( Exception ):
+		def __repr__( self ) -> str:
+			args = ', '.join( repr( arg ) for arg in self.args )
+			cls = type( self )
+			return f'{cls.__module__}.{cls.__qualname__}({args})'
+	
+	class Disconnect( Error ):
 		pass
 	
 	class SoftError( Error ):

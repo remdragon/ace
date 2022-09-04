@@ -42,3 +42,9 @@ class Audit:
 		path = _path / now.strftime( _file )
 		with path.open( 'a', encoding = 'utf-8', errors = 'backslashreplace' ) as f:
 			print( line, file = f )
+
+class NoAudit( Audit ):
+	def __init__( self ) -> None:
+		pass
+	def audit( self, msg: str ) -> None:
+		pass

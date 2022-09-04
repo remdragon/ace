@@ -10,9 +10,11 @@ import logging
 from pathlib import Path
 import re
 import sqlite3
+import threading
 from typing import (
 	Any, cast, Dict, List, Optional as Opt, Sequence as Seq, Tuple, Union,
 )
+import uuid
 
 # local imports:
 import auditing
@@ -163,11 +165,33 @@ class SqlInteger( SqlBase ):
 	def to_sqlite( self ) -> str:
 		sql: List[str] = [
 			self.name,
-			f'INTEGER({self.size})',
+			'INTEGER' if self.auto else f'INTEGER({self.size})', # sqlite doesn't like (size) for autoinc fields
 			'NULL' if self.null else 'NOT NULL',
 			'PRIMARY KEY' if self.primary else '',
 			'UNIQUE' if self.unique else '',
 			'AUTOINCREMENT' if self.auto else '',
+		]
+		return ' '.join( filter( None, sql ))
+
+
+class SqlFloat( SqlBase ):
+	def __init__( self, name: str, *,
+		null: bool,
+		index: bool = False,
+	) -> None:
+		super().__init__( name,
+			null = null,
+			index = index,
+		)
+	
+	def validate( self ) -> None:
+		pass
+	
+	def to_sqlite( self ) -> str:
+		sql: List[str] = [
+			self.name,
+			f'FLOAT',
+			'NULL' if self.null else 'NOT NULL',
 		]
 		return ' '.join( filter( None, sql ))
 
@@ -273,6 +297,8 @@ class Repository( metaclass = ABCMeta ):
 		*,
 		limit: Opt[int] = None,
 		offset: int = 0,
+		orderby: str = '',
+		reverse: bool = False,
 	) -> Seq[Tuple[REPOID, Dict[str, Any]]]:
 		# Return all dictionaries of type
 		cls = type( self )
@@ -309,7 +335,8 @@ def dict_factory( cursor: Any, row: Seq[Any] ) -> Dict[str,Any]:
 
 class RepoSqlite( Repository ):
 	type = 'sqlite'
-	database: sqlite3.Connection
+	sqlite_path: Path
+	tls = threading.local()
 	
 	@classmethod
 	def setup( cls, config: Config ) -> None:
@@ -317,8 +344,7 @@ class RepoSqlite( Repository ):
 		sqlite_path = Path( config.sqlite_path )
 		if not sqlite_path.exists():
 			sqlite_path.touch()
-		cls.database = sqlite3.connect( str( sqlite_path ))
-		setattr( cls.database, 'row_factory', dict_factory )
+		cls.sqlite_path = sqlite_path
 		#with closing( cls.database.cursor() ) as cur:
 		#	#cur.execute(
 		#	#	'CREATE TABLE IF NOT EXISTS "audits" (id INTEGER PRIMARY KEY AUTOINCREMENT)' )
@@ -335,7 +361,7 @@ class RepoSqlite( Repository ):
 		
 		assert fields, f'no fields defined for table {tablename!r}'
 		
-		if not hasattr( RepoSqlite, 'database' ):
+		if not hasattr( RepoSqlite, 'sqlite_path' ):
 			RepoSqlite.setup( config )
 		
 		super().__init__( config, tablename, ending, fields, auditing )
@@ -351,33 +377,47 @@ class RepoSqlite( Repository ):
 			fldsupp.extend( fld.to_sqlite_after( tablename ))
 		
 		_flds_ = ',\n'.join( fldsql + fldxtra )
-		sql: List[str] = [ f'CREATE TABLE IF NOT EXISTS "{tablename}" (_flds_);' ]
+		sql: List[str] = [ f'CREATE TABLE IF NOT EXISTS "{tablename}" ({_flds_});' ]
 		sql.extend( fldsupp )
 		
-		with closing( self.database.cursor() ) as cur:
+		conn = self.database
+		with closing( conn.cursor() ) as cur:
 			for sql_ in sql:
 				cur.execute( sql_ )
+		conn.commit()
+	
+	@property
+	def database( self ) -> sqlite3.Connection:
+		conn = getattr( self.tls, 'conn', None )
+		if conn is None:
+			conn = sqlite3.connect( str( self.sqlite_path ))
+			setattr( conn, 'row_factory', dict_factory )
+			setattr( self.tls, 'conn', conn )
+		return conn
 	
 	def valid_id( self, id: REPOID ) -> REPOID:
-		log = logger.getChild( 'RepoFs.valid_id' )
-		log.debug( f'id={id!r}' )
-		try:
-			id_ = int( id )
-		except ValueError as e:
-			raise ValueError( f'Invalid uuid {id!r}: {e!r}', 400 ).with_traceback( e.__traceback__ ) from None
-		return id_
+		log = logger.getChild( 'RepoSqlite.valid_id' )
+		
+		if not isinstance( id, int ):
+			if isinstance( id, str ) and id.isnumeric():
+				return int( id )
+			try:
+				_ = uuid.UUID( id )  # TODO FIXME: invalid uuid?
+			except ValueError as e:
+				raise ValueError( f'Invalid uuid {id!r}: {e!r}' ).with_traceback( e.__traceback__ ) from None
+		return id
 	
 	def exists( self, id: REPOID ) -> bool:
-		assert isinstance( id, int )
+		assert isinstance( id, ( int, str )), f'invalid id={id!r}'
 		with closing( self.database.cursor() ) as cur:
 			cur.execute( f'select count(*) as "qty" from "{self.tablename}" WHERE id = ?', ( id, ) )
 			row: Dict[str,int] = cur.fetchone()
 		return row['qty'] > 0
 	
 	def get_by_id( self, id: REPOID ) -> Dict[str,Any]:
-		assert isinstance( id, int )
+		assert isinstance( id, ( int, str )), f'invalid id={id!r}'
 		with closing( self.database.cursor() ) as cur:
-			cur.execute( f'select * from "{self.tablename}" WHERE id = ?', ( id, ) )
+			cur.execute( f'select * from "{self.tablename}" WHERE id = ?', [ id ])
 			item: Opt[Dict[str,Any]] = cur.fetchone() # TODO FIXME: EOF?
 		if item is None:
 			raise ResourceNotFound( id )
@@ -388,6 +428,8 @@ class RepoSqlite( Repository ):
 		*,
 		limit: Opt[int] = None,
 		offset: int = 0,
+		orderby: str = '',
+		reverse: bool = False,
 	) -> Seq[Tuple[REPOID, Dict[str, Any]]]:
 		items: Seq[Tuple[REPOID, Dict[str, Any]]]
 		
@@ -408,41 +450,48 @@ class RepoSqlite( Repository ):
 				paging.append( f'offset {int(offset or 0)!r}' )
 		_paging_ = ' '.join( paging )
 		
-		sql = f'select * from "{self.tablename}" {_where_} order by id {_paging_}'
+		orderby = orderby.strip() or 'id'
+		assert '"' not in orderby, f'invalid orderby={orderby!r}'
+		direction = 'desc' if reverse else 'asc'
+		sql = f'select * from "{self.tablename}" {_where_} order by "{orderby}" {direction} {_paging_}'
+		items: List[Tuple[REPOID,Dict[str,Any]]] = []
 		with closing( self.database.cursor() ) as cur:
 			cur.execute( sql, params )
-			items = cur.fetchall()
+			for row in cur.fetchall():
+				id = row['id']
+				items.append(( id, row ))
 		
-		if not limit:
-			limit = len( items )
-		return items[offset:offset+limit]
+		return items
 	
 	def create( self, id: REPOID, resource: Dict[str,Any], *, audit: auditing.Audit ) -> None:
-		keys = []
-		values = []
-		for key, val in resource.items():
-			keys.append( key )
-			values.append( val )
-		
 		sql1 = f'SELECT COUNT(*) AS "qty" FROM "{self.tablename}" WHERE "id"=?'
-		with closing( self.database.cursor() ) as cur:
-			cur.execute( sql1 )
+		conn = self.database
+		with closing( conn.cursor() ) as cur:
+			cur.execute( sql1, [ id ] )
 			row = cur.fetchone()
 			qty = cast( int, row['qty'] )
 			if qty > 0:
 				raise ResourceAlreadyExists()
 		
-		keys_string = '", "'.join( keys )
-		values_string = '", "'.join( values )
+		keys: List[str] = []
+		values: List[str] = []
+		params: List[Any] = []
+		for key, val in resource.items():
+			assert '"' not in key, f'invalid key={key!r}'
+			keys.append( f'"{key}"' )
+			values.append( '?' )
+			params.append( val )
 		
-		query_string = 'INSERT INTO "{}" ("{}") VALUES ("{}")'.format(
-			self.tablename,
-			keys_string,
-			values_string, # <<< TODO FIXME: sql injection attack potential here...
-		)
+		_keys_ = ','.join( keys )
+		_values_ = ','.join( values )
 		
-		with closing( self.database.cursor() ) as cur:
-			cur.execute( query_string )
+		assert '"' not in self.tablename, f'invalid tablename={self.tablename!r}'
+		sql = f'INSERT INTO "{self.tablename}" ({_keys_}) VALUES ({_values_});'
+		
+		with closing( conn.cursor() ) as cur:
+			cur.execute( sql, params )
+		
+		conn.commit()
 		
 		if self.auditing:
 			auditdata = ''.join (
@@ -452,16 +501,21 @@ class RepoSqlite( Repository ):
 			audit.audit( f'Created {self.tablename} {id!r}:{auditdata}' )
 	
 	def update( self, id: REPOID, resource: Dict[str,Any], *, audit: auditing.Audit ) -> Dict[str,Any]:
-		values = ', '.join( f'{k}={v}' for k, v in resource.items() ) # TODO FIXME: sql injection vulnerability
+		values: List[str] = []
+		params: List[Any] = []
+		for k, v in resource.items():
+			values.append( f'{k}=?' )
+			params.append( v )
+		_values_ = ','.join( values )
 		
-		query_string = 'UPDATE "{}" SET {} WHERE id="{}"'.format(
-			self.tablename,
-			values, # <<< TODO FIXME: sql injection attack potential here...
-			id,
-		)
+		assert '"' not in self.tablename, f'invalid tablename={self.tablename!r}'
+		sql = f'UPDATE "{self.tablename}" SET {_values_} WHERE id=?'
+		params.append( id )
 		
-		with closing( self.database.cursor() ) as cur:
-			cur.execute( query_string )
+		conn = self.database
+		with closing( conn.cursor() ) as cur:
+			cur.execute( sql, params )
+		conn.commit()
 		
 		if self.auditing:
 			auditdata = ''.join (
@@ -476,10 +530,13 @@ class RepoSqlite( Repository ):
 		# delete by id and return deleted dict
 		data = self.get_by_id( id )
 		
-		with closing( self.database.cursor() ) as cur:
-			cur.execute( 'DELETE FROM "{}" WHERE id="{}"'.format(
-				self.tablename, id
-			) )
+		assert '"' not in self.tablename, f'invalid tablename={self.tablename!r}'
+		sql = f'DELETE FROM "{self.tablename}" WHERE id=?;'
+		
+		conn = self.database
+		with closing( conn.cursor() ) as cur:
+			cur.execute( sql, [ id ])
+		conn.commit()
 		
 		if self.auditing:
 			audit.audit( f'Deleted {self.tablename} {id!r}' )
@@ -540,6 +597,8 @@ class RepoFs( Repository ):
 		*,
 		limit: Opt[int] = None,
 		offset: int = 0,
+		orderby: str = '',
+		reverse: bool = False,
 	) -> Seq[Tuple[REPOID, Dict[str, Any]]]:
 		items: List[Tuple[REPOID, Dict[str, Any]]] = []
 		
@@ -562,7 +621,11 @@ class RepoFs( Repository ):
 					if not _filter( id, data ):
 						items.append( ( id, data ) )
 		
-		items = sorted( items, key = lambda kv: kv[0] )
+		if not orderby.strip():
+			orderby = 'id'
+		items = sorted( items, key = lambda kv: kv[1].get( orderby ))
+		if reverse:
+			items = items[::-1]
 		if offset:
 			items = items[offset:]
 		if limit:
@@ -638,10 +701,12 @@ class AsyncRepository:
 		*,
 		limit: Opt[int] = None,
 		offset: int = 0,
+		orderby: str = '',
+		reverse: bool = False,
 	) -> Seq[Tuple[REPOID, Dict[str, Any]]]:
 		loop = asyncio.get_running_loop()
 		return await loop.run_in_executor( None, lambda:
-			self.repo.list( filters, limit = limit, offset = offset )
+			self.repo.list( filters, limit = limit, offset = offset, orderby = orderby )
 		)
 	
 	async def create( self, id: REPOID, resource: Dict[str,Any], *, audit: auditing.Audit ) -> None:

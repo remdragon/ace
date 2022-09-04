@@ -87,6 +87,7 @@ import ace_logging
 import ace_settings
 import auditing
 from coalesce import coalesce
+from dhms import dhms
 import repo
 from tts import TTS_VOICES, tts_voices
 
@@ -116,6 +117,7 @@ else:
 	)
 
 g_settings_mplock = MPLockFactory()
+g_car_mplock = MPLockFactory()
 
 
 #endregion globals
@@ -256,6 +258,7 @@ def html_page( *lines: str, stylesheets: Opt[List[str]] = None, status_code: Opt
 			f'	<li><a href="{url_for("http_routes")}">Routes</a></li>',
 			f'	<li><a href="{url_for("http_voicemails")}">Voicemail</a></li>',
 			f'	<li><a href="{url_for("http_settings")}">Settings</a></li>',
+			f'	<li><a href="{url_for("http_cars")}">CAR</a></li>',
 			f'	<li><a href="{url_for("http_audits")}">Audit</a></li>',
 			f'	<li><a href="{url_for("http_logout")}">Log Out</a></li>',
 			'</ul>',
@@ -623,16 +626,16 @@ REPO_JSON_CDR = REPO_FACTORY_NOFS( repo_config, 'cdr', '.cdr', [
 
 # CAR = Caller Activity Report
 REPO_CAR = REPO_FACTORY_NOFS( repo_config, 'car', '.car', [
-	repo.SqlInteger( 'id', null = False, size = 16, auto = True, primary = True ),
-	repo.SqlVarChar( 'call_uuid', size = 36, null = False ),
+	# NOTE: keep this in sync with ace_car.CAR
+	repo.SqlVarChar( 'id', size = 36, null = False, primary = True ), # call's uuid
 	repo.SqlVarChar( 'did', size = DID_MAX_LENGTH, null = False ),
 	repo.SqlVarChar( 'ani', size = ANI_MAX_LENGTH, null = False ),
 	repo.SqlVarChar( 'cpn', size = CPN_MAX_LENGTH, null = False ),
-	repo.SqlVarChar( 'acct_num', size = ACCT_NUM_MAX_LENGTH, null = False ),
-	repo.SqlVarChar( 'acct_name', size = ACCT_NAME_MAX_LENGTH, null = False ),
-	repo.SqlDateTime( 'start', null = False ),
-	repo.SqlDateTime( 'end', null = False ),
-	repo.SqlJson( 'json',  null = False ),
+	repo.SqlVarChar( 'acct_num', size = ACCT_NUM_MAX_LENGTH, null = True ),
+	repo.SqlVarChar( 'acct_name', size = ACCT_NAME_MAX_LENGTH, null = True ),
+	repo.SqlFloat( 'start', null = False ),
+	repo.SqlFloat( 'end', null = True ),
+	repo.SqlJson( 'activity',  null = False ),
 ], auditing = False )
 
 #endregion repo config
@@ -1655,7 +1658,7 @@ def http_flags() -> Response:
 #endregion http - flags
 #region http - routes
 
-@app.route( '/routes', methods = [ 'GET', 'POST' ] )
+@app.route( '/routes', methods = [ 'GET', 'POST' ])
 @login_required # type: ignore
 def http_routes() -> Response:
 	log = logger.getChild( 'http_routes' )
@@ -1699,7 +1702,7 @@ def http_routes() -> Response:
 	q_route = request.args.get( 'route', '' ).strip()
 	q_name = request.args.get( 'name', '' ).strip()
 	
-	filters = {}
+	filters: Dict[str,str] = {}
 	if q_route:
 		filters['id'] = q_route
 	if q_name:
@@ -1713,36 +1716,39 @@ def http_routes() -> Response:
 			offset = q_offset,
 		))
 	except Exception as e:
-		#raise e
+		log.exception( 'Error querying routes list:' )
 		return _http_failure(
 			return_type,
 			f'Error querying routes list: {e!r}',
 			500,
 		)
 	if return_type == 'application/json':
-		return rest_success( [ { 'route': id, 'name': route.get( 'name' ) } for id, route in routes ] )
+		return rest_success([{
+			'route': id,
+			'name': route.get( 'name' )
+		} for id, route in routes ] )
 	
-	row_html = '\n'.join( [
+	row_html = '\n'.join([
 		'<tr>',
 			'<td><a href="{url}">{route}</a></td>',
 			'<td><a href="{url}">{name}</a></td>',
 			'<td><button class="delete" route="{route}">Delete {route} {name}</button></td>',
 		'</tr>',
-	] )
-	body = '\n'.join( [
+	])
+	body = '\n'.join([
 		row_html.format(
 			route = route,
 			name = data.get( 'name' ) or '(Unnamed)',
 			url = url_for( 'http_route', route = route ),
 		)
 		for route, data in routes
-	] )
+	])
 	
 	route_tip = 'Performs substring search of all Route numbers'
 	name_tip = 'Performs substring search of all Route Names'
 	
-	prevpage = urlencode( { 'route': q_route, 'name': q_name, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit ) } )
-	nextpage = urlencode( { 'route': q_route, 'name': q_name, 'limit': q_limit, 'offset': q_offset + q_limit } )
+	prevpage = urlencode({ 'route': q_route, 'name': q_name, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit )})
+	nextpage = urlencode({ 'route': q_route, 'name': q_name, 'limit': q_limit, 'offset': q_offset + q_limit })
 	return html_page(
 		'<table width="100%"><tr>',
 		f'<td align="left"><a href="?{prevpage}">Prev Page</a></td>',
@@ -2281,6 +2287,224 @@ def http_settings_id( fld_name: str ) -> Response:
 
 
 #endregion http - settings
+#region http - CAR
+
+
+@app.route( '/cars', methods = [ 'GET' ])
+@login_required # type: ignore
+def http_cars() -> Response:
+	log = logger.getChild( 'http_cars' )
+	return_type = accept_type()
+	
+	q_limit = qry_int( 'limit', 20, min = 1, max = 1000 )
+	q_offset = qry_int( 'offset', 0, min = 0 )
+	
+	q_did = request.args.get( 'did', '' ).strip()
+	q_ani = request.args.get( 'ani', '' ).strip()
+	
+	filters: Dict[str,str] = {}
+	if q_did:
+		filters['did'] = q_did
+	if q_ani:
+		filters['ani'] = q_ani
+	
+	try:
+		cars = list( REPO_CAR.list(
+			filters,
+			limit = q_limit,
+			offset = q_offset,
+			orderby = 'start',
+			reverse = True,
+		))
+	except Exception as e:
+		log.exception( 'Error querying car list:' )
+		return _http_failure(
+			return_type,
+			f'Error querying car list: {e!r}',
+			500,
+		)
+	
+	if return_type == 'application/json':
+		return rest_success([
+			data for _, data in cars
+		])
+	
+	row_html = '\n'.join([
+		'<tr>',
+			'<td><a href="{url}">{uuid}</a></td>',
+			'<td><a href="{url}">{did}</a></td>',
+			'<td><a href="{url}">{ani}</a></td>',
+			'<td><a href="{url}">{cpn}</a></td>',
+			'<td><a href="{url}">{acct_num}</a></td>',
+			'<td><a href="{url}">{acct_name}</a></td>',
+			'<td><a href="{url}">{start}</a></td>',
+			'<td><a href="{url}">{end}</a></td>',
+		'</tr>',
+	])
+	body_: List[str] = []
+	for _, data in cars:
+		try:
+			start = (
+				datetime.datetime.utcfromtimestamp( data['start'] )
+				.replace( tzinfo = datetime.timezone.utc ) # assign correct tz
+				.astimezone() # convert to local time
+				.strftime( '%Y-%m-%d %H:%M:%S.%f%z' )
+			)
+		except Exception as e:
+			start = repr( e )
+		try:
+			end = (
+				datetime.datetime.utcfromtimestamp( data['end'] )
+				.replace( tzinfo = datetime.timezone.utc ) # assign correct tz
+				.astimezone() # convert to local time
+				.strftime( '%Y-%m-%d %H:%M:%S.%f%z' )
+			)
+		except Exception as e:
+			end = repr( e )
+		uuid = data['id']
+		data2 = dict( **data ) | dict(
+			uuid = uuid,
+			start = start,
+			end = end,
+			url = url_for( 'http_car', uuid = uuid ), # TODO FIXME: This can throw a number of exceptions...
+		)
+		body_.append( row_html.format( **data2 ))
+	
+	body = '\n'.join( body_ )
+	
+	did_tip = 'search for full or partial DID'
+	ani_tip = 'search for full or partial ANI'
+	
+	prevpage = urlencode({ 'did': q_did, 'ani': q_ani, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit )})
+	nextpage = urlencode({ 'did': q_did, 'ani': q_ani, 'limit': q_limit, 'offset': q_offset + q_limit })
+	return html_page(
+		'<table width="100%"><tr>',
+		f'<td align="left"><a href="?{prevpage}">Prev Page</a></td>',
+		'<td align="center">'
+		'<form method="GET">'
+		f'<span tooltip="{html_att(did_tip)}"><input type="text" name="did" placeholder="DID" value="{html_att(q_did)}" maxlength="10" size="11"/></span>',
+		f'<span tooltip="{html_att(ani_tip)}"><input type="text" name="ani" placeholder="ANI" value="{html_att(q_ani)}" maxlength="10" size="11"/></span>',
+		'<input type="submit" value="Search"/>',
+		'<button id="clear" type="button" onclick="window.location=\'?\'">Clear</button>'
+		'</form>',
+		'</td>',
+		f'<td align="right"><a href="?{nextpage}">Next Page</a></td>',
+		'</tr></table>',
+		
+		'<table border=1>',
+		'<tr>',
+		'	<th>UUID</th>',
+		'	<th>DID</th>',
+		'	<th>ANI</th>',
+		'	<th>CPN</th>',
+		'	<th>Acct#</th>',
+		'	<th>Acct Name</th>',
+		'	<th>Start</th>',
+		'	<th>End</th>',
+		'</tr>',
+		body,
+		'</table>',
+	)
+
+@app.route( '/cars/<string:uuid>', methods = [ 'GET' ])
+@login_required # type: ignore
+def http_car( uuid: str ) -> Response:
+	log = logger.getChild( 'http_car' )
+	return_type = accept_type()
+	try:
+		try:
+			id_ = REPO_CAR.valid_id( uuid )
+		except ValueError as e1:
+			raise HttpFailure( f'invalid uuid={uuid!r}: {e1!r}' ).with_traceback( e1.__traceback__ ) from None
+		
+		data = REPO_CAR.get_by_id( id_ )
+		
+		if return_type == 'application/json':
+			return rest_success([ data ])
+		
+		did = data.get( 'did' ) or '(none)'
+		ani = data.get( 'ani' ) or '(none)'
+		cpn = data.get( 'cpn' ) or '(none)'
+		acct_num = data.get( 'acct_num' ) or '(none)'
+		acct_name = data.get( 'acct_name' ) or '(none)'
+		
+		try:
+			start_: Opt[datetime.datetime] = (
+				datetime.datetime.utcfromtimestamp( data['start'] )
+				.replace( tzinfo = datetime.timezone.utc ) # assign correct tz
+				.astimezone() # convert to local time
+			)
+			start: str = start_.strftime( '%Y-%m-%d %H:%M:%S.%f%z' )
+		except Exception as e:
+			start_ = None
+			start = repr( e )
+		
+		try:
+			end_: Opt[datetime.datetime] = (
+				datetime.datetime.utcfromtimestamp( data['end'] )
+				.replace( tzinfo = datetime.timezone.utc ) # assign correct tz
+				.astimezone() # convert to local time
+			)
+			end: str = end_.strftime( '%Y-%m-%d %H:%M:%S.%f%z' )
+		except Exception as e:
+			end_ = None
+			end = repr( e )
+		
+		if start_ and end_:
+			duration: str = dhms( end_ - start_ )
+		else:
+			duration = '(unknown)'
+		
+		html_lines: List[str] = [
+			'<h2>Call Activity Record:</h2>',
+			f'<b>UUID:</b> {html_text(uuid)}<br/>',
+			f'<b>DID:</b> {html_text(did)}<br/>',
+			f'<b>ANI:</b> {html_text(ani)}<br/>',
+			f'<b>CPN:</b> {html_text(cpn)}<br/>',
+			f'<b>Acct#:</b> {html_text(acct_num)}<br/>',
+			f'<b>Acct Name:</b> {html_text(acct_name)}<br/>',
+			f'<b>Start:</b> {html_text(start)}<br/>',
+			f'<b>End:</b> {html_text(end)}<br/>',
+			f'<b>Duration:</b> {html_text(duration)}<br/>',
+		]
+		
+		try:
+			activity: List[Dict[str,str]] = json.loads( cast( str, data.get( 'activity' )))
+			assert isinstance( activity, list )
+		except Exception as e:
+			log.exception( 'Error loading car activity:' )
+			html_lines.append(
+				f'ERROR loading activity: {e!r}'
+			)
+		else:
+			html_lines.append( f'<table border="1" style="border-collapse:collapse"><tr><th>Time</th><th>Activity</th></tr>' )
+			for row in activity:
+				try:
+					time: str = row['time']
+				except Exception as e:
+					time = repr( e )
+				try:
+					description: str = row['description']
+				except Exception as e:
+					description = repr( e )
+				html_lines.append(
+					'<tr>'
+						f'<td>{html_text(time)}</td>'
+						f'<td>{html_text(description)}</td>'
+					'</tr>'
+				)
+			html_lines.append( '</table>' )
+		
+		return html_page( *html_lines )
+		
+	except HttpFailure as e2:
+		return _http_failure(
+			return_type,
+			e2.error,
+			e2.status_code,
+		)
+
+#endregion http - CAR
 #region http - audits
 
 
@@ -2537,6 +2761,8 @@ if __name__ == '__main__':
 		repo_anis = repo.AsyncRepository( REPO_ANIS ),
 		repo_dids = repo.AsyncRepository( REPO_DIDS ),
 		repo_routes = repo.AsyncRepository( REPO_ROUTES ),
+		repo_car = repo.AsyncRepository( REPO_CAR ),
+		car_mplock = g_car_mplock,
 		did_fields = ITAS_DID_FIELDS,
 		flags_path = flags_path,
 		vm_box_path = voicemail_meta_path,
