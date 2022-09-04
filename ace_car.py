@@ -50,7 +50,7 @@ async def activity( repo: repo.AsyncRepository, lock: MPLock, uuid: str,
 		record = await repo.get_by_id( uuid )
 		activity: List[Dict[str,str]] = json.loads( record['activity'] )
 		activity.append({
-			'time': datetime.now().astimezone().strftime( '%H:%M:%S.%f%z' ),
+			'time': datetime.now().astimezone().strftime( '%H:%M:%S.%f' ),
 			'description': description
 		})
 		record['activity'] = json.dumps( activity )
