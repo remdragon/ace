@@ -1970,7 +1970,7 @@ class CallState( State ):
 						await self.car_activity( f'action_voicemail: caller back from vm box {box!r} admin mode' )
 					else:
 						await self.car_activity( f'action_voicemail: caller failed to log into box {box!r}' )
-					await self.car_activity( 'action_voicemail: hanging up and terminating script' )
+					await self.car_activity( 'action_voicemail: hangup and terminating script' )
 					await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'CallState.action_voicemail' )
 					return STOP
 				if digit and digit in '1234567890':
@@ -2265,7 +2265,7 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 		if not route:
 			log.error( 'no route to execute: route=%r', route )
 			cause1: Final = 'UNALLOCATED_NUMBER'
-			await state.car_activity( f'_handler: hanging up call with {cause1!r} because no route was found' )
+			await state.car_activity( f'_handler: hangup call with {cause1!r} b/c no route was found' )
 			await util.hangup( esl, uuid, cause1, 'ace_engine._handler#1' )
 			return
 		
@@ -2275,12 +2275,12 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 			try:
 				box = int( box_ )
 			except ValueError:
-				log.error( 'Could not interpret %r as an integer voicemail box #', box_ )
+				log.error( 'Could not interpret %r as an integer vm box #', box_ )
 				cause2: Final = 'UNALLOCATED_NUMBER'
-				await state.car_activity( f'_handler: hanging up call with {cause2!r} because could not interpret {box_!r} as an integer voicemail box #' )
+				await state.car_activity( f'_handler: hangup call with {cause2!r} b/c {box_!r} not an integer vm box #' )
 				await util.hangup( esl, uuid, cause2, 'ace_engine._handler#2' )
 				return
-			await state.car_activity( f'_handler: routing call to voicemail box {box!r}' )
+			await state.car_activity( f'_handler: routing call directly to vm box {box!r}' )
 			routedata = {
 				#'type': 'root_route',
 				'nodes': [{
@@ -2293,7 +2293,7 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 				routedata = await state.config.repo_routes.get_by_id( route )
 			except repo.ResourceNotFound:
 				log.error( 'route does not exist: route=%r', route )
-				await state.car_activity( '_handler: hanging up call because route {route!r} does not exist' )
+				await state.car_activity( '_handler: hangup call because route {route!r} does not exist' )
 				await util.hangup( esl, uuid, 'UNALLOCATED_NUMBER', 'ace_engine._handler#3' )
 				return
 		
@@ -2308,16 +2308,16 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 			#except TimeoutError:
 			#	log.warning( 'timeout waiting for uuid_setvar' )
 			cause3: Final = 'NORMAL_CLEARING'
-			log.debug( 'hanging up call with %r', cause3 )
-			await state.car_activity( f'hanging up call with {cause3!r}' )
+			log.debug( 'hangup call with %r', cause3 )
+			await state.car_activity( f'hangup call with {cause3!r}' )
 			try:
 				await util.hangup( esl, uuid, cause3, 'ace_engine._handler' )
 			except TimeoutError:
 				log.warning( 'timeout waiting for hangup request' )
 		else:
-			await state.car_activity( f'NOT hanging up call because hangup_on_exit={state.hangup_on_exit!r}' )
+			await state.car_activity( f'NOT hangup call because hangup_on_exit={state.hangup_on_exit!r}' )
 			#cause = 'NORMAL_CLEARING'
-			#log.debug( 'hanging up call with %r because route exited with %r and we have no way to signal inband lua yet', cause, r )
+			#log.debug( 'hangup call with %r because route exited with %r and we have no way to signal inband lua yet', cause, r )
 			#await esl.uuid_setvar( uuid, ACE_STATE, STATE_CONTINUE )
 	
 	except ChannelHangup as e1:
