@@ -621,7 +621,7 @@ class RepoFs( Repository ):
 		
 		if not orderby.strip():
 			orderby = 'id'
-		items = sorted( items, key = lambda kv: kv[1].get( orderby ) or '' )
+		items = sorted( items, key = lambda kv: kv[0] if orderby == 'id' else kv[1].get( orderby ) or '' )
 		if reverse:
 			items = items[::-1]
 		if offset:
