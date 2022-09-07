@@ -2211,6 +2211,7 @@ class NotifyState( State ):
 		try:
 			resp, _ = smtp.sendmail( ec.from_, list( chain( ec.to, ec.cc, bcc )), ec.as_bytes() )
 		except Exception as e:
+			log.exception( 'email failure:' )
 			await self.car_activity( f'ERROR: email failure: {e!r}' )
 		else:
 			await self.car_activity( f'email success: {resp!r}' )
