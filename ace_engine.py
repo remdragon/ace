@@ -324,6 +324,12 @@ def _on_event( event: ESL.Message ) -> None:
 		uuid = event.header( 'Unique-ID' )
 		log.info( 'caught CHANNEL_HANGUP - raising ChannelHangup' )
 		raise ChannelHangup( uuid )
+	elif evt_name == 'CUSTOM':
+		evt_name = event.header( 'Event-Subclass' )
+		if evt_name == 'teledigm-acd':
+			acd_event = event.header( 'acd-event' )
+			evt_name = f'acd_{acd_event}'
+		log.debug( 'ignoring event %r', evt_name )
 	else:
 		log.debug( 'ignoring event %r', evt_name )
 
@@ -1643,7 +1649,7 @@ class CallState( State ):
 		log.debug( 'breaking' )
 		await self.esl.uuid_break( self.uuid, 'all' )
 		
-		# check for events. if acd picked up the call, we don't want to queue more music...
+		# check for events: if acd picked up the call, we don't want to queue more music...
 		async for event in self.esl.events( timeout = 0.01 ):
 			_on_event( event )
 		
