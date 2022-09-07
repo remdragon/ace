@@ -1056,7 +1056,7 @@ class CallState( State ):
 		path: Opt[Path] = None
 		
 		async def _setvar( key: str, val: str ) -> None:
-			await self.car_activity( 'set_preannounce: setting channel variable {key!r}={val!r}' )
+			await self.car_activity( f'set_preannounce: setting channel variable {key!r}={val!r}' )
 			await self.esl.uuid_setvar( self.uuid, key, val )
 		
 		global_flag = await self.load_flag( 'global_flag' )
