@@ -74,9 +74,34 @@ STOP: Final = 'stop'
 RESULT = Literal['continue','stop']
 
 ACE_STATE = 'ace-state'
-STATE_RUNNING = 'running'
-STATE_CONTINUE = 'continue'
-STATE_KILL = 'kill'
+class AceState( Enum ):
+	ACD_ADD = 'acd-add'
+	ACD_GATE = 'acd-gate'
+	ACD_UNGATE = 'acd-ungate'
+	ANSWER = 'answer'
+	BRIDGE = 'bridge'
+	GREETING = 'greeting'
+	HANGUP = 'hangup'
+	IVR = 'ivr'
+	MOH = 'moh'
+	PAGD = 'pagd'
+	PLAYBACK = 'playback'
+	PLAYDTMF = 'playdtmf'
+	PLAYTTS = 'playtts'
+	PREANNOUNCE = 'preannounce'
+	PREANSWER = 'preanswer'
+	RING = 'ring'
+	ROUTE = 'route'
+	RXFAX = 'rxfax'
+	SILENCE = 'silence'
+	THROTTLE = 'throttle'
+	TONE = 'tone'
+	TRANSFER = 'transfer'
+	VMADMIN = 'vmadmin'
+	VMCHECKIN = 'vmcheckin'
+	VMGUESTGRT = 'vmguestgrt'
+	VMGUESTMSG = 'vmguestmsg'
+	VMLOGIN = 'vmlogin'
 
 class ACTION( TypedDict ):
 	type: str
@@ -904,6 +929,9 @@ class CallState( State ):
 			return False
 		return True
 	
+	async def set_state( self, state: AceState ) -> None:
+		await self.esl.uuid_setvar( self.uuid, ACE_STATE, state.value )
+	
 	async def try_ani( self ) -> Opt[Union[int,str]]:
 		log = logger.getChild( 'CallState.try_ani' )
 		
@@ -961,6 +989,8 @@ class CallState( State ):
 		acct_num = data.get( 'acct' )
 		acct_name = data.get( 'name' )
 		if acct_num is not None or acct_name:
+			await self.esl.uuid_setvar( self.uuid, 'ace-acct-num', str( acct_num or '' ))
+			await self.esl.uuid_setvar( self.uuid, 'ace-acct-name', str( acct_name or '' ))
 			await self.config.repo_car.update( self.uuid,
 				{
 					'acct_num': acct_num,
@@ -1008,47 +1038,76 @@ class CallState( State ):
 			return None
 		return flag.strip() or None
 	
-	async def try_wav( self, filename: str ) -> bool:
+	async def try_wav( self, filename: str ) -> Opt[Path]:
 		log = logger.getChild( 'CallState.try_wav' )
 		settings = await ace_settings.aload()
 		path = Path( settings.preannounce_path ) / f'{filename}.wav'
+		path_ = str( path )
 		if not path.is_file():
 			log.debug( 'path not found: %r', str( path ))
-			return False
-		path_ = str( path )
-		log.debug( 'found path: %r', path_)
-		await self.car_activity( 'try_wav setting channel variable preannounce_wav={path_!r}' )
-		await self.esl.uuid_setvar( self.uuid, 'preannounce_wav', path_ )
-		return True
+			await self.car_activity( f'try_wav: preannounce path not found: {path_!r}' )
+			return None
+		log.debug( 'found path: %r', path_ )
+		return path
 	
 	async def set_preannounce( self, didinfo: Dict[str,Any] ) -> None:
 		log = logger.getChild( 'CallState.set_preannounce' )
-		preannounce = 'default.wav'
+		
+		path: Opt[Path] = None
+		
+		async def _setvar( key: str, val: str ) -> None:
+			await self.car_activity( 'set_preannounce: setting channel variable {key!r}={val!r}' )
+			await self.esl.uuid_setvar( self.uuid, key, val )
 		
 		global_flag = await self.load_flag( 'global_flag' )
 		
 		if global_flag:
-			if await self.try_wav( f'global_{global_flag}' ):
-				return
+			await _setvar( 'ace-global_flag', global_flag )
+			if not path:
+				path2 = await self.try_wav( f'global_{global_flag}' )
+				if path2:
+					path = path2
+		else:
+			await self.car_activity( 'set_preannounce: global flag not set' )
 		
 		category = ( didinfo.get( 'category' ) or '' ).strip()
 		if category:
+			await _setvar( 'ace-category', category )
 			cat_flag = await self.load_flag( f'category_{category}' )
 			if cat_flag:
-				if await self.try_wav( f'category_{category}_{cat_flag}' ):
-					return
+				await _setvar( 'ace-category_flag', cat_flag )
+				if not path:
+					path2 = await self.try_wav( f'category_{category}_{cat_flag}' )
+					if path2:
+						path = path2
+			else:
+				await self.car_activity( f'set_preannounce: category flag {category!r} not set' )
+		else:
+			await self.car_activity( 'set_preannounce: no category configured' )
 		
 		acct = str( didinfo.get( 'acct' ) or '' ).strip()
 		if acct:
 			acct_flag = ( didinfo.get( 'acct_flag' ) or '' ).strip()
 			if acct_flag:
-				if await self.try_wav( f'{acct}_{acct_flag}' ):
-					return
+				await _setvar( 'ace-acct_flag', acct_flag )
+				if not path:
+					path2 = await self.try_wav( f'{acct}_{acct_flag}' )
+					if path2:
+						path = path2
+			else:
+				await self.car_activity( 'set_preannounce: acct # flag not set' )
+		else:
+			await self.car_activity( 'set_preannounce: acct # not set' )
 		
 		did_flag = ( didinfo.get( 'did_flag' ) or '' ).strip()
 		if did_flag:
-			if await self.try_wav( f'{self.did}_{did_flag}' ):
-				return
+			await _setvar( 'ace-did_flag', did_flag )
+			if not path:
+				path2 = await self.try_wav( f'{self.did}_{did_flag}' )
+				if path2:
+					path = path2
+		else:
+			await self.car_activity( 'set_preannounce: did flag not set' )
 		
 		#holiday = holidays.today()
 		#if holiday ~= nil then
@@ -1060,43 +1119,62 @@ class CallState( State ):
 		#	log.debug( 'not a holiday' )
 		#end
 		
-		async def _uuid_getint( key: str, default: int ) -> int:
+		async def _uuid_gethhmm( key: str, default: str ) -> str:
 			value = await self.esl.uuid_getvar( self.uuid, key )
 			if value is None:
 				return default
+			m = re.match( r'^(\d\d?):(\d\d)', value )
+			if m:
+				hr = int( m.group( 1 ))
+				mn = int( m.group( 2 ))
+				return f'{hr:02}:{mn:02}'
 			try:
-				return int( value )
+				h = int( value )
 			except ValueError as e:
-				log.warning( 'Could not convert %r value %r to int: %r', key, value, e )
+				log.warning( 'Could not convert %r value %r to an integer or an HH:MM timestamp: %r', key, value, e )
 				return default
+			else:
+				return f'{h:02}:00'
 		
 		# BEGIN bushrs stuff
 		# DOW table: Sun=1 Mon=2 Tue=3 Wed=4 Thu=5 Fri=6 Sat=7
-		bushrs_start = await _uuid_getint( 'bushrs_start', 8 )
-		bushrs_end = await _uuid_getint( 'bushrs_end', 17 )
-		bushrs_dow = await self.esl.uuid_getvar( self.uuid, 'bushrs_dow' ) or '23456' # M-F
-		now = datetime.datetime.now()
-		now_dow = str(( now.weekday() + 1 ) % 7 + 1 ) # now.weekday() MON=0 ... SUN=6, we need SUN=1 ... SAT=7
-		log.debug( 'bushrs_dow=%r, now_dow=%r', bushrs_dow, now_dow )
-		tod = 'AFTHRS'
-		if now_dow in bushrs_dow:
-			if now.hour >= bushrs_start and now.hour < bushrs_end:
-				tod = 'BUSHRS'
+		if not path:
+			bushrs_start = await _uuid_gethhmm( 'bushrs_start', '08:00' ) # TODO FIXME: support 'HH:MM'
+			bushrs_end = await _uuid_gethhmm( 'bushrs_end', '17:00' )
+			bushrs_dow = await self.esl.uuid_getvar( self.uuid, 'bushrs_dow' ) or '23456' # M-F
+			now = datetime.datetime.now()
+			now_dow = str(( now.weekday() + 1 ) % 7 + 1 ) # now.weekday() MON=0 ... SUN=6, we need SUN=1 ... SAT=7
+			log.debug( 'bushrs_dow=%r, now_dow=%r', bushrs_dow, now_dow )
+			tod = 'AFTHRS'
+			if now_dow in bushrs_dow:
+				now_hhmm = f'{now.hour:02}:{now.minute:02}'
+				if now_hhmm >= bushrs_start and now_hhmm <= bushrs_end:
+					tod = 'BUSHRS'
+				else:
+					log.debug( 'hour mismatch' )
 			else:
-				log.debug( 'hour mismatch' )
+				log.debug( 'dow mismatch' )
+			
+			tod_preannounce: str = ( await self.esl.uuid_getvar( self.uuid, f'{tod.lower()}_preannounce' ) or '' ).strip()
+			path2 = await self.try_wav( tod_preannounce or f'{self.did}_{tod}' )
+			if path2:
+				path = path2
+		
+		path2 = await self.try_wav( str( self.did ))
+		if path2:
+			path = path2
+		
+		path2 = await self.try_wav( 'default' )
+		if path2:
+			path = path2
+		
+		if path:
+			path_ = str( path )
+			varname = 'ace-preannounce_wav'
+			await _setvar( varname, path_ )
 		else:
-			log.debug( 'dow mismatch' )
-		
-		if await self.try_wav( f'{self.did}_{tod}' ):
-			return
-		
-		if await self.try_wav( str( self.did )):
-			return
-		
-		if await self.try_wav( 'default' ):
-			return
-		
-		log.debug( 'no preannounce recording found' )
+			log.debug( 'no preannounce recording found' )
+			await self.car_activity( 'set_preannounce: no preannounce recording found' )
 	
 	async def _pagd( self, action_type: str, action: Union[ACTION_IVR,ACTION_PAGD], success: Callable[[str],Coroutine[Any,Any,Opt[RESULT]]] ) -> RESULT:
 		log = logger.getChild( 'CallState._pagd' )
@@ -1245,6 +1323,7 @@ class CallState( State ):
 		log = logger.getChild( 'CallState.action_acd_call_add' )
 		if self.state == HUNT: return CONTINUE
 		
+		await self.set_state( AceState.ACD_ADD )
 		gates: str = expect( str, action.get( 'gates' ))
 		priority: int = await self.toint( action, 'priority' )
 		queue_offset_seconds: int = await self.toint( action, 'queue_offset_seconds', default = 0 )
@@ -1268,6 +1347,7 @@ class CallState( State ):
 		log = logger.getChild( 'CallState.action_acd_call_gate' )
 		if self.state == HUNT: return CONTINUE
 		
+		await self.set_state( AceState.ACD_GATE )
 		gate: str = str( action.get( 'gate' ) or '' )
 		priority: int = await self.toint( action, 'priority' )
 		
@@ -1290,6 +1370,7 @@ class CallState( State ):
 		
 		gate: str = str( action.get( 'gate' ) or '' )
 		
+		await self.set_state( AceState.ACD_UNGATE )
 		r = await self.esl.luarun(
 			'itas/acd.lua',
 			'call',
@@ -1306,6 +1387,7 @@ class CallState( State ):
 		#log = logger.getChild( 'CallState.action_answer' )
 		if self.state == HUNT: return CONTINUE
 		
+		await self.set_state( AceState.ANSWER )
 		if not await util.answer( self.esl, self.uuid, 'ace_eso.CallState.action_answer' ):
 			return STOP
 		await self.car_activity( f'answer supervision sent' )
@@ -1446,12 +1528,14 @@ class CallState( State ):
 		# origination failed:
 		which = 'timeoutBranch' if 'NO_ANSWER' in result else 'failBranch'
 		await self.car_activity( f'ERROR: bridge failed with {result!r}, executing branch {which!r}' )
+		await self.set_state( AceState.BRIDGE )
 		return await self.exec_branch( action, which, pagd, log = log )
 	
 	async def _greeting( self, action: ACTION_GREETING, box: int, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState._greeting' )
 		greeting: int = await self.toint( action, 'greeting', default = 1 )
 		settings = await ace_settings.aload()
+		await self.set_state( AceState.GREETING )
 		vm = Voicemail( self.esl, self.uuid, settings )
 		if greeting < 1 or greeting > 9:
 			try:
@@ -1506,6 +1590,7 @@ class CallState( State ):
 			log.warning( f'unrecognized hangup cause={cause!r}' )
 			await self.car_activity( f'WARNING: unrecognized hangup cause={cause!r}' )
 		await self.car_activity( f'Hanging up call with cause={cause!r}' )
+		await self.set_state( AceState.HANGUP )
 		try:
 			await util.hangup( self.esl, self.uuid, cause, 'action_hangup' )
 		except Exception as e:
@@ -1539,6 +1624,7 @@ class CallState( State ):
 				await self.car_activity( f'IVR does not have a branch for digits={digits!r}' )
 				return None
 		
+		await self.set_state( AceState.IVR )
 		return await self._pagd( 'IVR', action, _success )
 	
 	async def _broadcast( self, action_type: str, stream: Opt[str], *, default: str, log: logging.Logger ) -> RESULT:
@@ -1558,6 +1644,7 @@ class CallState( State ):
 	
 	async def action_moh( self, action: ACTION_MOH, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_moh' )
+		await self.set_state( AceState.MOH )
 		return await self._broadcast( 'MOH', action.get( 'stream' ), default = '$${hold_music}', log = log )
 	
 	async def action_pagd( self, action: ACTION_PAGD, pagd: Opt[PAGD] ) -> RESULT:
@@ -1578,6 +1665,7 @@ class CallState( State ):
 			await self.car_activity( f'PAGD executing success branch on digits={digits!r}' )
 			return await self.exec_branch( action, 'successBranch', None, log = log )
 		
+		await self.set_state( AceState.PAGD )
 		return await self._pagd( 'PAGD', action, _success )
 	
 	async def action_playback( self, action: ACTION_PLAYBACK, pagd: Opt[PAGD] ) -> RESULT:
@@ -1591,6 +1679,7 @@ class CallState( State ):
 		except ValueError as e:
 			sound = 'ivr/ivr-invalid_sound_prompt.wav'
 			await self.car_activity( f'playback using default sound={sound!r} b/c {e!r}' )
+		await self.set_state( AceState.PLAYBACK )
 		return await self._playback( sound, pagd )
 	
 	async def action_playtts( self, action: ACTION_PLAYTTS, pagd: Opt[PAGD] ) -> RESULT:
@@ -1614,6 +1703,7 @@ class CallState( State ):
 			text, tts.voice, r,
 		)
 		await self.car_activity( f'TTS result={r!r}' )
+		await self.set_state( AceState.PLAYTTS )
 		return r
 	
 	async def action_play_dtmf( self, action: ACTION_PLAY_DTMF, pagd: Opt[PAGD] ) -> RESULT:
@@ -1622,6 +1712,7 @@ class CallState( State ):
 		
 		dtmf = action.get( 'dtmf' ) or ''
 		if dtmf:
+			await self.set_state( AceState.PLAYDTMF )
 			r = await self.esl.uuid_send_dtmf( self.uuid, dtmf )
 			log.info( 'uuid_send_dtmf( %r, %r ) -> %r', self.uuid, dtmf, r )
 			await self.car_activity( f'uuid_send_dtmf({dtmf!r}) -> {r!r}' )
@@ -1634,19 +1725,21 @@ class CallState( State ):
 		log = logger.getChild( 'CallState.action_preannounce' )
 		if self.state == HUNT: return CONTINUE
 		
-		sound = ( await self.expand( '${preannounce_wav}' )).strip()
+		sound = ( await self.expand( '${ace-preannounce_wav}' )).strip()
 		if not sound:
 			log.warning( 'no preannounce path' )
-			await self.car_activity( f'ERROR: cannot play preannounce b/c ${{preannounce_wav}}={sound!r}' )
+			await self.car_activity( f'ERROR: cannot play preannounce b/c ${{ace-preannounce_wav}}={sound!r}' )
 			return CONTINUE
 		log.info( 'sound=%r', sound )
-		await self.car_activity( f'playing ${{preannounce_wav}}={sound!r}' )
+		await self.car_activity( f'playing ${{ace-preannounce_wav}}={sound!r}' )
+		await self.set_state( AceState.PREANNOUNCE )
 		return await self._playback( sound, pagd )
 	
 	async def action_preanswer( self, action: ACTION_PREANSWER, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_preanswer' )
 		if self.state == HUNT: return CONTINUE
 		
+		await self.set_state( AceState.PREANSWER )
 		log.info( 'pre-answering' )
 		await self.car_activity( 'pre-answering call' )
 		if not await util.pre_answer( self.esl, self.uuid, 'ace_eso.CallState.action_preanswer' ):
@@ -1656,6 +1749,7 @@ class CallState( State ):
 	
 	async def action_ring( self, action: ACTION_RING, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_ring' )
+		await self.set_state( AceState.RING )
 		await self.car_activity( 'playing ringtone to caller' )
 		return await self._broadcast( 'RING', action.get( 'tone' ), default = '$${us-ring}', log = log )
 	
@@ -1663,6 +1757,7 @@ class CallState( State ):
 		log = logger.getChild( 'CallState.route' )
 		if self.state == HUNT: return CONTINUE
 		
+		await self.set_state( AceState.ROUTE )
 		route: int = await self.toint( action, 'route' )
 		if not valid_route( route ):
 			log.warning( 'invalid route=%r', route )
@@ -1695,6 +1790,7 @@ class CallState( State ):
 			await self.car_activity( f'ERROR: cannot rxfax b/c action.mailto={mailto!r}' )
 			return STOP
 		
+		await self.set_state( AceState.RXFAX )
 		# generate a fax image path that doesn't exist already
 		counter: int = 0
 		path: Opt[Path] = None
@@ -1732,6 +1828,7 @@ class CallState( State ):
 		log = logger.getChild( 'CallState.action_silence' )
 		if self.state == HUNT: return CONTINUE
 		
+		await self.set_state( AceState.SILENCE )
 		seconds = await self.tonumber( action, 'seconds', default = 0 )
 		divisor = await self.toint( action, 'divisor', default = 0 )
 		duration = -1 if seconds < 0 else int( seconds * 1000 )
@@ -1748,6 +1845,7 @@ class CallState( State ):
 			if self.state != HUNT: return CONTINUE
 			return await self.exec_branch( action, 'throttledBranch', pagd, log = log )
 		
+		await self.set_state( AceState.THROTTLE )
 		try:
 			throttle_id = await self.esl.uuid_getvar( self.uuid, 'throttle_id' ) or self.did
 		except Exception as e:
@@ -1813,6 +1911,7 @@ class CallState( State ):
 			await self.car_activity( f'ERROR: cannot play tone b/c tone={tone!r}' )
 			return CONTINUE
 		
+		await self.set_state( AceState.TONE )
 		loops = await self.toint( action, 'loops', default = 1 )
 		stream = f'tone_stream://{tone};loops={loops}'
 		log.info( 'stream=%r', stream )
@@ -1823,6 +1922,7 @@ class CallState( State ):
 		log = logger.getChild( 'CallState.action_transfer' )
 		if self.state == HUNT: return CONTINUE
 		
+		await self.set_state( AceState.TRANSFER )
 		leg = cast( Literal['','-bleg','-both'], str( action.get( 'leg' ) or '' ).strip() )
 		assert leg in ( '', '-bleg', '-both' ), f'invalid leg={leg!r}'
 		dest = str( action.get( 'dest' ) or '' ).strip()
@@ -1931,11 +2031,13 @@ class CallState( State ):
 		_ = await util.answer( self.esl, self.uuid, 'CallState.action_voicemail' )
 		
 		if box == 0:
+			await self.set_state( AceState.VMCHECKIN )
 			await self.car_activity( f'action_voicemail: Executing voicemail checkin logic b/c box={box!r}' )
 			if not await vm.checkin():
 				return STOP
 			return CONTINUE
 		
+		await self.set_state( AceState.VMGUESTGRT )
 		try:
 			boxsettings: BOXSETTINGS = await vm.load_box_settings( box )
 		except LoadBoxError as e:
@@ -1946,6 +2048,7 @@ class CallState( State ):
 			await vm.play_menu([ stream ])
 			# TODO FIXME: do we want to forceably hangup the call here?
 			# TODO FIXME: or add a "no box" branch to the voicemail node in the editor?
+			await self.set_state( AceState.HANGUP )
 			await vm.goodbye()
 			return STOP
 		await self.car_activity(
@@ -1963,14 +2066,17 @@ class CallState( State ):
 				if digit is None:
 					return STOP
 				if digit == '*':
+					await self.set_state( AceState.VMLOGIN )
 					await self.car_activity( 'action_voicemail: caller pressed * during vm greeting, prompting for login' )
 					if await vm.login( box, boxsettings ):
 						await self.car_activity( f'action_voicemail: caller logged into box {box!r} successfully, transferring to admin_main_menu' )
+						await self.set_state( AceState.VMADMIN )
 						await vm.admin_main_menu( box, boxsettings )
 						await self.car_activity( f'action_voicemail: caller back from vm box {box!r} admin mode' )
 					else:
 						await self.car_activity( f'action_voicemail: caller failed to log into box {box!r}' )
 					await self.car_activity( 'action_voicemail: hangup and terminating script' )
+					await self.set_state( AceState.HANGUP )
 					await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'CallState.action_voicemail' )
 					return STOP
 				if digit and digit in '1234567890':
@@ -1987,7 +2093,9 @@ class CallState( State ):
 				if digit and digit != '#':
 					log.warning( 'invalid digit=%r', digit )
 				await self.car_activity( f'action_voicemail: vm box {box!r} greeting finished, preparing to record new message now' )
+				await self.set_state( AceState.VMGUESTMSG )
 				if await vm.guest( self.did, self.ani, box, boxsettings, self.notify ):
+					await self.set_state( AceState.HANGUP )
 					await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'CallState.action_voicemail' )
 				return STOP
 		finally:

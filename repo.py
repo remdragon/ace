@@ -431,8 +431,6 @@ class RepoSqlite( Repository ):
 		orderby: str = '',
 		reverse: bool = False,
 	) -> Seq[Tuple[REPOID, Dict[str, Any]]]:
-		items: Seq[Tuple[REPOID, Dict[str, Any]]]
-		
 		params: List[str] = []
 		if filters:
 			wheres: List[str] = []
@@ -623,7 +621,7 @@ class RepoFs( Repository ):
 		
 		if not orderby.strip():
 			orderby = 'id'
-		items = sorted( items, key = lambda kv: kv[1].get( orderby ))
+		items = sorted( items, key = lambda kv: kv[1].get( orderby ) or '' )
 		if reverse:
 			items = items[::-1]
 		if offset:

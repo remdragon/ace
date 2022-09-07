@@ -338,12 +338,14 @@ class IntField( Field ):
 		max_length: Opt[int] = None,
 		min_value: Opt[int] = None,
 		max_value: Opt[int] = None,
+		placeholder: Opt[str] = None,
 	) -> None:
 		super().__init__( field, label,
 			tooltip = tooltip,
 			required = required,
 			min_length = min_length,
 			max_length = max_length,
+			placeholder = placeholder,
 		)
 		self.min_value = min_value
 		self.max_value = max_value
@@ -1052,7 +1054,7 @@ def try_post_did( did: int, data: Dict[str,str] ) -> int:
 			auditdata_.append( f'\t{key}: {oldval!r} -> {newval!r}' )
 		else:
 			auditdata_.append( f'\t{key}: {oldval!r} (unchanged)' )
-	auditdata = '\n'.join ( auditdata_ )
+	auditdata = '\n'.join( auditdata_ )
 	
 	audit = new_audit()
 	
@@ -1242,6 +1244,8 @@ def http_did( did: int ) -> Response:
 		atts = ''
 		if field.max_length:
 			atts += f' size="{field.max_length+1!r}" maxlength="{field.max_length!r}"'
+		if field.placeholder:
+			atts += f' placeholder="{html_att(field.placeholder)}"'
 		value: Union[None,int,str] = data.get( field.field, None )
 		value = str( value ) if value is not None else ''
 		x += f'<input type="text" name="{field.field}" value="{html_att(value)}"{atts}/>'
@@ -1250,9 +1254,9 @@ def http_did( did: int ) -> Response:
 		x += '<br/><br/>'
 		html_rows.append( x )
 	
-	variables_examples = '\n'.join ( ITAS_DID_VARIABLES_EXAMPLES )
+	variables_examples = '\n'.join( ITAS_DID_VARIABLES_EXAMPLES )
 	
-	html_rows.extend( [
+	html_rows.extend([
 		'<table class="unpadded"><tr><td valign="top">',
 		'<b>Variables:</b><br/>',
 		f'<textarea name="variables" cols="40" rows="4">{html_text(variables)}</textarea><br/><br/>',
@@ -1268,7 +1272,7 @@ def http_did( did: int ) -> Response:
 	submit = 'Save' if did else 'Create'
 	cloneparams = urlencode( data )
 	cloneaction = f"window.location='/dids/0?{cloneparams}'"
-	html_rows.extend( [
+	html_rows.extend([
 		f'<input type="submit" value="{html_att(submit)}"/>',
 		'&nbsp;&nbsp;&nbsp;',
 		f'<button onclick="{cloneaction}" type="button" class="clone">Clone</button>' if did else '',
@@ -1278,7 +1282,7 @@ def http_did( did: int ) -> Response:
 		f'<font color="red">{err}</font>',
 		'<script src="/did.js"></script>',
 		'</form>',
-	] )
+	])
 	return html_page( *html_rows )
 
 
@@ -1600,10 +1604,10 @@ deleteButton.addEventListener( 'click', function( event ) {
 #region http - flags
 
 
-@app.route( '/flags', methods = [ 'GET', 'POST' ] )
+@app.route( '/flags', methods = [ 'GET', 'POST' ])
 @login_required # type: ignore
 def http_flags() -> Response:
-	#log = logger.getChild ( 'http_flags' )
+	#log = logger.getChild( 'http_flags' )
 	return_type = accept_type()
 	
 	if request.method == 'POST':
@@ -2362,12 +2366,11 @@ def http_cars() -> Response:
 		except Exception as e:
 			end = repr( e )
 		uuid = data['id']
-		data2 = dict( **data ) | dict(
-			uuid = uuid,
-			start = start,
-			end = end,
-			url = url_for( 'http_car', uuid = uuid ), # TODO FIXME: This can throw a number of exceptions...
-		)
+		data2: Dict[str,Any] = dict( **data )
+		data2['uuid'] = uuid
+		data2['start'] = start
+		data2['end'] = end
+		data2['url'] = url_for( 'http_car', uuid = uuid ) # TODO FIXME: This can throw a number of exceptions...
 		body_.append( row_html.format( **data2 ))
 	
 	body = '\n'.join( body_ )
@@ -2434,6 +2437,7 @@ def http_car( uuid: str ) -> Response:
 				.replace( tzinfo = datetime.timezone.utc ) # assign correct tz
 				.astimezone() # convert to local time
 			)
+			assert start_ is not None
 			start: str = start_.strftime( '%Y-%m-%d %H:%M:%S.%f%z' )
 		except Exception as e:
 			start_ = None
@@ -2445,6 +2449,7 @@ def http_car( uuid: str ) -> Response:
 				.replace( tzinfo = datetime.timezone.utc ) # assign correct tz
 				.astimezone() # convert to local time
 			)
+			assert end_ is not None
 			end: str = end_.strftime( '%Y-%m-%d %H:%M:%S.%f%z' )
 		except Exception as e:
 			end_ = None

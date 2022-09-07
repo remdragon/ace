@@ -12,6 +12,7 @@ class Field:
 		required: bool = False,
 		min_length: Opt[int] = None,
 		max_length: Opt[int] = None,
+		placeholder: Opt[str] = None,
 	) -> None:
 		self.field = field
 		self.label = label
@@ -19,6 +20,7 @@ class Field:
 		self.required = required
 		self.min_length = min_length
 		self.max_length = max_length
+		self.placeholder = placeholder
 	
 	def validate( self, rawvalue: Opt[str] ) -> Union[None,int,str]:
 		if rawvalue is None:
