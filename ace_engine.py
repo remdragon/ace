@@ -732,8 +732,8 @@ class State( metaclass = ABCMeta ):
 		log = logger.getChild( 'State.action_repeat' )
 		count: int = await self.toint( action, 'count', default = 0 )
 		nodes = cast( ACTIONS, expect( list, action.get( 'nodes' ), default = [] ))
-		i: int = 0
-		while count == 0 or i < count:
+		i: int = 1
+		while count == 0 or i <= count:
 			if self.state != HUNT:
 				log.info( 'starting loop %r of %s', i, count or 'infinite' )
 				await self.car_activity( f'repeat node starting loop {i!r} of {count or "infinite"!r}' )
@@ -896,12 +896,19 @@ class State( metaclass = ABCMeta ):
 				divisor = 0,
 			)
 			log.info( 'executing silence instead (b/c pagd is active)' )
-			await self.car_activity( 'wait playing silence for {seconds!r} second(s) b/c pagd is active' )
+			await self.car_activity( 'action_wait: playing silence for {seconds!r} second(s) b/c pagd is active' )
 			return await self.action_silence( params2, pagd )
 		else:
 			log.info( 'waiting for %r second(s)', seconds )
 			await self.car_activity( f'waiting for {seconds!r} second(s)' )
-			await asyncio.sleep( seconds )
+			done = time.time() + seconds
+			while True:
+				remaining = done - time.time()
+				if remaining < 0.05:
+					break
+				timeout_seconds = remaining * 0.5 if remaining > 0.5 else remaining
+				async for event in self.esl.events( timeout = timeout_seconds ):
+					_on_event( event )
 		
 		return CONTINUE
 
@@ -1635,6 +1642,10 @@ class CallState( State ):
 		
 		log.debug( 'breaking' )
 		await self.esl.uuid_break( self.uuid, 'all' )
+		
+		# check for events. if acd picked up the call, we don't want to queue more music...
+		async for event in self.esl.events( timeout = 0.01 ):
+			_on_event( event )
 		
 		log.info( 'playing %r', stream )
 		await self.car_activity( f'broadcasting stream {stream!r}' )
