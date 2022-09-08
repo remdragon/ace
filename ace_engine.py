@@ -317,6 +317,9 @@ def expect( type: Type[T], value: Opt[T], *, default: Opt[T] = None ) -> T:
 class ChannelHangup( Exception ):
 	pass
 
+class AcdConnected( Exception ):
+	pass
+
 def _on_event( event: ESL.Message ) -> None:
 	log = logger.getChild( '_on_event' )
 	evt_name = event.event_name
@@ -329,6 +332,8 @@ def _on_event( event: ESL.Message ) -> None:
 		if evt_name == 'teledigm-acd':
 			acd_event = event.header( 'acd-event' )
 			evt_name = f'acd_{acd_event}'
+			if evt_name == 'acd_connected':
+				raise AcdConnected()
 		log.debug( 'ignoring event %r', evt_name )
 	else:
 		log.debug( 'ignoring event %r', evt_name )
@@ -2448,18 +2453,22 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 			#log.debug( 'hangup call with %r because route exited with %r and we have no way to signal inband lua yet', cause, r )
 			#await esl.uuid_setvar( uuid, ACE_STATE, STATE_CONTINUE )
 	
-	except ChannelHangup as e1:
-		log.warning( repr( e1 ))
+	except AcdConnected as e1:
+		log.info( f'call processing finished because {e1!r}' )
 		if state is not None:
 			await state.car_activity( f'call processing finished because {e1!r}' )
-	except Exception as e2:
+	except ChannelHangup as e2:
+		log.warning( repr( e2 ))
+		if state is not None:
+			await state.car_activity( f'call processing finished because {e2!r}' )
+	except Exception as e3:
 		log.exception( 'Unexpected error:' )
 		if state is not None:
-			await state.car_activity( f'call processing aborted with {e2!r}' )
+			await state.car_activity( f'call processing aborted with {e3!r}' )
 	finally:
 		if state is not None:
 			await ace_car.finish( State.config.repo_car, uuid )
-		log.warn( 'closing down client' )
+		log.debug( 'closing down client' )
 		await esl.close()
 
 async def _server(
