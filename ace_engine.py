@@ -318,7 +318,11 @@ class ChannelHangup( Exception ):
 	pass
 
 class AcdConnected( Exception ):
-	pass
+	def __init__( self, agent: Opt[str] = None ) -> None:
+		self.agent = agent
+	def __repr__( self ) -> str:
+		cls = type( self )
+		return f'{cls.__module__}.{cls.__qualname__}(agent={self.agent!r})'
 
 def _on_event( event: ESL.Message ) -> None:
 	log = logger.getChild( '_on_event' )
@@ -333,7 +337,8 @@ def _on_event( event: ESL.Message ) -> None:
 			acd_event = event.header( 'acd-event' )
 			evt_name = f'acd_{acd_event}'
 			if evt_name == 'acd_connected':
-				raise AcdConnected()
+				agent = event.header( 'acd-agent' )
+				raise AcdConnected( agent = agent )
 		log.debug( 'ignoring event %r', evt_name )
 	else:
 		log.debug( 'ignoring event %r', evt_name )
