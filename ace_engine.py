@@ -1647,6 +1647,8 @@ class CallState( State ):
 				await self.car_activity( f'IVR does not have a branch for digits={digits!r}' )
 				return None
 		
+		_ = await util.answer( self.esl, self.uuid, 'CallState.action_ivr' )
+		
 		await self.set_state( AceState.IVR )
 		return await self._pagd( 'IVR', action, _success )
 	
@@ -1691,6 +1693,8 @@ class CallState( State ):
 		async def _success( digits: str ) -> Opt[RESULT]:
 			await self.car_activity( f'PAGD executing success branch on digits={digits!r}' )
 			return await self.exec_branch( action, 'successBranch', None, log = log )
+		
+		_ = await util.answer( self.esl, self.uuid, 'CallState.action_pagd' )
 		
 		await self.set_state( AceState.PAGD )
 		return await self._pagd( 'PAGD', action, _success )
