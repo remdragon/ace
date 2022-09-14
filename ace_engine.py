@@ -1797,14 +1797,14 @@ class CallState( State ):
 			log.warning( 'unable to execute route %r: %r', route, e )
 			await self.car_activity( f'ERROR: unable to execute route {route!r}: {e!r}' )
 			return CONTINUE
-		old_route = self.route
+		#old_route = self.route
 		log.info( 'executing route=%r', route )
 		await self.car_activity( f'executing route {route!r}' )
 		result = await self.exec_top_actions(
 			expect( list, routedata.get( 'nodes' ), default = [] )
 		)
 		await self.car_activity( f'route {route!r} returned with result={result!r}' )
-		self.route = old_route
+		#self.route = old_route
 		return result
 	
 	async def action_rxfax( self, action: ACTION_RXFAX, pagd: Opt[PAGD] ) -> RESULT:
