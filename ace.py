@@ -1099,6 +1099,7 @@ def http_did( did: int ) -> Response:
 		except ValidationError as e2:
 			err = e2.args[0]
 		except Exception as e3:
+			log.exception( 'Unexpected error posting DID:' )
 			err = repr ( e3 )
 		else:
 			if return_type == 'application/json':
