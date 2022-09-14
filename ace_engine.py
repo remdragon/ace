@@ -1183,13 +1183,15 @@ class CallState( State ):
 			if path2:
 				path = path2
 		
-		path2 = await self.try_wav( str( self.did ))
-		if path2:
-			path = path2
+		if not path:
+			path2 = await self.try_wav( str( self.did ))
+			if path2:
+				path = path2
 		
-		path2 = await self.try_wav( 'default' )
-		if path2:
-			path = path2
+		if not path:
+			path2 = await self.try_wav( 'default' )
+			if path2:
+				path = path2
 		
 		if path:
 			path_ = str( path )
