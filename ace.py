@@ -1043,8 +1043,11 @@ def try_post_did( did: int, data: Dict[str,str] ) -> int:
 		data2['notes'] = notes
 	
 	path = did_file_path( did2 )
-	with path.open( 'r' ) as f:
-		olddata = json.loads( f.read() )
+	if did:
+		with path.open( 'r' ) as f:
+			olddata = json.loads( f.read() )
+	else:
+		olddata = {}
 	keys = set( olddata.keys() ) | set( data2.keys() )
 	auditdata_: List[str] = []
 	for key in sorted( keys ):
