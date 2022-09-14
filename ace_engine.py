@@ -854,14 +854,12 @@ class State( metaclass = ABCMeta ):
 		
 		smsto: str = str( action.get( 'smsto' ) or '' ).strip() # TODO FIXME: thinq expects 'XXXXXXXXXX'
 		message: str = str( action.get( 'message' ) or '' ).strip()
+		if not message and isinstance( self, NotifyState ):
+			message = ( self.boxsettings.get( 'default_sms_message' ) or '' ).strip()
 		if not message:
-			boxsettings = cast( Opt[BOXSETTINGS], getattr( self, 'settings', None ))
-			if boxsettings:
-				message = ( boxsettings.get( 'default_sms_message' ) or '' ).strip()
+			message = ( settings.sms_message or '' ).strip()
 			if not message:
-				message = ( settings.sms_message or '' ).strip()
-				if not message:
-					message = 'New VM Message from ${ani} Pls call ${did} to check your VM'
+				message = 'New VM Message from ${ani} Pls call ${did} to check your VM'
 		
 		message = message.replace( '\n', '\\n' ) # TODO FIXME: why is this necessary?
 		message = await self.expand( message )
