@@ -620,6 +620,7 @@ class RepoFs( Repository ):
 						data = json.loads( f.read() )
 					except json.decoder.JSONDecodeError:
 						log.exception( 'Error trying to load %r:', str( itemFile ))
+						data = {}
 					if not _filter( id, data ):
 						items.append( ( id, data ) )
 		
