@@ -598,6 +598,7 @@ class RepoFs( Repository ):
 		orderby: str = '',
 		reverse: bool = False,
 	) -> Seq[Tuple[REPOID, Dict[str, Any]]]:
+		log = logger.getChild( 'RepoFs.list' )
 		items: List[Tuple[REPOID, Dict[str, Any]]] = []
 		
 		def _filter( id: int, data: Dict[str,Any] ) -> bool:
@@ -613,9 +614,12 @@ class RepoFs( Repository ):
 		for itemFile in self.path.iterdir():
 			name = itemFile.name.lower()
 			if name.endswith( self.ending ):
-				with itemFile.open( 'r' ) as fileContent:
+				with itemFile.open( 'r' ) as f:
 					id = int( itemFile.stem )
-					data = json.loads( fileContent.read() )
+					try:
+						data = json.loads( f.read() )
+					except json.decoder.JSONDecodeError:
+						log.exception( 'Error trying to load %r:', str( itemFile ))
 					if not _filter( id, data ):
 						items.append( ( id, data ) )
 		
