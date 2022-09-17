@@ -2392,7 +2392,7 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 		await esl.filter( 'Unique-ID', uuid )
 		await esl.event_plain_all()
 		
-		#await esl.linger() # TODO FIXME: I'm probably going to want this...
+		await esl.linger() # TODO FIXME: I'm probably going to want this...
 		
 		state = CallState( esl, uuid, did, ani )
 		
