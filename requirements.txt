@@ -22,3 +22,4 @@ python-pam
 pytz
 service_identity
 tornado
+types-flask
