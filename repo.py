@@ -7,6 +7,7 @@ from contextlib import closing
 from dataclasses import dataclass
 import json
 import logging
+import os
 from pathlib import Path
 import re
 import sqlite3
@@ -18,6 +19,7 @@ import uuid
 
 # local imports:
 import auditing
+from chown import chown
 
 #endregion imports
 #region globals/exceptions
@@ -266,6 +268,8 @@ class Repository( metaclass = ABCMeta ):
 		tablename: str,
 		ending: str,
 		fields: List[SqlBase],
+		owner_user: str,
+		owner_group: str,
 		auditing: bool = True,
 	) -> None:
 		assert tablename not in Repository.schemas, f'duplicate schema definition for table {tablename!r}'
@@ -355,6 +359,8 @@ class RepoSqlite( Repository ):
 		tablename: str,
 		ending: str,
 		fields: List[SqlBase],
+		owner_user: str,
+		owner_group: str,
 		auditing: bool = True,
 	) -> None:
 		assert re.match( r'^[a-z][a-z_0-9]+$', tablename )
@@ -364,7 +370,7 @@ class RepoSqlite( Repository ):
 		if not hasattr( RepoSqlite, 'sqlite_path' ):
 			RepoSqlite.setup( config )
 		
-		super().__init__( config, tablename, ending, fields, auditing )
+		super().__init__( config, tablename, ending, fields, owner_user, owner_group, auditing )
 		if not RepoSqlite.schemas:
 			RepoSqlite.setup( config )
 		
@@ -560,13 +566,17 @@ class RepoFs( Repository ):
 		tablename: str,
 		ending: str,
 		fields: List[SqlBase],
+		owner_user: str,
+		owner_group: str,
 		auditing: bool = True,
 	) -> None:
 		if not hasattr( RepoFs, 'base_path' ):
 			RepoFs.setup( config )
-		super().__init__( config, tablename, ending, fields, auditing )
+		super().__init__( config, tablename, ending, fields, owner_user, owner_group, auditing )
 		self.path = self.base_path / tablename
 		self.path.mkdir( mode = 0o770, parents = True, exist_ok = True )
+		self.owner_user = owner_user
+		self.owner_group = owner_group
 	
 	def valid_id( self, id: REPOID ) -> REPOID:
 		log = logger.getChild( 'RepoFs.valid_id' )
@@ -641,6 +651,8 @@ class RepoFs( Repository ):
 			raise ResourceAlreadyExists()
 		with path.open( 'w' ) as fileContent:
 			fileContent.write( json_dumps( resource ))
+		chown( str( path ), self.owner_user, self.owner_group )
+		os.chmod( str( path ), 0o770 )
 		
 		if self.auditing:
 			auditdata = ''.join (

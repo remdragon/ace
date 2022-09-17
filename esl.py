@@ -166,6 +166,8 @@ class ESL:
 		err: Opt[Exception] = None
 		command_required = True
 		reply: Opt[ESL.Message] = None
+		reply_text: Opt[str] = None # content of reply header 'Reply-Text'
+		reply_body: Opt[str] = None # content of reply body
 		
 		def __init__( self,
 			cli: ESL,
@@ -214,13 +216,14 @@ class ESL:
 		
 		def on_reply( self, reply: ESL.Message ) -> None:
 			log = logger.getChild( 'Request.on_reply' )
-			reply_text = reply.header( 'Reply-Text' ) or ''
-			#log.log( logging.DEBUG, 'reply_text=%r, reply.body=%r', reply_text, reply.body )
-			if reply_text.startswith( '-ERR' ):
-				#log.warning( f'reply_text={reply_text!r} reply.headers={reply.headers!r}' )
-				raise ESL.SoftError( reply_text )
-			elif reply.body.startswith( '-ERR' ):
-				raise ESL.SoftError( reply.body )
+			self.reply_text = reply.header( 'Reply-Text' ) or ''
+			self.reply_body = reply.body
+			#log.log( logging.DEBUG, 'reply_text=%r, reply.body=%r', self.reply_text, self.reply_body )
+			if self.reply_text.startswith( '-ERR' ):
+				#log.warning( 'reply_text=%r reply.headers=%r', self.reply_text, reply.headers )
+				raise ESL.SoftError( self.reply_text )
+			elif self.reply_body.startswith( '-ERR' ):
+				raise ESL.SoftError( self.reply_body )
 		
 		def __repr__( self ) -> str:
 			cls = type( self )
@@ -514,11 +517,8 @@ class ESL:
 			except Exception:
 				log.exception( 'Unexpected error processing event:' )
 	
-	#async def linger( self ) -> None:
-	#	log = logger.getChild( 'ESO.linger' )
-	#	await self._write( b'linger\n\n' )
-	#	packet = await self._waitfor( b'\n\n' )
-	#	log.warn( f'packet={packet!r}' )
+	async def linger( self ) -> ESL.Request:
+		return await self._send( ESL.Request( self, 'linger' ))
 	
 	async def log( self, level: str, msg: str ) -> ESL.Request:
 		return await self._send( ESL.Request( self, f'api log {level} {msg}' ))

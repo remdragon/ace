@@ -1,15 +1,24 @@
 # the following instructions assume http[s] access to *.debian.org, *.pythonhosted.org, *.pypi.org
-# sudo ufw allow 4444
+# sudo ufw allow 443
 # sudo apt update
 # sudo apt upgrade
 # sudo apt install python3-pip build-essential libsystemd-dev libssl-dev
-# sudo pip3 install flask pyopenssl python-pam Flask-Login Flask-Session twisted systemd accept-types pytz
 # sudo pip3 install service_identity --force --upgrade
-# sudo python3 icx-server.py install
+# sudo pip3 install -r requirements.txt
+# sudo ./ace.py install
 
 accept-types
+aiofiles
+aiohttp
+aioshutil
+boto3
 flask
 Flask-Login
 Flask-Session
+mypy-extensions
+pydub
 PyOpenSSL
+python-pam
+pytz
 service_identity
+tornado

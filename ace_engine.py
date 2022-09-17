@@ -450,13 +450,11 @@ class State( metaclass = ABCMeta ):
 	
 	async def _AgentsInGate( self, gate: int ) -> List[Dict[str,str]]:
 		r = await self.esl.lua( 'itas/acd.lua', 'nolog', 'agent', 'list', 'gate', str( gate ))
-		body = r.reply.body if r.reply else ''
-		return _parse_csv_to_list( body )
+		return _parse_csv_to_list( r.reply_body )
 	
 	async def _CallsInGate( self, gate: int ) -> List[Dict[str,str]]:
 		r = await self.esl.lua( 'itas/acd.lua', 'nolog', 'call', 'list', 'gate', str( gate ))
-		body = r.reply.body if r.reply else ''
-		return _parse_csv_to_list( body )
+		return _parse_csv_to_list( r.reply_body )
 	
 	async def _api_AgentsInGate( self, gate: int ) -> int:
 		agents = await self._AgentsInGate( gate )
@@ -473,7 +471,7 @@ class State( metaclass = ABCMeta ):
 	async def _api_EstWait( self, gate: int, limit: int = 10 ) -> int:
 		log = logger.getChild( 'State._api_EstWait' )
 		r = await self.esl.lua( 'itas/acd.lua', 'nolog', 'gate', 'estwait', str( gate ), str( limit ))
-		body = r.reply.body if r.reply else ''
+		body = r.reply_body or ''
 		try:
 			estwait = int( body[3:].strip() ) if body else 0
 		except Exception as e:
@@ -2392,7 +2390,8 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 		await esl.filter( 'Unique-ID', uuid )
 		await esl.event_plain_all()
 		
-		await esl.linger() # TODO FIXME: I'm probably going to want this...
+		r1 = await esl.linger()
+		log.debug( 'linger reply-text=%r, body=%r', r1.reply_text, r1.reply_body )
 		
 		state = CallState( esl, uuid, did, ani )
 		

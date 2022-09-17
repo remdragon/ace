@@ -41,15 +41,6 @@ from typing_extensions import Literal # Python 3.7
 from urllib.parse import urlencode, urlparse
 import uuid
 
-def _requirements() -> int:
-	cmd = f'{sys.executable} -m pip install accept-types aiofiles aiohttp aioshutil boto3 flask Flask-Login Flask-Session mypy-extensions pydub PyOpenSSL service_identity tornado tzlocal'
-	print ( cmd )
-	os.system ( cmd )
-	return -1
-
-if __name__ == '__main__' and sys.argv[1:] == [ 'requirements' ]:
-	sys.exit( _requirements() )
-
 # 3rd-party imports:
 import accept_types # type: ignore # pip install accept-types
 from flask import( # pip install flask
@@ -86,6 +77,7 @@ from ace_fields import Field, ValidationError
 import ace_logging
 import ace_settings
 import auditing
+from chown import chown
 from coalesce import coalesce
 from dhms import dhms
 import repo
@@ -155,7 +147,7 @@ def is_safe_url( url: str ) -> bool:
 	return not unsafe
 
 def is_root() -> bool:
-	assert os.name == 'posix' # this function doesn't make sense outside of posix for now
+	assert sys.platform != 'win32' # this function doesn't make sense outside of posix for now
 	uid: int = os.getuid() # type: ignore
 	return uid == 0
 
@@ -179,15 +171,6 @@ if sys.platform != 'win32':
 		_ = os.umask( 0o077 ) # returns old_umask
 else:
 	def drop_root( uid_name: str = 'nobody', gid_name: str = 'nogroup' ) -> None:
-		pass
-
-if sys.platform != 'win32':
-	def chown( path: str, uid_name: str, gid_name: str ) -> None:
-		uid = pwd.getpwnam( uid_name ).pw_uid
-		gid = grp.getgrnam( gid_name ).gr_gid
-		os.chown( path, uid, gid )
-else:
-	def chown( path: str, uid_name: str, gid_name: str ) -> None:
 		pass
 
 def os_execute( cmd: str ) -> None:
@@ -289,10 +272,10 @@ class HttpFailure( Exception ):
 		return f'{cls.__module__}.{cls.__name__}(error={self.error!r}, status_code={self.status_code!r})'
 
 def rest_success( rows: Opt[List[Dict[str,Any]]] = None ) -> Response:
-	return jsonify( success = True, rows = rows or [] )
+	return cast( Response, jsonify( success = True, rows = rows or [] ))
 
 def rest_failure( error: str, status_code: Opt[int] = None ) -> Response:
-	r = jsonify( success = False, error = error )
+	r = cast( Response, jsonify( success = False, error = error ))
 	r.status_code = status_code or 400
 	return r
 
@@ -530,7 +513,7 @@ auditing.init(
 if __name__ == '__main__' and SESSION_TYPE == 'filesystem':
 	session_path = Path( SESSION_FILE_DIR )
 	session_path.mkdir( mode = 0o770, parents = True, exist_ok = True )
-	if os.name == 'posix':
+	if sys.platform != 'win32':
 		chown( str( session_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
 		os.chmod( SESSION_FILE_DIR, 0o770 )
 
@@ -605,17 +588,17 @@ if REPO_FACTORY == repo.RepoFs:
 REPO_DIDS = REPO_FACTORY( repo_config, DIDS, '.did', [
 	#repo.SqlInteger( 'id', null = False, size = 10, auto = True, primary = True ),
 	#repo.SqlText( 'name', null = True ),
-])
+], ITAS_OWNER_USER, ITAS_OWNER_GROUP )
 
-REPO_ANIS = REPO_FACTORY( repo_config, ANIS, '.ani', [] )
+REPO_ANIS = REPO_FACTORY( repo_config, ANIS, '.ani', [], ITAS_OWNER_USER, ITAS_OWNER_GROUP )
 
 REPO_ROUTES = REPO_FACTORY( repo_config, 'routes', '.route', [
 	repo.SqlInteger( 'id', null = False, size = 10, auto = True, primary = True ),
 	repo.SqlText( 'name', null = True ),
 	repo.SqlJson( 'json', null = False ),
-])
+], ITAS_OWNER_USER, ITAS_OWNER_GROUP )
 
-REPO_BOXES = REPO_FACTORY( repo_config, 'boxes', '.box', [] )
+REPO_BOXES = REPO_FACTORY( repo_config, 'boxes', '.box', [], ITAS_OWNER_USER, ITAS_OWNER_GROUP )
 
 REPO_JSON_CDR = REPO_FACTORY_NOFS( repo_config, 'cdr', '.cdr', [
 	repo.SqlInteger( 'id', null = False, size = 16, auto = True, primary = True ),
@@ -624,7 +607,7 @@ REPO_JSON_CDR = REPO_FACTORY_NOFS( repo_config, 'cdr', '.cdr', [
 	repo.SqlDateTime( 'answered_stamp', null = True ),
 	repo.SqlDateTime( 'end_stamp', null = False ),
 	repo.SqlJson( 'json', null = False ),
-], auditing = False )
+], ITAS_OWNER_USER, ITAS_OWNER_GROUP , auditing = False )
 
 # CAR = Caller Activity Report
 REPO_CAR = REPO_FACTORY_NOFS( repo_config, 'car', '.car', [
@@ -638,7 +621,7 @@ REPO_CAR = REPO_FACTORY_NOFS( repo_config, 'car', '.car', [
 	repo.SqlFloat( 'start', null = False ),
 	repo.SqlFloat( 'end', null = True ),
 	repo.SqlJson( 'activity',  null = False ),
-], auditing = False )
+], ITAS_OWNER_USER, ITAS_OWNER_GROUP , auditing = False )
 
 #endregion repo config
 #region session management
