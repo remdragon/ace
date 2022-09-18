@@ -946,6 +946,7 @@ def http_dids() -> Response:
 	)
 
 def try_post_did( did: int, data: Dict[str,str] ) -> int:
+	log = logger.getChild( 'try_post_did' )
 	try:
 		did2 = did or int( data.get( 'did' ) or '' )
 	except Exception as e1:
@@ -1028,7 +1029,11 @@ def try_post_did( did: int, data: Dict[str,str] ) -> int:
 	path = did_file_path( did2 )
 	if did:
 		with path.open( 'r' ) as f:
-			olddata = json.loads( f.read() )
+			try:
+				olddata = json.load( f )
+			except json.JSONDecodeError:
+				log.exception( f'Corrupt DID file {str(path)!r}:' )
+				olddata = {}
 	else:
 		olddata = {}
 	keys = set( olddata.keys() ) | set( data2.keys() )
