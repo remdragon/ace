@@ -932,6 +932,7 @@ class State( metaclass = ABCMeta ):
 class CallState( State ):
 	box: Opt[int] = None # set to an integer if we're inside of a specific voicemail box
 	hangup_on_exit: bool = True
+	close_on_exit: bool = True
 	
 	def __init__( self, esl: ESL, uuid: str, did: str, ani: str ) -> None:
 		super().__init__( esl, uuid )
@@ -2135,6 +2136,7 @@ class CallState( State ):
 	async def notify( self, box: int, boxsettings: BOXSETTINGS, msg: MSG ) -> None:
 		log = logger.getChild( 'CallState.notify' )
 		try:
+			self.close_on_exit = False
 			settings = await ace_settings.aload()
 			await self.car_activity( f'notify starting for box {box!r} named {boxsettings.get("name")!r}' )
 			state = NotifyState( self.esl, self.uuid, box, msg, boxsettings, settings.vm_checkin )
@@ -2145,6 +2147,9 @@ class CallState( State ):
 		except Exception as e:
 			log.exception( 'Unexpected error during voicemail notify:' )
 			await self.car_activity( f'notification terminated with an error: {e!r}' )
+		finally:
+			log.debug( 'closing down client' )
+			await self.esl.close()
 
 
 #endregion CallState
@@ -2476,8 +2481,11 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 	finally:
 		if state is not None:
 			await ace_car.finish( State.config.repo_car, uuid )
-		log.debug( 'closing down client' )
-		await esl.close()
+		if not state or state.close_on_exit:
+			log.debug( 'closing down client' )
+			await esl.close()
+		else:
+			log.debug( 'leaving client open as requested' )
 
 async def _server(
 	config: Config,
