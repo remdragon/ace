@@ -379,8 +379,7 @@ class ESL:
 	
 	async def eval( self, *args: str ) -> Opt[str]:
 		_args_ = ' '.join( map( self.escape, args ))
-		r = ESL.ValueRequest( self, f'api eval {_args_}' )
-		await r.wait()
+		r = await self._send( ESL.ValueRequest( self, f'api eval {_args_}' ))
 		return r.value
 	
 	async def event( self,
