@@ -628,7 +628,7 @@ class RepoFs( Repository ):
 					id = int( itemFile.stem )
 					try:
 						data = json.loads( f.read() )
-					except json.decoder.JSONDecodeError:
+					except json.JSONDecodeError:
 						log.exception( 'Error trying to load %r:', str( itemFile ))
 						data = {}
 					if not _filter( id, data ):

@@ -863,10 +863,10 @@ def http_dids() -> Response:
 		if q_tf or q_acct or q_name or q_route or q_notes:
 			with file.open( 'r' ) as f:
 				try:
-					data = cast( Dict[str,Any], json.loads( f.read() ))
+					data = cast( Dict[str,Any], json.load( f ))
 				except Exception as e:
-					log.error( f'error parsing json of {str(file)!r}: {e!r}' )
-					continue
+					log.exception( f'Corrupt DID file {str(file)!r}:' )
+					data = {}
 			if q_tf and q_tf not in data.get( 'tollfree', '' ):
 				#log.debug( f'rejecting {str(file)!r} b/c {q_tf!r} not in {data.get("tollfree","")!r}' )
 				continue
@@ -891,8 +891,8 @@ def http_dids() -> Response:
 				try:
 					data = cast( Dict[str,Any], json.loads( f.read() ))
 				except Exception as e:
-					log.error( f'error parsing json of {str(file)!r}: {e!r}' )
-					continue
+					log.exception( f'Corrupt DID file {str(file)!r}:' )
+					data = {}
 		data['did'] = did2
 		dids.append({ **datadefs, **data })
 		if len( dids ) >= q_limit:
@@ -1097,11 +1097,17 @@ def http_did( did: int ) -> Response:
 		if did:
 			try:
 				with path.open() as f:
-					data = json.loads( f.read() )
+					raw = f.read()
+					try:
+						data = json.loads( raw )
+					except json.JSONDecodeError as e:
+						log.exception( f'Corrupt DID file {str(path)!r}:' )
+						data = {}
+						err = f'Corrupt DID file {str(path)!r}: {e!r}\nRaw File Content:\n{raw!r}'
 			except Exception as e4:
 				return _http_failure( return_type, repr( e4 ), 500 )
 			if return_type == 'application/json':
-				return rest_success( [ data ] )
+				return rest_success([ data ])
 		else:
 			data = request.args
 	
@@ -1266,7 +1272,7 @@ def http_did( did: int ) -> Response:
 		'&nbsp;&nbsp;&nbsp;',
 		'<button id="delete" class="delete">Delete</button>' if did else '',
 		'<br/><br/>',
-		f'<font color="red">{err}</font>',
+		f'<font color="red"><pre>{html_text(err)}</pre></font>',
 		'<script src="/did.js"></script>',
 		'</form>',
 	])
