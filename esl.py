@@ -558,9 +558,8 @@ class ESL:
 		if chanvars:
 			_chanvars_ = ','.join( f'{k}={v}' for k, v in chanvars.items() )
 			dest = f'{{{_chanvars_}}}{dest}'
-		parts.append( dest )
+		parts.extend([ dest, origin ])
 		args = list( map( self.escape, [
-			origin,
 			dialplan,
 			context,
 			cid_name,
