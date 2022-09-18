@@ -377,8 +377,8 @@ class ESL:
 		r = await self._send( ESL.AuthRequest( self, f'auth {pwd}' ))
 		return r
 	
-	async def eval( self, *args: str ) -> Opt[str]:
-		_args_ = ' '.join( map( self.escape, args ))
+	async def eval( self, *args: str, escape: bool = True ) -> Opt[str]:
+		_args_ = ' '.join( map( self.escape, args ) if escape else args )
 		r = await self._send( ESL.ValueRequest( self, f'api eval {_args_}' ))
 		return r.value
 	
@@ -808,7 +808,11 @@ class ESL:
 		# this allows you to query for all channel variables visible in uuid_dump which uuid_getvar does not
 		assert is_valid_uuid( uuid ), f'invalid uuid={uuid!r}'
 		assert isinstance( key, str ) and ' ' not in key, f'invalid key={key!r}'
-		return await self.eval( f'uuid:{uuid}', f'${{{key}}}' )
+		return await self.eval(
+			f'uuid:{uuid}',
+			self.escape( f'${{{key}}}' ),
+			escape = False,
+		)
 	
 	async def uuid_kill( self,
 		uuid: str,
