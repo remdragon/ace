@@ -2320,15 +2320,18 @@ class NotifyState( State ):
 		return True, None
 	
 	async def _uuid_wait_for_answer( self, uuid: str, timeout: datetime.timedelta ) -> Tuple[bool,Opt[str]]:
+		log = logger.getChild( 'NotifyState._uuid_wait_for_answer' )
 		timer = ElapsedTimer( timeout )
 		while True:
 			if not await self.esl.uuid_exists( uuid ):
 				return False, '-ERR uuid no longer exists'
-			if await self.esl.uuid_getchanvar( uuid, 'Answer-State' ) == 'answered':
+			answer_state = await self.esl.uuid_getchanvar( uuid, 'Answer-State' )
+			log.debug( 'answer_state=%r', answer_state )
+			if answer_state == 'answered':
 				return True, None
 			if timer.elapsed():
 				return False, '-ERR timeout before answer'
-			await asyncio.sleep( 0.5 )
+			await asyncio.sleep( 1.0 )
 	
 	async def action_voice_deliver( self, action: ACTION_VOICE_DELIVER, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'NotifyState.action_voice_deliver' )
