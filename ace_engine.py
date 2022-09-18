@@ -2148,8 +2148,8 @@ class CallState( State ):
 			log.exception( 'Unexpected error during voicemail notify:' )
 			await self.car_activity( f'notification terminated with an error: {e!r}' )
 		finally:
-			log.debug( 'closing down client' )
-			await self.esl.close()
+			log.debug( 'allowing esl shutdown' )
+			self.close_on_exit = True
 
 
 #endregion CallState
@@ -2481,11 +2481,15 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 	finally:
 		if state is not None:
 			await ace_car.finish( State.config.repo_car, uuid )
-		if not state or state.close_on_exit:
-			log.debug( 'closing down client' )
-			await esl.close()
-		else:
-			log.debug( 'leaving client open as requested' )
+		await _handler_cleanup( esl, state )
+
+async def _handler_cleanup( esl: ESL, state: Opt[CallState] ) -> None:
+	log = logger.getChild( '_handler_cleanup' )
+	while state and not state.close_on_exit:
+		log.debug( 'uuid %r waiting on state.close_on_exit', state.uuid )
+		await asyncio.sleep( 10 )
+	log.debug( 'closing down client' )
+	await esl.close()
 
 async def _server(
 	config: Config,
