@@ -2334,7 +2334,7 @@ class NotifyState( State ):
 		log = logger.getChild( 'NotifyState.action_voice_deliver' )
 		if self.state == HUNT: return CONTINUE
 		
-		number = str( action.get( 'number' ) or '' ).strip()
+		number = str( action.get( 'number' ) or '' ).strip() # TODO FIXME: do we want/need expand here?
 		
 		if not number:
 			log.error( 'cannot voice deliver - no number' )
@@ -2346,9 +2346,15 @@ class NotifyState( State ):
 			await self.car_activity( f'action_voice_deliver: ERROR - cannot proceed b/c no wav file: {str(self.msg.path)!r}' )
 			return CONTINUE
 		
-		await self.car_activity( f'action_voice_deliver: executing voice delivery to number={number!r}' )
+		settings = await ace_settings.aload()
+		if number.startswith( '!' ):
+			number2: str = number[1:]
+		else:
+			number2 = f'{settings.originate_prefix}{number}'
+		
+		await self.car_activity( f'action_voice_deliver: executing voice delivery to number={number!r} ({number2!r})' )
 		try:
-			ok, reason = await self._voice_deliver( action, number )
+			ok, reason = await self._voice_deliver( action, number2 )
 		except Exception as e:
 			ok = False
 			reason = repr( e )

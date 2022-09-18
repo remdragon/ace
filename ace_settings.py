@@ -173,6 +173,10 @@ class Settings:
 		description = 'ESL Password',
 		editor = PasswordEditor(),
 	))
+	originate_prefix: str = field( default = '9', metadata = SettingMeta(
+		description = 'Originate Prefix',
+		editor = StrEditor(),
+	))
 	smtp_secure: Literal['no','starttls','yes'] = field( default = 'no', metadata = SettingMeta(
 		description = 'SMTP Secure',
 		editor = ChoiceEditor([ 'no', 'starttls', 'yes' ]),
