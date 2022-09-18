@@ -808,7 +808,7 @@ class ESL:
 		# this allows you to query for all channel variables visible in uuid_dump which uuid_getvar does not
 		assert is_valid_uuid( uuid ), f'invalid uuid={uuid!r}'
 		assert isinstance( key, str ) and ' ' not in key, f'invalid key={key!r}'
-		return await self.eval( f'uuid:{uuid} ${{{key}}}' )
+		return await self.eval( f'uuid:{uuid}', f'${{{key}}}' )
 	
 	async def uuid_kill( self,
 		uuid: str,
