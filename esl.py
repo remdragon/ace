@@ -395,6 +395,9 @@ class ESL:
 	async def event_plain_all( self ) -> ESL.Request:
 		return await self._send( ESL.Request( self, 'event plain all' ))
 	
+	async def nixevent_plain_all( self ) -> ESL.Request:
+		return await self._send( ESL.Request( self, 'nixevent plain all' ))
+	
 	async def execute( self, uuid: str, app: str, *args: str, escape: bool = True, playback_stop: Callable[[],bool] = lambda: False ) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.execute' )
 		assert isinstance( app, str ) and len( app ), f'invalid app={app!r}'

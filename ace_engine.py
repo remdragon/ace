@@ -2305,6 +2305,9 @@ class NotifyState( State ):
 		
 		await asyncio.sleep( 1 )
 		
+		await self.esl.filter( 'Unique-ID', origination_uuid )
+		await self.esl.event_plain_all()
+		
 		answered, reason = await self._uuid_wait_for_answer( origination_uuid, timeout )
 		
 		if not answered:
@@ -2316,22 +2319,47 @@ class NotifyState( State ):
 		await self.car_activity( f'executing vm box {self.box!r} voice delivery mode' )
 		await vm.voice_deliver( self.box, self.msg, trusted, self.boxsettings )
 		
+		await self.esl.nixevent_plain_all()
+		await self.esl.filter_delete( 'Unique-ID', origination_uuid )
+		
 		await self.car_activity( f'vm box {self.box!r} voice delivery mode done' )
 		return True, None
 	
-	async def _uuid_wait_for_answer( self, uuid: str, timeout: datetime.timedelta ) -> Tuple[bool,Opt[str]]:
+	async def _uuid_wait_for_answer( self,
+		uuid: str,
+		timeout: datetime.timedelta,
+		*,
+		aleg_uuid: Opt[str] = None,
+	) -> Tuple[bool,Opt[str]]:
 		log = logger.getChild( 'NotifyState._uuid_wait_for_answer' )
-		timer = ElapsedTimer( timeout )
+		# TODO FIXME: modify _bridge to use this funcion...
+		originate_timer = ElapsedTimer( timeout )
+		exists_timer = ElapsedTimer( datetime.timedelta( seconds = 6 ))
+		terminators = { 'CHANNEL_DESTROY', 'CHANNEL_HANGUP', 'CHANNEL_UNBRIDGE' }
 		while True:
-			if not await self.esl.uuid_exists( uuid ):
-				return False, '-ERR uuid no longer exists'
-			answer_state = await self.esl.uuid_getchanvar( uuid, 'Answer-State' )
-			log.debug( 'answer_state=%r', answer_state )
-			if answer_state == 'answered':
-				return True, None
-			if timer.elapsed():
-				return False, '-ERR timeout before answer'
-			await asyncio.sleep( 1.0 )
+			async for evt in self.esl.events():
+				evt_name = evt.event_name
+				evt_uuid = evt.header( 'Unique-ID' )
+				if evt_uuid != uuid:
+					continue
+				if evt_name == 'CHANNEL_ANSWER':
+					log.info( 'call proceeding on %r', evt_name )
+					await self.car_activity( f'call proceeding on event {evt_name!r}' )
+					return True, ''
+				elif evt_name in terminators:
+					await self.car_activity( f'ERROR: originate failed because got event {evt_name!r} waiting for answer' )
+					return False, evt_name
+			if originate_timer.elapsed():
+				r = await self.esl.uuid_kill( uuid, 'ORIGINATOR_CANCEL' )
+				log.info( 'timeout before CHANNEL_ANSWER, uuid_kill -> %r', r )
+				await self.car_activity( 'ERROR: originate failed because timeout waiting for answer' )
+				return False, 'timeout'
+			if aleg_uuid and exists_timer.elapsed():
+				if not await self.esl.uuid_exists( aleg_uuid ):
+					r = await self.esl.uuid_kill( uuid, 'ORIGINATOR_CANCEL' )
+					log.info( 'aleg disappeared, uuid_kill -> %r', r )
+					await self.car_activity( 'ERROR: originate failed because aleg disappeared' )
+					return False, 'aleg uuid disappeared'
 	
 	async def action_voice_deliver( self, action: ACTION_VOICE_DELIVER, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'NotifyState.action_voice_deliver' )
