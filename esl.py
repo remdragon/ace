@@ -810,7 +810,7 @@ class ESL:
 		assert isinstance( key, str ) and ' ' not in key, f'invalid key={key!r}'
 		return await self.eval(
 			f'uuid:{uuid}',
-			self.escape( f'${{{key}}}' ),
+			f'${{{key}}}',
 			escape = False,
 		)
 	
