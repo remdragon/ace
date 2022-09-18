@@ -373,9 +373,9 @@ class ESL:
 			except Exception:
 				log.exception( 'Unexpected error processing event:' )
 	
-	async def auth( self, pwd: str ) -> ESL.Request:
-		r = ESL.AuthRequest( self, f'auth {pwd}' )
-		return await r.wait()
+	async def auth( self, pwd: str ) -> ESL.AuthRequest:
+		r = await self._send( ESL.AuthRequest( self, f'auth {pwd}' ))
+		return r
 	
 	async def eval( self, *args: str ) -> Opt[str]:
 		_args_ = ' '.join( map( self.escape, args ))
