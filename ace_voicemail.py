@@ -1099,15 +1099,15 @@ class Voicemail:
 				x.say( '. To listen now, press any digit.' )
 			else:
 				x.say( '. To listen now, enter your pin number followed by pound.' )
-			intro: str = str( await x.generate() )
+			intro: list[str] = [ str( await x.generate() ), SILENCE_10_SECONDS ]
 			
 			if trusted:
 				max_attempts: int = 3
-				digits: str = await self.play_menu([ intro ], max_attempts )
+				digits: str = await self.play_menu( intro, max_attempts )
 				if not digits:
 					return
 			else:
-				if not await self.login( box, boxsettings, [ intro ] ): # TODO FIXME: make this optional...
+				if not await self.login( box, boxsettings, intro ): # TODO FIXME: make this optional...
 					return
 			
 			prevnext: bool = False
