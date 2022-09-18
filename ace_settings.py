@@ -161,6 +161,18 @@ class Settings:
 		description = 'Voice Delivery Caller-ID',
 		editor = StrEditor(),
 	))
+	esl_host: str = field( default = '127.0.0.1', metadata = SettingMeta(
+		description = 'ESL Hostname',
+		editor = StrEditor(),
+	))
+	esl_port: int = field( default = 8021, metadata = SettingMeta(
+		description = 'ESL Port',
+		editor = IntEditor( min = 1, max = 65535 ),
+	))
+	esl_pass: str = field( default = 'ClueCon', metadata = SettingMeta(
+		description = 'ESL Password',
+		editor = PasswordEditor(),
+	))
 	smtp_secure: Literal['no','starttls','yes'] = field( default = 'no', metadata = SettingMeta(
 		description = 'SMTP Secure',
 		editor = ChoiceEditor([ 'no', 'starttls', 'yes' ]),

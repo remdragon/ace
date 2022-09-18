@@ -932,7 +932,6 @@ class State( metaclass = ABCMeta ):
 class CallState( State ):
 	box: Opt[int] = None # set to an integer if we're inside of a specific voicemail box
 	hangup_on_exit: bool = True
-	close_on_exit: bool = True
 	
 	def __init__( self, esl: ESL, uuid: str, did: str, ani: str ) -> None:
 		super().__init__( esl, uuid )
@@ -2136,10 +2135,11 @@ class CallState( State ):
 	async def notify( self, box: int, boxsettings: BOXSETTINGS, msg: MSG ) -> None:
 		log = logger.getChild( 'CallState.notify' )
 		try:
-			self.close_on_exit = False
 			settings = await ace_settings.aload()
 			await self.car_activity( f'notify starting for box {box!r} named {boxsettings.get("name")!r}' )
-			state = NotifyState( self.esl, self.uuid, box, msg, boxsettings, settings.vm_checkin )
+			esl = ESL()
+			await esl.connect_to( settings.esl_host, settings.esl_port, settings.esl_pass )
+			state = NotifyState( esl, self.uuid, box, msg, boxsettings, settings.vm_checkin )
 			delivery = boxsettings.get( 'delivery' ) or {}
 			nodes = delivery.get( 'nodes' ) or []
 			await state.exec_top_actions( nodes )
@@ -2147,9 +2147,6 @@ class CallState( State ):
 		except Exception as e:
 			log.exception( 'Unexpected error during voicemail notify:' )
 			await self.car_activity( f'notification terminated with an error: {e!r}' )
-		finally:
-			log.debug( 'allowing esl shutdown' )
-			self.close_on_exit = True
 
 
 #endregion CallState
@@ -2348,7 +2345,11 @@ class NotifyState( State ):
 			return CONTINUE
 		
 		await self.car_activity( f'action_voice_deliver: executing voice delivery to number={number!r}' )
-		ok, reason = await self._voice_deliver( action, number )
+		try:
+			ok, reason = await self._voice_deliver( action, number )
+		except Exception as e:
+			ok = False
+			reason = repr( e )
 		log.info( 'ok=%r, reason=%r', ok, reason )
 		if ok:
 			await self.car_activity( 'action_voice_deliver: voice delivery complete' )
@@ -2481,15 +2482,8 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 	finally:
 		if state is not None:
 			await ace_car.finish( State.config.repo_car, uuid )
-		await _handler_cleanup( esl, state )
-
-async def _handler_cleanup( esl: ESL, state: Opt[CallState] ) -> None:
-	log = logger.getChild( '_handler_cleanup' )
-	while state and not state.close_on_exit:
-		log.debug( 'uuid %r waiting on state.close_on_exit', state.uuid )
-		await asyncio.sleep( 10 )
-	log.debug( 'closing down client' )
-	await esl.close()
+		log.debug( 'closing down client' )
+		await esl.close()
 
 async def _server(
 	config: Config,
