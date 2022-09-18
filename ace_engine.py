@@ -2356,6 +2356,7 @@ class NotifyState( State ):
 		try:
 			ok, reason = await self._voice_deliver( action, number2 )
 		except Exception as e:
+			log.exception( 'Unexpected error trying to execute voice delivery:' )
 			ok = False
 			reason = repr( e )
 		log.info( 'ok=%r, reason=%r', ok, reason )
