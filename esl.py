@@ -556,7 +556,7 @@ class ESL:
 			parts.append( 'expand' )
 		parts.append( 'originate' )
 		if chanvars:
-			_chanvars_ = ','.join( f'{k}={v}' for k, v in chanvars.items() )
+			_chanvars_ = ','.join( f'{k}={self.escape(v)}' for k, v in chanvars.items() )
 			dest = f'{{{_chanvars_}}}{dest}'
 		parts.extend([ dest, origin ])
 		args = list( map( self.escape, [
