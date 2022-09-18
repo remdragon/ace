@@ -2147,6 +2147,8 @@ class CallState( State ):
 		except Exception as e:
 			log.exception( 'Unexpected error during voicemail notify:' )
 			await self.car_activity( f'notification terminated with an error: {e!r}' )
+		finally:
+			await esl.close()
 
 
 #endregion CallState
