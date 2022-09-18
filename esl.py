@@ -400,7 +400,7 @@ class ESL:
 		assert isinstance( app, str ) and len( app ), f'invalid app={app!r}'
 		args_ = ' '.join( map( self.escape, args ) if escape else args )
 		log.debug( 'executing app=%r args=%r', app, args_ )
-		r = await self._send( ESL.Request( self, 'sendmsg', {
+		r = await self._send( ESL.Request( self, f'sendmsg {uuid}', {
 			'call-command': 'execute',
 			'execute-app-name': app,
 			'execute-app-arg': args_,
