@@ -551,9 +551,7 @@ class ESL:
 		expand: bool = False,
 		bgapi: bool = False,
 	) -> ESL.Request:
-		parts: List[str] = []
-		if bgapi:
-			parts.append( 'bgapi' )
+		parts: List[str] = [ 'bgapi' if bgapi else 'api' ]
 		if expand:
 			parts.append( 'expand' )
 		parts.append( 'originate' )
