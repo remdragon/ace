@@ -942,9 +942,11 @@ class CallState( State ):
 		log = logger.getChild( 'CallState.can_continue' )
 		if not await self.esl.uuid_exists( self.uuid ):
 			log.debug( 'uuid_exists -> false' )
+			await self.car_activity( f'route terminating b/c uuid {self.uuid!r} no longer exists' )
 			return False
 		if await self.esl.uuid_getvar( self.uuid, 'bridge_uuid' ):
 			log.debug( 'bridge_uuid ~= nil' )
+			await self.car_activity( f'route terminating b/c uuid {self.uuid!r} was bridged' )
 			return False
 		return True
 	
@@ -2164,7 +2166,13 @@ class NotifyState( State ):
 		self.checkin = checkin
 	
 	async def can_continue( self ) -> bool:
-		return self.msg.status == 'new' and Path( self.msg.path ).is_file()
+		if self.msg.status != 'new':
+			await self.car_activity( f'notification terminating b/c msg.status={self.msg.status!r}' )
+			return False
+		if not Path( self.msg.path ).is_file():
+			await self.car_activity( f'notification terminating b/c file no longer exists: {self.msg.path!r}' )
+			return False
+		return True
 	
 	async def action_email( self, action: ACTION_EMAIL, pagd: Opt[PAGD] ) -> RESULT:
 		# TODO FIXME: might we have a use for this in CallState too?
@@ -2286,7 +2294,6 @@ class NotifyState( State ):
 		
 		await self.car_activity( f'dialing {dest!r}' )
 		try:
-			# TODO FIXME: may need to create a new ESL object for notifications process...
 			r = await self.esl.originate(
 				dest = dest,
 				origin = '&playback(silence_stream://-1)',
@@ -2305,25 +2312,32 @@ class NotifyState( State ):
 		
 		await asyncio.sleep( 1 )
 		
-		await self.esl.filter( 'Unique-ID', origination_uuid )
-		await self.esl.event_plain_all()
-		
-		answered, reason = await self._uuid_wait_for_answer( origination_uuid, timeout )
-		
-		if not answered:
-			await self.car_activity( f'ERROR: dialout never answered: {reason!r}' )
-			return False, reason
-		
-		settings = await ace_settings.aload()
-		vm = Voicemail( self.esl, origination_uuid, settings )
-		await self.car_activity( f'executing vm box {self.box!r} voice delivery mode' )
-		await vm.voice_deliver( self.box, self.msg, trusted, self.boxsettings )
-		
-		await self.esl.nixevent_plain_all()
-		await self.esl.filter_delete( 'Unique-ID', origination_uuid )
-		
-		await self.car_activity( f'vm box {self.box!r} voice delivery mode done' )
-		return True, None
+		try:
+			await self.esl.filter( 'Unique-ID', origination_uuid )
+			await self.esl.event_plain_all()
+			
+			answered, reason = await self._uuid_wait_for_answer( origination_uuid, timeout )
+			
+			if not answered:
+				await self.car_activity( f'ERROR: dialout never answered: {reason!r}' )
+				return False, reason
+			
+			settings = await ace_settings.aload()
+			vm = Voicemail( self.esl, origination_uuid, settings )
+			await self.car_activity( f'executing vm box {self.box!r} voice delivery mode' )
+			await vm.voice_deliver( self.box, self.msg, trusted, self.boxsettings )
+			
+			await self.car_activity( f'vm box {self.box!r} voice delivery mode done' )
+			return True, None
+		except ChannelHangup:
+			log.debug( 'caught ChannelHangup during voice delivery' )
+			await self.car_activity( f'caught channel hangup on voice delivery call leg {origination_uuid!r}' )
+			return True, None
+		finally:
+			await self.esl.nixevent_plain_all()
+			await self.esl.filter_delete( 'Unique-ID', origination_uuid )
+			
+			await self.esl.uuid_kill( origination_uuid, 'ORIGINATOR_CANCEL' ) # make sure it's dead...
 	
 	async def _uuid_wait_for_answer( self,
 		uuid: str,

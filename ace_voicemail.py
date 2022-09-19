@@ -1099,7 +1099,7 @@ class Voicemail:
 				x.say( '. To listen now, press any digit.' )
 			else:
 				x.say( '. To listen now, enter your pin number followed by pound.' )
-			intro: list[str] = [ str( await x.generate() ), SILENCE_10_SECONDS ]
+			intro: List[str] = [ str( await x.generate() ), SILENCE_10_SECONDS ]
 			
 			if trusted:
 				max_attempts: int = 3
