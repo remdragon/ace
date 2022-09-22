@@ -2221,43 +2221,52 @@ class NotifyState( State ):
 		ec.subject = await self.expand( ec.subject )
 		ec.text = await self.expand( ec.text )
 		
-		if file and fmt == 'mp3':
-			mp3_file = file.with_suffix( '.mp3' )
-			pydub.AudioSegment.from_wav( str( file )).export( str( mp3_file ), format = 'mp3' )
-			file = mp3_file
-			content_type = 'audio/mpeg'
-		
-		if file:
-			with file.open( 'rb' ) as f:
-				ec.attach( f, file.name, content_type )
-		
-		if settings.smtp_secure == 'yes':
-			smtp: Union[smtplib2.SMTP,smtplib2.SMTP_SSL] = smtplib2.SMTP_SSL(
-				settings.smtp_host,
-				settings.smtp_port or 465,
-				timeout = settings.smtp_timeout_seconds,
-			)
-		else:
-			smtp = smtplib2.SMTP(
-				settings.smtp_host,
-				settings.smtp_port or 587,
-				timeout = settings.smtp_timeout_seconds,
-			)
-		
-		if settings.smtp_username or settings.smtp_password:
-			assert settings.smtp_username and settings.smtp_password
-			smtp.login( settings.smtp_username, settings.smtp_password )
-		
-		await self.car_activity( f'sending email to={ec.to!r}, cc={ec.cc!r}, bcc={bcc!r}' )
+		mp3_file: Opt[Path] = None
 		try:
-			resp: str
-			senderrs: Dict[str,Tuple[int,str]]
-			resp, senderrs = smtp.sendmail2( ec.from_, list( chain( ec.to, ec.cc, bcc )), ec.as_bytes() )
-		except Exception as e:
-			log.exception( 'email failure:' )
-			await self.car_activity( f'ERROR: email failure: {e!r}' )
-		else:
-			await self.car_activity( f'email success: {resp!r}' )
+			if file and fmt == 'mp3':
+				mp3_file = file.with_suffix( '.mp3' )
+				pydub.AudioSegment.from_wav( str( file )).export( str( mp3_file ), format = 'mp3' )
+				file = mp3_file
+				content_type = 'audio/mpeg'
+			
+			if file:
+				with file.open( 'rb' ) as f:
+					ec.attach( f, file.name, content_type )
+			
+			if settings.smtp_secure == 'yes':
+				smtp: Union[smtplib2.SMTP,smtplib2.SMTP_SSL] = smtplib2.SMTP_SSL(
+					settings.smtp_host,
+					settings.smtp_port or 465,
+					timeout = settings.smtp_timeout_seconds,
+				)
+			else:
+				smtp = smtplib2.SMTP(
+					settings.smtp_host,
+					settings.smtp_port or 587,
+					timeout = settings.smtp_timeout_seconds,
+				)
+			
+			if settings.smtp_username or settings.smtp_password:
+				assert settings.smtp_username and settings.smtp_password
+				smtp.login( settings.smtp_username, settings.smtp_password )
+			
+			await self.car_activity( f'sending email to={ec.to!r}, cc={ec.cc!r}, bcc={bcc!r}' )
+			try:
+				resp: str
+				senderrs: Dict[str,Tuple[int,str]]
+				resp, senderrs = smtp.sendmail2( ec.from_, list( chain( ec.to, ec.cc, bcc )), ec.as_bytes() )
+			except Exception as e:
+				log.exception( 'email failure:' )
+				await self.car_activity( f'ERROR: email failure: {e!r}' )
+			else:
+				await self.car_activity( f'email success: {resp!r}' )
+		
+		finally:
+			if mp3_file is not None:
+				try:
+					mp3_file.unlink()
+				except Exception:
+					log.exception( 'Error trying to delete %r:', str( mp3_file ))
 		
 		return CONTINUE
 	
@@ -2417,7 +2426,7 @@ class NotifyState( State ):
 #region bootstrap
 
 def normalize_phone_number( phone: str ) -> str:
-	phone = re.sub( r'[^\d]', '', phone )
+	phone = re.sub( r'[^\d+*]', '', phone )
 	if len( phone ) == 11 and phone[0] == '1':
 		phone = phone[1:]
 	return phone
@@ -2427,14 +2436,14 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 	esl = ESL()
 	state: Opt[CallState] = None
 	try:
-		headers = await esl.connect_from( reader, writer )
+		headers: Dict[str,str] = await esl.connect_from( reader, writer )
 		
 		await asyncio.sleep( 0.5 ) # wait for media to establish
 		
 		#for k, v in headers.items():
 		#	print( f'{k!r}: {v!r}' )
 		uuid = headers['Unique-ID']
-		did = headers['Caller-Destination-Number']
+		did = headers.get( 'ace-destination' ) or headers['Caller-Destination-Number']
 		ani = headers['Caller-ANI']
 		cpn = '' # TODO FIXME what field has this?
 		log.debug( 'uuid=%r raw did=%r ani=%r', uuid, did, ani )
@@ -2455,48 +2464,71 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 		
 		state = CallState( esl, uuid, did, ani )
 		
-		ani_route = await state.try_ani()
-		route, didinfo = await state.try_did( ani_route )
-		if route:
-			await state.car_activity( f'_handler: setting channel variable "route"={route!r}' )
-			await esl.uuid_setvar( uuid, 'route', str( route ))
-		if didinfo is not None:
-			await state.set_preannounce( didinfo )
-		
-		if not route:
-			log.error( 'no route to execute: route=%r', route )
-			cause1: Final = 'UNALLOCATED_NUMBER'
-			await state.car_activity( f'_handler: hangup call with {cause1!r} b/c no route was found' )
-			await util.hangup( esl, uuid, cause1, 'ace_engine._handler#1' )
-			return
-		
-		route_ = str( route or '' )
-		if route_.startswith( 'V' ):
-			box_ = route_[1:]
-			try:
-				box = int( box_ )
-			except ValueError:
-				log.error( 'Could not interpret %r as an integer vm box #', box_ )
-				cause2: Final = 'UNALLOCATED_NUMBER'
-				await state.car_activity( f'_handler: hangup call with {cause2!r} b/c {box_!r} not an integer vm box #' )
-				await util.hangup( esl, uuid, cause2, 'ace_engine._handler#2' )
-				return
-			await state.car_activity( f'_handler: routing call directly to vm box {box!r}' )
+		if did.startswith( '*95' ): # direct to voicemail with greeting
+			box = int( did[3:].strip() )
+			await state.car_activity( f'_handler: *95 direct access to box {box!r} w/ default greeting behavior' )
 			routedata = {
 				#'type': 'root_route',
 				'nodes': [{
 					'type': 'voicemail',
 					'box': box,
+					'greeting_override': '',
+				}]
+			}
+		elif did.startswith( '*99' ): # direct to voicemail with no greeting
+			box = int( did[3:].strip() )
+			await state.car_activity( f'_handler: *99 direct access to box {box!r} w/ no greeting' )
+			routedata = {
+				#'type': 'root_route',
+				'nodes': [{
+					'type': 'voicemail',
+					'box': box,
+					'greeting_override': 'X',
 				}]
 			}
 		else:
-			try:
-				routedata = await state.config.repo_routes.get_by_id( route )
-			except repo.ResourceNotFound:
-				log.error( 'route does not exist: route=%r', route )
-				await state.car_activity( '_handler: hangup call because route {route!r} does not exist' )
-				await util.hangup( esl, uuid, 'UNALLOCATED_NUMBER', 'ace_engine._handler#3' )
+			ani_route = await state.try_ani()
+			route, didinfo = await state.try_did( ani_route )
+			if route:
+				await state.car_activity( f'_handler: setting channel variable "route"={route!r}' )
+				await esl.uuid_setvar( uuid, 'route', str( route ))
+			if didinfo is not None:
+				await state.set_preannounce( didinfo )
+			
+			if not route:
+				log.error( 'no route to execute: route=%r', route )
+				cause1: Final = 'UNALLOCATED_NUMBER'
+				await state.car_activity( f'_handler: hangup call with {cause1!r} b/c no route was found' )
+				await util.hangup( esl, uuid, cause1, 'ace_engine._handler#1' )
 				return
+			
+			route_ = str( route or '' )
+			if route_.startswith( 'V' ):
+				box_ = route_[1:]
+				try:
+					box = int( box_ )
+				except ValueError:
+					log.error( 'Could not interpret %r as an integer vm box #', box_ )
+					cause2: Final = 'UNALLOCATED_NUMBER'
+					await state.car_activity( f'_handler: hangup call with {cause2!r} b/c {box_!r} not an integer vm box #' )
+					await util.hangup( esl, uuid, cause2, 'ace_engine._handler#2' )
+					return
+				await state.car_activity( f'_handler: routing call directly to vm box {box!r}' )
+				routedata = {
+					#'type': 'root_route',
+					'nodes': [{
+						'type': 'voicemail',
+						'box': box,
+					}]
+				}
+			else:
+				try:
+					routedata = await state.config.repo_routes.get_by_id( route )
+				except repo.ResourceNotFound:
+					log.error( 'route does not exist: route=%r', route )
+					await state.car_activity( '_handler: hangup call because route {route!r} does not exist' )
+					await util.hangup( esl, uuid, 'UNALLOCATED_NUMBER', 'ace_engine._handler#3' )
+					return
 		
 		nodes = cast( ACTIONS, routedata.get( 'nodes' ) or [] )
 		r = await state.exec_top_actions( nodes )

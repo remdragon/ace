@@ -336,7 +336,7 @@ class ESL:
 		reader: asyncio.StreamReader,
 		writer: asyncio.StreamWriter,
 		timeout_seconds: Union[int,float] = 3,
-	) -> dict[str,str]:
+	) -> Dict[str,str]:
 		log = logger.getChild ( 'ESL.connect_from' )
 		
 		# NOTE: this does not conform to the normal API and must only be called as the
