@@ -2427,7 +2427,9 @@ class NotifyState( State ):
 
 def normalize_phone_number( phone: str ) -> str:
 	phone = re.sub( r'[^\d+*]', '', phone )
-	if len( phone ) == 11 and phone[0] == '1':
+	if len( phone ) == 12 and phone[:2] == '+1':
+		phone = phone[2:]
+	elif len( phone ) == 11 and phone[0] == '1':
 		phone = phone[1:]
 	return phone
 
