@@ -1545,8 +1545,8 @@ class Voicemail:
 		
 		while True:
 			digit: str = await self.play_menu( menu )
-			if digit in '123456789':
-				greeting = int( digit ) # TODO FIXME: ValueEror
+			if digit and digit in '123456789':
+				greeting = int( digit ) # TODO FIXME: ValueError
 				await self.admin_greeting( box, boxsettings, greeting )
 			elif digit == '*':
 				log.info( 'box %r user cancelled with *', box )
