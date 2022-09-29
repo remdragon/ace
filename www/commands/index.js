@@ -14,6 +14,7 @@ import IfStr from './ifstr.js'; export{ IfStr }
 import IVR from './ivr.js'; export{ IVR }
 import Label from './label.js'; export{ Label }
 import Log from './log.js'; export{ Log }
+import Loop from './loop.js'; export{ Loop }
 import Lua from './lua.js'; export{ Lua }
 import LuaFile from './luafile.js'; export{ LuaFile }
 import MOH from './moh.js'; export{ MOH }
@@ -26,7 +27,6 @@ import PreAnnounce from './preannounce.js'; export{ PreAnnounce }
 import PlayTTS from './playtts.js'; export{ PlayTTS }
 import PreAnswer from './preanswer.js'; export{ PreAnswer }
 import Python from './python.js'; export{ Python }
-import Repeat from './repeat.js'; export{ Repeat }
 import Ring from './ring.js'; export{ Ring }
 import Route from './route.js'; export{ Route }
 import RxFax from './rxfax.js'; export{ RxFax }
@@ -60,6 +60,7 @@ let all_commands =
 	, IVR
 	, Label
 	, Log
+	, Loop
 	, Lua
 	, LuaFile
 	, MOH
@@ -72,7 +73,6 @@ let all_commands =
 	, PlayTTS
 	, PreAnswer
 	, Python
-	, Repeat
 	, Ring
 	, Route
 	, RxFax

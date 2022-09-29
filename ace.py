@@ -257,7 +257,7 @@ def accept_type(
 	accepted_types: List[str] = [ 'text/html', 'application/json' ],
 ) -> str:
 	#log = logger.getChild( 'accept_type' )
-	accept_header = request.headers.get( 'Accept' )
+	accept_header: str = request.headers.get( 'Accept' ) or 'text/html'
 	return_type: str = accept_types.get_best_match( accept_header, accepted_types )
 	assert isinstance( return_type, str ), f'invalid return_type={return_type!r}'
 	#log.debug( 'accept_header=%r, accepted_types=%r, return_type=%r', accept_header, accepted_types, return_type )

@@ -1,19 +1,19 @@
 import{ UINode, walkChild } from './UINode.js'
 
-export default class Repeat extends UINode {
+export default class Loop extends UINode {
 	static icon = '/media/streamline/repeat.png'
-	static context_menu_name = 'Repeat'
+	static context_menu_name = 'Loop'
 	static command = 'repeat'
 	
 	canPaste = true
 	help =
 		`This node runs all its commands in a loop<br/>
 <br/>
-Repeats forever is count is 0, otherwise stops after count is met`
+Loops forever if count is 0, otherwise stops after count is met`
 	
 	get label()
 	{
-		return 'Repeat ' + ( this.name || this.count || 'forever' )
+		return 'Loop ' + ( this.name || this.count || 'forever' )
 	}
 	
 	count = 1//: number = 1
@@ -35,7 +35,8 @@ Repeats forever is count is 0, otherwise stops after count is met`
 		tooltip: 'This is for documentation purposes only',
 	},{
 		key: 'count',
-		type: 'int'
+		type: 'int',
+		tooltip: 'How many times in total to execute the nodes inside here',
 	}]
 	
 	getJson()
