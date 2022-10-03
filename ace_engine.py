@@ -751,7 +751,7 @@ class State( metaclass = ABCMeta ):
 			if self.state != HUNT:
 				log.info( 'starting loop %r of %s', i, count or 'infinite' )
 				await self.car_activity( f'repeat node starting loop {i!r} of {count or "infinite"!r}' )
-			if STOP == await self.exec_actions( nodes ):
+			if STOP == await self.exec_actions( nodes, pagd ):
 				return STOP
 			if self.state == HUNT: return CONTINUE
 			i += 1
