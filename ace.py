@@ -69,7 +69,8 @@ if sys.platform != 'win32':
 	import pwd
 
 if __name__ == '__main__':
-	sys.path.append( 'incpy' )
+	incpy_path = Path( __file__ ).absolute().parent / 'incpy'
+	sys.path.append( str( incpy_path ))
 
 # local imports:
 import ace_engine
