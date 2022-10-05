@@ -2568,10 +2568,13 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 		if state is not None:
 			await state.car_activity( f'call processing aborted with {e3!r}' )
 	finally:
-		if state is not None:
-			await ace_car.finish( State.config.repo_car, uuid )
-		log.debug( 'closing down client' )
-		await esl.close()
+		try:
+			if state is not None:
+				await ace_car.finish( State.config.repo_car, uuid )
+			log.debug( 'closing down client' )
+			await esl.close()
+		except Exception:
+			log.exception( 'Unexpected error in finally handling:' )
 
 async def _server(
 	config: Config,
