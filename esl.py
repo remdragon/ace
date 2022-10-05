@@ -882,7 +882,7 @@ class ESL:
 		assert dest.strip(), f'invalid dest={dest!r}'
 		assert dialplan in ( '', 'xml', 'inline' ), f'invalid dialplan={dialplan!r}'
 		return await self._send( ESL.Request( self,
-			f'uuid_transfer {uuid} {leg} {self.escape(dest)} {self.escape(dialplan)} {self.escape(context)}',
+			f'api uuid_transfer {uuid} {leg} {self.escape(dest)} {self.escape(dialplan)} {self.escape(context)}',
 		))
 	
 	# END requests ^^^^

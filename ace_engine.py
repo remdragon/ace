@@ -897,8 +897,8 @@ class State( metaclass = ABCMeta ):
 		log = logger.getChild( 'State.action_wait' )
 		if self.state == HUNT: return CONTINUE
 		
-		minutes: int = await self.toint( action, 'minutes', default = 0 )
-		seconds = minutes * 60 + await self.toint( action, 'seconds', default = 0 )
+		minutes: Union[int,float] = await self.tonumber( action, 'minutes', default = 0 )
+		seconds = minutes * 60 + await self.tonumber( action, 'seconds', default = 0 )
 		
 		if isinstance( self, CallState ) and pagd is not None:
 			params2 = ACTION_SILENCE(
