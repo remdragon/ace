@@ -1835,9 +1835,11 @@ class CallState( State ):
 		subject = str( action.get( 'subject' ) or '' ).strip()
 		if not subject:
 			subject = 'fax received at {did} from {ani}'
+		await self.esl.uuid_setvar( self.uuid, 'ace_rxfax_subject', subject )
 		body = str( action.get( 'body' ) or '' ).strip()
 		if not body:
 			body = 'See attached'
+		await self.esl.uuid_setvar( self.uuid, 'ace_rxfax_body', body )
 		
 		await self.car_activity( 'initiating rxfax' )
 		result = await self.esl.uuid_transfer( self.uuid, '', 'ace_rxfax', 'xml', 'default' )
