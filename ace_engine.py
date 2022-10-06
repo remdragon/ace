@@ -1842,6 +1842,7 @@ class CallState( State ):
 		await self.car_activity( 'initiating rxfax' )
 		result = await self.esl.uuid_transfer( self.uuid, '', 'ace_rxfax', 'xml', 'default' )
 		log.info( 'uuid_transfer result=%r', result )
+		self.hangup_on_exit = False
 		return STOP
 	
 	async def action_set( self, action: ACTION_SET, pagd: Opt[PAGD] ) -> RESULT:
