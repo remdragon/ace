@@ -1834,11 +1834,13 @@ class CallState( State ):
 		# TODO FIXME: calculate time spent receiving fax and expression it as an injection variable
 		subject = str( action.get( 'subject' ) or '' ).strip()
 		if not subject:
-			subject = 'fax received at {did} from {ani}'
+			subject = 'fax received at ${did} from ${ani}'
+		subject = await self.expand( subject )
 		await self.esl.uuid_setvar( self.uuid, 'ace_rxfax_subject', subject )
 		body = str( action.get( 'body' ) or '' ).strip()
 		if not body:
 			body = 'See attached'
+		body = await self.expand( body )
 		await self.esl.uuid_setvar( self.uuid, 'ace_rxfax_body', body )
 		
 		await self.car_activity( 'initiating rxfax' )
