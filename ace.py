@@ -381,6 +381,13 @@ if not cfg_path.is_file():
 		f'ITAS_REPOSITORY_TYPE = {"fs"!r}',
 		f'ITAS_REPOSITORY_FS_PATH = {"/usr/share/itas/ace/"!r}',
 		f'ITAS_REPOSITORY_SQLITE_PATH = {"/usr/share/itas/ace/ace.sqlite"!r}',
+		f'ITAS_REPOSITORY_COCKROACH_HOST = {"127.0.0.1"!r}',
+		f'ITAS_REPOSITORY_COCKROACH_PORT = {26257!r}',
+		f'ITAS_REPOSITORY_COCKROACH_USER` = {"ace"!r}',
+		f'ITAS_REPOSITORY_COCKROACH_PASS` = {"password"!r}',
+		f'ITAS_REPOSITORY_COCKROACH_DB` = {"ace"!r}',
+		f'ITAS_REPOSITORY_COCKROACH_TLS_MODE` = {"verify-ca"!r}',
+		f'ITAS_REPOSITORY_COCKROACH_TLS_CA_PATH` = {"/etc/ssl/certs/crdb-ca.pem"!r}',
 		f'ITAS_FLAGS_PATH = {str(default_data_path)!r}',
 		f'ITAS_DID_FIELDS = {[]!r}',
 		f'ITAS_DID_VARIABLES_EXAMPLES = {[]!r}',
@@ -426,6 +433,13 @@ ITAS_FREESWITCH_JSON_CDR_PATH: str = ''
 ITAS_REPOSITORY_TYPE: str = ''
 ITAS_REPOSITORY_FS_PATH: str = ''
 ITAS_REPOSITORY_SQLITE_PATH: str = ''
+ITAS_REPOSITORY_COCKROACH_HOST: str = ''
+ITAS_REPOSITORY_COCKROACH_PORT: int = 26257
+ITAS_REPOSITORY_COCKROACH_USER: str = ''
+ITAS_REPOSITORY_COCKROACH_PASS: str = ''
+ITAS_REPOSITORY_COCKROACH_DB: str = ''
+ITAS_REPOSITORY_COCKROACH_TLS_MODE: str = ''
+ITAS_REPOSITORY_COCKROACH_TLS_CA_PATH: str = ''
 ITAS_FLAGS_PATH: str = ''
 ITAS_DID_FIELDS: List[Field] = []
 ITAS_DID_VARIABLES_EXAMPLES: List[str] = []
@@ -570,6 +584,13 @@ def voicemail_box_msgs_path( box: int ) -> PurePosixPath:
 repo_config = repo.Config(
 	fs_path = Path( ITAS_REPOSITORY_FS_PATH ),
 	sqlite_path = Path( ITAS_REPOSITORY_SQLITE_PATH ),
+	cockroach_host = ITAS_REPOSITORY_COCKROACH_HOST,
+	cockroach_port = ITAS_REPOSITORY_COCKROACH_PORT,
+	cockroach_user = ITAS_REPOSITORY_COCKROACH_USER,
+	cockroach_pass = ITAS_REPOSITORY_COCKROACH_PASS,
+	cockroach_db = ITAS_REPOSITORY_COCKROACH_DB,
+	cockroach_tls_mode = ITAS_REPOSITORY_COCKROACH_TLS_MODE,
+	cockroach_tls_ca_path = Path( ITAS_REPOSITORY_COCKROACH_TLS_CA_PATH ),
 )
 
 REPO_FACTORY: Type[repo.Repository]
@@ -579,6 +600,8 @@ if ITAS_REPOSITORY_TYPE == 'sqlite':
 	REPO_FACTORY = repo.RepoSqlite
 elif ITAS_REPOSITORY_TYPE == 'fs':
 	REPO_FACTORY = repo.RepoFs
+elif ITAS_REPOSITORY_TYPE == 'cockroach':
+	REPO_FACTORY = repo.RepoCockroach
 else:
 	raise Exception( f'invalid ITAS_REPOSITORY_TYPE={ITAS_REPOSITORY_TYPE!r}' )
 
