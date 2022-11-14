@@ -923,6 +923,24 @@ class State( metaclass = ABCMeta ):
 					_on_event( event )
 		
 		return CONTINUE
+	
+	async def holiday_today( self ) -> Opt[str]:
+		log = logger.getChild( 'State.holiday_today' )
+		
+		r_holiday = re.compile( r'^\s*([A-Z0-9]+)\s*=\s*(\d{1,2})\s*-\s*(\d{1,2})\s*$' )
+		
+		today = datetime.date.today()
+		settings = await ace_settings.aload()
+		for holiday in settings.holidays:
+			m = r_holiday.match( holiday )
+			if m:
+				name = m.group( 1 )
+				month = int( m.group( 2 ))
+				day = int( m.group( 3 ))
+				when = datetime.date( today.year, month, day )
+				if when == today:
+					return name.strip().upper()
+		return None
 
 
 #endregion State
@@ -1130,15 +1148,18 @@ class CallState( State ):
 		else:
 			await self.car_activity( 'set_preannounce: did flag not set' )
 		
-		#holiday = holidays.today()
-		#if holiday ~= nil then
-		#	holname = string.upper( holiday.name )
-		#	holname = holname:gsub( ' ', '' )
-		#	if await self.try_wav( uuid, did .. '_' .. holname ) then return end
-		#	if await self.try_wav( uuid, did .. '_HOLIDAY' ) then return end
-		#else
-		#	log.debug( 'not a holiday' )
-		#end
+		if not path:
+			holiday = await self.holiday_today()
+			if holiday is not None:
+				path2 = await self.try_wav( f'{self.did}_{holiday}' )
+				if path2:
+					path = path2
+				if not path:
+					path2 = await self.try_wav( f'{self.did}_HOLIDAY' )
+					if path2:
+						path = path2
+			else:
+				await self.car_activity( 'set_preannounce: not a holiday' )
 		
 		async def _uuid_gethhmm( key: str, default: str ) -> str:
 			value = await self.esl.uuid_getvar( self.uuid, key )

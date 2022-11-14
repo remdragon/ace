@@ -137,6 +137,10 @@ class Settings:
 		description = 'DID Categories',
 		editor = ListEditor( rows = 10, cols = 20 ),
 	))
+	holidays: List[str] = field( default_factory = lambda: [ 'NEWYEARS=01-01', 'GOODFRIDAY=03-31', 'MEMORIALDAY=05-31', 'JULY4=07-04', 'LABORDAY=09-01', 'THANKSGIVING=11-24', 'CHRISTMAS=12-25' ], metadata = SettingMeta(
+		description = 'Holidays',
+		editor = ListEditor( rows = 10, cols = 20 ),
+	))
 	freeswitch_sounds: List[str] = field( default_factory = lambda: [ '/usr/share/freeswitch/sounds/en/us/callie' ], metadata = SettingMeta(
 		description = 'FreeSWITCH Sound Sources',
 		editor = ListEditor( rows = 10, cols = 80 ),
