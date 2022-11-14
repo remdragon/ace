@@ -21,7 +21,7 @@ from uuid import uuid4
 
 # 3rd-party imports:
 import aiofiles # pip install aiofiles
-import natural # pip install natural
+import natural.number # pip install natural
 
 # local imports:
 import ace_settings
