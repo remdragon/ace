@@ -1306,7 +1306,7 @@ class Voicemail:
 			x = self.settings.tts()
 			month = when.strftime( '%B' )
 			day = natural.number.ordinal( when.day )
-			x.say( when.strftime( f'{month} {day}, {when.year},' ))
+			x.say( when.strftime( f'{month} {day},, {when.year},' ))
 			msgsounds.append( str( await x.generate() ))
 		x = self.settings.tts()
 		x.say( when.strftime( '%I:%M %p' ))
