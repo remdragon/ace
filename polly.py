@@ -57,6 +57,7 @@ class AWSPolly:
 		log.debug( 'requesting new tts content for text=%r', text )
 		polly_response = polly_client.synthesize_speech(
 			VoiceId = voice,
+			Engine = 'neural',
 			OutputFormat = 'pcm',
 			SampleRate = self.sample_rate,
 			TextType = 'ssml',
