@@ -21,6 +21,7 @@ from uuid import uuid4
 
 # 3rd-party imports:
 import aiofiles # pip install aiofiles
+import natural # pip install natural
 
 # local imports:
 import ace_settings
@@ -1112,7 +1113,7 @@ class Voicemail:
 			
 			prevnext: bool = False
 			digit: Opt[str] = await self.admin_listen_msg( msg, None, prevnext )
-		
+			
 			if digit == LISTEN_MAIN_MENU:
 				await self.admin_main_menu( box, boxsettings )
 		finally:
@@ -1288,6 +1289,29 @@ class Voicemail:
 				msgsounds.append( str( await x.generate() ))
 			else:
 				msgsounds.append( URGENT )
+		
+		now = datetime.datetime.now()
+		when = datetime.datetime( msg.year, msg.month, msg.day, msg.hour, msg.minute, msg.second )
+		if when.date() == now.date():
+			x = self.settings.tts()
+			x.say( 'today,' )
+			msgsounds.append( str( await x.generate() ))
+		elif now - when < datetime.timedelta( days = 365 // 2 ):
+			x = self.settings.tts()
+			month = when.strftime( '%B' )
+			day = natural.number.ordinal( when.day )
+			x.say( when.strftime( f'{month} {day},' ))
+			msgsounds.append( str( await x.generate() ))
+		else:
+			x = self.settings.tts()
+			month = when.strftime( '%B' )
+			day = natural.number.ordinal( when.day )
+			x.say( when.strftime( f'{month} {day}, {when.year},' ))
+			msgsounds.append( str( await x.generate() ))
+		x = self.settings.tts()
+		x.say( when.strftime( '%I:%M %p' ))
+		msgsounds.append( str( await x.generate() ))
+		
 		if len( msgsounds ) > 0:
 			msgsounds.append( SILENCE_1_SECOND )
 		msgsounds.append( str( msg.path ))

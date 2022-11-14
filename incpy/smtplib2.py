@@ -50,6 +50,7 @@ import hmac
 import logging
 import re
 import socket
+import sys
 from typing import (
 	BinaryIO, Callable, Dict, List, Optional as Opt, Sequence as Seq, Tuple,
 	Union,
@@ -890,58 +891,57 @@ if _have_ssl:
 # LMTP extension
 #
 
-class LMTP ( SMTP ):
-	"""LMTP - Local Mail Transfer Protocol
-	
-	The LMTP protocol, which is very similar to ESMTP, is heavily based
-	on the standard SMTP client. It's common to use Unix sockets for
-	LMTP, so our connect() method must support that as well as a regular
-	host:port server.  local_hostname has the same meaning as it does in
-	the SMTP class.  To specify a Unix socket, you must use an absolute
-	path as the host, starting with a '/'.
-	
-	Authentication is supported, using the regular SMTP mechanism. When
-	using a Unix socket, LMTP generally don't support or require any
-	authentication, but your mileage might vary."""
-	
-	default_port = LMTP_PORT
-	
-	ehlo_msg = b'lhlo'
-	
-	def __init__ ( self,
-		host: str = '',
-		port: int = LMTP_PORT,
-		local_hostname: Opt[str] = None,
-	) -> None:
-		"""Initialize a new instance."""
-		super().__init__ ( host, port, local_hostname )
-
-	def connect ( self, host: str = 'localhost', port: int = 0 ) -> Tuple[int,str]:
-		"""Connect to the LMTP daemon, on either a Unix or a TCP socket."""
-		log = logger.getChild ( 'LMTP.connect' )
-		if host[0] != '/':
-			return super().connect ( host, port )
+if sys.platform != 'win32':
+	class LMTP ( SMTP ):
+		"""LMTP - Local Mail Transfer Protocol
 		
-		# Handle Unix-domain sockets.
-		try:
-			self.sock = socket.socket ( socket.AF_UNIX, socket.SOCK_STREAM )
-			self.sock.connect ( host )
-		except socket.error as e:
-			log.warning ( 'connect to host %r failed with %r', host, e )
-			if self.sock:
-				self.sock.close()
-			del self.sock
-			raise
-		code, msg = self.getreply()
-		log.info ( 'connect: %r', msg )
-		return code, msg
+		The LMTP protocol, which is very similar to ESMTP, is heavily based
+		on the standard SMTP client. It's common to use Unix sockets for
+		LMTP, so our connect() method must support that as well as a regular
+		host:port server.  local_hostname has the same meaning as it does in
+		the SMTP class.  To specify a Unix socket, you must use an absolute
+		path as the host, starting with a '/'.
+		
+		Authentication is supported, using the regular SMTP mechanism. When
+		using a Unix socket, LMTP generally don't support or require any
+		authentication, but your mileage might vary."""
+		
+		default_port = LMTP_PORT
+		
+		ehlo_msg = b'lhlo'
+		
+		def __init__ ( self,
+			host: str = '',
+			port: int = LMTP_PORT,
+			local_hostname: Opt[str] = None,
+		) -> None:
+			"""Initialize a new instance."""
+			super().__init__ ( host, port, local_hostname )
+		
+		def connect ( self, host: str = 'localhost', port: int = 0 ) -> Tuple[int,str]:
+			"""Connect to the LMTP daemon, on either a Unix or a TCP socket."""
+			log = logger.getChild ( 'LMTP.connect' )
+			if host[0] != '/':
+				return super().connect ( host, port )
+			
+			# Handle Unix-domain sockets.
+			try:
+				self.sock = socket.socket ( socket.AF_UNIX, socket.SOCK_STREAM )
+				self.sock.connect ( host )
+			except socket.error as e:
+				log.warning ( 'connect to host %r failed with %r', host, e )
+				if self.sock:
+					self.sock.close()
+				del self.sock
+				raise
+			code, msg = self.getreply()
+			log.info ( 'connect: %r', msg )
+			return code, msg
 
 
 # Test the sendmail method, which tests most of the others.
 # Note: This always sends to localhost.
 if __name__ == '__main__':
-	import sys
-	
 	logging.basicConfig ( level = logging.DEBUG )
 	
 	if True:

@@ -16,10 +16,15 @@ flask
 Flask-Login
 Flask-Session
 mypy-extensions
+natural
 pydub
 PyOpenSSL
 python-pam
 pytz
 service_identity
 tornado
+types-aiofiles
+types-certifi
 types-flask
+types-tornado
+types-tzlocal
