@@ -133,6 +133,10 @@ class SettingMeta( TypedDict ):
 
 @dataclass
 class Settings:
+	default_throttle_limit: int = field( default = 10, metadata = SettingMeta(
+		description = 'Default Throttle Limit',
+		editor = IntEditor( min = 1, max = 50 ),
+	))
 	did_categories: List[str] = field( default_factory = lambda: [ 'general', 'medical', 'shoes' ], metadata = SettingMeta(
 		description = 'DID Categories',
 		editor = ListEditor( rows = 10, cols = 20 ),

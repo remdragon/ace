@@ -1913,7 +1913,8 @@ class CallState( State ):
 		try:
 			throttle_limit = int( await self.esl.uuid_getvar( self.uuid, 'throttle_limit' ) or '?' )
 		except Exception as e:
-			throttle_limit = 10
+			settings = await ace_settings.aload()
+			throttle_limit = settings.default_throttle_limit
 			log.error( 'Error trying to get throttle_limit (defaulting to %r): %r',
 				throttle_limit, e,
 			)
