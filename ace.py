@@ -1428,8 +1428,15 @@ def try_post_ani( ani: int, data: Dict[str,str] ) -> int:
 		data2['notes'] = notes
 	
 	path = ani_file_path( ani2 )
-	with path.open( 'r' ) as f:
-		olddata = json.loads( f.read() )
+	if ani:
+		with path.open( 'r' ) as f:
+			try:
+				olddata = json.loads( f.read() )
+			except json.JSONDecodeError:
+				log.exception( f'Corrupt ANI file: {str(path)!r}:' )
+				olddata = {}
+	else:
+		olddata = {}
 	keys = set( olddata.keys() ) | set( data2.keys() )
 	auditdata_: List[str] = []
 	for key in sorted( keys ):
