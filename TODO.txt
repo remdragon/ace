@@ -1,2 +1,11 @@
 https://github.com/kkroening/ffmpeg-python
 https://pypi.org/project/tinytag/
+
+
+callnet:
+	recordings management in webui
+	https://blog.addpipe.com/using-recorder-js-to-capture-wav-audio-in-your-html5-web-site/
+
+DID Management:
+	To delete all active recordings for this DID, type "PURGE" in the following box:
+	[                        ]
