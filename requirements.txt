@@ -28,3 +28,4 @@ types-certifi
 types-flask
 types-tornado
 types-tzlocal
+tzlocal
