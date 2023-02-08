@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 import certifi
 import concurrent.futures
-import datetime
+from datetime import datetime, timedelta
 from enum import Enum
 import itertools
 import logging
@@ -12,7 +12,7 @@ from pathlib import Path, PurePosixPath
 import re
 import ssl
 from typing import (
-	Any, AsyncIterator, Callable, Dict, Iterator, List, Optional as Opt,
+	Any, AsyncIterator, Callable, Optional as Opt,
 	overload, Tuple, TypeVar, Union,
 )
 from typing_extensions import AsyncIterator, Literal
@@ -42,7 +42,7 @@ class ESL:
 	_writer: Opt[asyncio.StreamWriter] = None
 	_event_queue: asyncio.Queue[ESL.Message]
 	_requests: asyncio.Queue[ESL.Request]
-	request_timeout = datetime.timedelta( seconds = 10 )
+	request_timeout = timedelta( seconds = 10 )
 	
 	class Error( Exception ):
 		def __repr__( self ) -> str:
@@ -63,13 +63,13 @@ class ESL:
 		pass
 	
 	class Message:
-		esl_headers: Opt[Dict[str,str]] = None
+		esl_headers: Opt[dict[str,str]] = None # "normal" headers are moved here for events
 		content_type: str
-		when_event: datetime.datetime
-		when_rcvd: datetime.datetime
+		when_event: datetime
+		when_rcvd: datetime
 		
 		def __init__( self, *,
-			headers: Dict[str,str],
+			headers: dict[str,str],
 			raw: Opt[bytes] = None
 		) -> None:
 			self.raw: Opt[bytes] = None
@@ -132,8 +132,8 @@ class ESL:
 		@staticmethod
 		def _parse_headers(
 			hdrs: str,
-		) -> Dict[str,str]:
-			headers: Dict[str,str] = {}
+		) -> dict[str,str]:
+			headers: dict[str,str] = {}
 			for line in hdrs.split( '\n' ):
 				ar = line.split( ':', 1 )
 				if len( ar ) == 2:
@@ -144,9 +144,10 @@ class ESL:
 		
 		def __repr__( self ) -> str:
 			cls = type( self )
-			ar = [ f'{cls.__module__}.{cls.__qualname__}(' ]
-			ar.append( f'headers={self.headers!r}, raw={self.raw!r}, body={self.body!r})' )
-			return ''.join( ar )
+			_atts_ = ', '.join([
+				f'{k}={getattr(self,k,None)!r}' for k in 'headers raw body esl_headers'.split()
+			])
+			return f'{cls.__module__}.{cls.__qualname__}({_atts_})'
 	
 	class DisconnectEvent( Message ):
 		def __init__( self ) -> None:
@@ -172,7 +173,7 @@ class ESL:
 		def __init__( self,
 			cli: ESL,
 			command: Opt[str] = None,
-			headers: Opt[Dict[str,str]] = None,
+			headers: Opt[dict[str,str]] = None,
 			body: Opt[str] = None,
 			*,
 			event_lock: bool = False,
@@ -183,7 +184,7 @@ class ESL:
 					if headers is None:
 						headers = {}
 					headers['Content-Length'] = str( len( _body_ ))
-				lines: List[str] = [ command ]
+				lines: list[str] = [ command ]
 				if headers:
 					lines.extend([
 						f'{k}: {v}' for k, v in headers.items()
@@ -336,7 +337,7 @@ class ESL:
 		reader: asyncio.StreamReader,
 		writer: asyncio.StreamWriter,
 		timeout_seconds: Union[int,float] = 3,
-	) -> Dict[str,str]:
+	) -> dict[str,str]:
 		log = logger.getChild ( 'ESL.connect_from' )
 		
 		# NOTE: this does not conform to the normal API and must only be called as the
@@ -384,7 +385,7 @@ class ESL:
 	
 	async def event( self,
 		event_name: str,
-		headers: Opt[Dict[str,str]] = None,
+		headers: Opt[dict[str,str]] = None,
 		body: Opt[str] = None,
 	) -> ESL.Request:
 		#log = logger.getChild( 'ESL.event' )
@@ -504,7 +505,7 @@ class ESL:
 		if context:
 			assert dialplan is not None, 'dialplan is required if context is set'
 		
-		args: List[str] = list( filter( None, [
+		args: list[str] = list( filter( None, [
 			backend,
 			realm,
 			resource,
@@ -548,12 +549,12 @@ class ESL:
 		context: str = '',
 		cid_name: str = '',
 		cid_num: str = '',
-		timeout: Opt[datetime.timedelta] = None,
-		chanvars: Opt[Dict[str,str]] = None,
+		timeout: Opt[timedelta] = None,
+		chanvars: Opt[dict[str,str]] = None,
 		expand: bool = False,
 		bgapi: bool = False,
 	) -> ESL.Request:
-		parts: List[str] = [ 'bgapi' if bgapi else 'api' ]
+		parts: list[str] = [ 'bgapi' if bgapi else 'api' ]
 		if expand:
 			parts.append( 'expand' )
 		parts.append( 'originate' )
@@ -576,13 +577,13 @@ class ESL:
 		min_digits: int,
 		max_digits: int,
 		tries: int,
-		timeout: datetime.timedelta,
+		timeout: timedelta,
 		terminators: str,
 		file: str,
 		invalid_file: Opt[str] = None,
 		var_name: Opt[str] = None,
 		regexp: Opt[str] = None,
-		digit_timeout: Opt[datetime.timedelta] = None,
+		digit_timeout: Opt[timedelta] = None,
 		transfer_on_failure: Opt[str] = None,
 		digits: Opt[list[str]] = None,
 		*,
@@ -643,19 +644,19 @@ class ESL:
 		min_digits: int,
 		max_digits: int,
 		tries: int,
-		timeout: datetime.timedelta,
+		timeout: timedelta,
 		terminators: str,
-		files: List[str],
+		files: list[str],
 		invalid_file: Opt[str] = None,
 		var_name: Opt[str] = None,
 		regexp: Opt[str] = None,
-		digit_timeout: Opt[datetime.timedelta] = None,
+		digit_timeout: Opt[timedelta] = None,
 		transfer_on_failure: Opt[str] = None,
 		digits: Opt[list[str]] = None,
 	) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.play_and_get_digits2' )
 		assert len( files ), f'invalid files={files!r}'
-		last: List[bool] = [ False ] * len ( files )
+		last: list[bool] = [ False ] * len ( files )
 		last[-1] = True
 		for file, is_last in zip( files, last ):
 			async for event in self.play_and_get_digits(
@@ -706,14 +707,14 @@ class ESL:
 	async def record( self,
 		uuid: str,
 		path: PurePosixPath,
-		time_limit: Opt[datetime.timedelta] = None,
+		time_limit: Opt[timedelta] = None,
 		silence_threshold: int = 30,
 		silence_hits: int = 5,
 	) -> AsyncIterator[ESL.Message]:
 		log = logger.getChild( 'ESL.record' )
 		assert isinstance( path, PurePosixPath ), f'invalid path={path!r}'
 		assert Path( path.parent ).is_dir(), f'path.parent={path.parent!r} does not exist'
-		assert time_limit is None or ( isinstance( time_limit, datetime.timedelta ) and time_limit.total_seconds() > 0 ), f'invalid time_limit={time_limit!r}'
+		assert time_limit is None or ( isinstance( time_limit, timedelta ) and time_limit.total_seconds() > 0 ), f'invalid time_limit={time_limit!r}'
 		assert isinstance( silence_threshold, int ) and silence_threshold > 0, f'invalid silence_threshold={silence_threshold!r}'
 		assert isinstance( silence_hits, int ) and silence_hits > 0, f'invalid silence_hits={silence_hits!r}'
 		path_ = str( path ).replace( '\\', '/' )
@@ -895,11 +896,13 @@ class ESL:
 			else:
 				raise ESL.HardError( 'reader is not alive' )
 	
-	async def events( self, timeout: Union[int,float] = 0.25 ) -> AsyncIterator[ESL.Message]:
+	async def events( self, timeout: Opt[timedelta] = None ) -> AsyncIterator[ESL.Message]:
+		if timeout is None:
+			timeout = timedelta( seconds = 0.25 )
 		while True:
 			self._assert_alive()
 			try:
-				event = await asyncio.wait_for( self._event_queue.get(), timeout = timeout )
+				event = await asyncio.wait_for( self._event_queue.get(), timeout = timeout.total_seconds() )
 			except asyncio.TimeoutError: # queue.Empty:
 				return
 			else:
@@ -931,16 +934,7 @@ class ESL:
 		try:
 			while reader is not None and reader == self._reader: # if reader has changed, this reader is done ( new call to connect() will spawn a new reader )
 				try:
-					#try:
 					data = await reader.read( 16384 )
-					#except socket.timeout:
-					#	log.debug( 'socket.timeout' )
-					#	continue
-					#except OSError as e:
-					#	if e.errno == socket.EBADF:
-					#		# socket is no (no longer) valid
-					#		return
-					#	raise
 					if not data:
 						log.debug( 'got EOF (0 bytes)' )
 						await self._event_queue.put( ESL.ErrorEvent( ESL.HardError( 'EOF' )))
@@ -957,6 +951,7 @@ class ESL:
 					await self._event_queue.put( ESL.ErrorEvent( ESL.HardError( repr( e )).with_traceback( e.__traceback__ )))
 					await asyncio.sleep( 1.0 )
 		finally:
+			await self._close()
 			self._reader_alive.clear()
 	
 	async def _reader_parse_bytes( self, buf: bytes ) -> bytes:
@@ -995,11 +990,11 @@ class ESL:
 				evt_hdrs, evt_body = evt.body.split( '\n\n', 1 )
 				evt.headers = ESL.Message._parse_headers( evt_hdrs )
 				try:
-					evt.when_event = datetime.datetime.fromtimestamp( float( evt.headers['Event-Date-Timestamp'] ) * 0.000001 )
+					evt.when_event = datetime.fromtimestamp( float( evt.headers['Event-Date-Timestamp'] ) * 0.000001 )
 				except Exception:
 					log.exception( 'Error parsing event timestamp:' )
-					evt.when_event = datetime.datetime.now() # fake it 'til you make it
-				evt.when_rcvd = datetime.datetime.now()
+					evt.when_event = datetime.now() # fake it 'til you make it
+				evt.when_rcvd = datetime.now()
 				evt.body = evt_body
 				#log.debug( 'queueing evt id %r %r', id( evt ), evt.event_name )
 				await self._event_queue.put( evt )
@@ -1049,3 +1044,23 @@ class ESL:
 		log = logger.getChild( 'ESL.__del__' )
 		if self._writer is not None:
 			log.warning( 'ESL id=%r deleted without being closed first', self.id )
+
+if __name__ == '__main__':
+	async def amain() -> None:
+		logging.basicConfig( level = DEBUG9 )
+		esl = ESL()
+		try:
+			print( 'connecting...' )
+			await esl.connect_to()
+			print( 'registering for events...' )
+			await esl.event_plain_all()
+			print( 'listening for events...' )
+			async for event in esl.events( timeout = timedelta( seconds = 30 )):
+				print( f'event={event!r}' )
+		finally:
+			await esl.close()
+	
+	try:
+		asyncio.run( amain() )
+	except KeyboardInterrupt:
+		pass

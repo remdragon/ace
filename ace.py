@@ -1342,6 +1342,8 @@ def http_anis() -> Response:
 	)
 
 def try_post_ani( ani: int, data: Dict[str,str] ) -> int:
+	log = logger.getChild( 'try_post_ani' )
+	
 	try:
 		ani2 = ani or int( data.get( 'ani' ) or '' )
 	except Exception as e1:

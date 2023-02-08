@@ -14,7 +14,7 @@ from abc import ABCMeta, abstractmethod
 import asyncio
 import base64
 from dataclasses import dataclass
-import datetime
+from datetime import date, datetime, timedelta
 from enum import Enum
 from itertools import chain
 import json
@@ -280,18 +280,18 @@ class Config:
 class PAGD:
 	min_digits: int
 	max_digits: int
-	timeout: datetime.timedelta
+	timeout: timedelta
 	terminators: str
 	digit_regex: str
 	variable_name: str
-	digit_timeout: datetime.timedelta
+	digit_timeout: timedelta
 	
 	digits: Opt[str] = None
 	valid: Opt[bool] = None
 
 
 class ElapsedTimer:
-	def __init__( self, interval: Opt[datetime.timedelta] ) -> None:
+	def __init__( self, interval: Opt[timedelta] ) -> None:
 		self.interval = interval
 		self.t1: float = time.time() + interval.total_seconds() if interval else 0
 	
@@ -350,7 +350,7 @@ def expired( expiration: str ) -> bool:
 	#log = logger.getChild( 'expired' )
 	if not expiration:
 		return False
-	now = datetime.datetime.now().strftime( '%Y-%m-%d %H:%M:%S' )
+	now = datetime.now().strftime( '%Y-%m-%d %H:%M:%S' )
 	#log.debug( 'comparing now=%r vs expiration=%r', now, expiration )
 	return now >= expiration
 
@@ -918,8 +918,8 @@ class State( metaclass = ABCMeta ):
 				remaining = done - time.time()
 				if remaining < 0.05:
 					break
-				timeout_seconds = remaining * 0.5 if remaining > 0.5 else remaining
-				async for event in self.esl.events( timeout = timeout_seconds ):
+				timeout = timedelta( seconds = remaining * 0.5 if remaining > 0.5 else remaining )
+				async for event in self.esl.events( timeout = timeout ):
 					_on_event( event )
 		
 		return CONTINUE
@@ -929,7 +929,7 @@ class State( metaclass = ABCMeta ):
 		
 		r_holiday = re.compile( r'^\s*([A-Z0-9]+)\s*=\s*(\d{1,2})\s*-\s*(\d{1,2})\s*$' )
 		
-		today = datetime.date.today()
+		today = date.today()
 		settings = await ace_settings.aload()
 		for holiday in settings.holidays:
 			m = r_holiday.match( holiday )
@@ -937,7 +937,7 @@ class State( metaclass = ABCMeta ):
 				name = m.group( 1 )
 				month = int( m.group( 2 ))
 				day = int( m.group( 3 ))
-				when = datetime.date( today.year, month, day )
+				when = date( today.year, month, day )
 				if when == today:
 					return name.strip().upper()
 		return None
@@ -1184,7 +1184,7 @@ class CallState( State ):
 			bushrs_start = await _uuid_gethhmm( 'bushrs_start', '08:00' ) # TODO FIXME: support 'HH:MM'
 			bushrs_end = await _uuid_gethhmm( 'bushrs_end', '17:00' )
 			bushrs_dow = await self.esl.uuid_getvar( self.uuid, 'bushrs_dow' ) or '23456' # M-F
-			now = datetime.datetime.now()
+			now = datetime.now()
 			now_dow = str(( now.weekday() + 1 ) % 7 + 1 ) # now.weekday() MON=0 ... SUN=6, we need SUN=1 ... SAT=7
 			log.debug( 'bushrs_dow=%r, now_dow=%r', bushrs_dow, now_dow )
 			tod = 'AFTHRS'
@@ -1222,15 +1222,15 @@ class CallState( State ):
 	
 	async def _pagd( self, action_type: str, action: Union[ACTION_IVR,ACTION_PAGD], success: Callable[[str],Coroutine[Any,Any,Opt[RESULT]]] ) -> RESULT:
 		log = logger.getChild( 'CallState._pagd' )
-		timeout = datetime.timedelta( seconds = await self.tonumber( action, 'timeout', default = 3 ))
+		timeout = timedelta( seconds = await self.tonumber( action, 'timeout', default = 3 ))
 		pagd = PAGD(
 			min_digits = await self.toint( action, 'min_digits', default = 1 ),
 			max_digits = await self.toint( action, 'max_digits', default = 1 ),
-			timeout = datetime.timedelta( milliseconds = 50 ), # don't want to apply pagd.timeout to every node under greeting branch
+			timeout = timedelta( milliseconds = 50 ), # don't want to apply pagd.timeout to every node under greeting branch
 			terminators = expect( str, action.get( 'terminators' ), default = '' ),
 			digit_regex = expect( str, action.get( 'digit_regex' ), default = '' ),
 			variable_name = expect( str, action.get( 'variable_name' ), default = '' ),
-			digit_timeout = datetime.timedelta( seconds = await self.tonumber( action, 'digit_timeout', default = timeout.total_seconds() ))
+			digit_timeout = timedelta( seconds = await self.tonumber( action, 'digit_timeout', default = timeout.total_seconds() ))
 		)
 		max_attempts = await self.toint( action, 'max_attempts', default = 3 )
 		attempt: int = 1
@@ -1298,7 +1298,7 @@ class CallState( State ):
 			if max_digits < 1:
 				max_digits = 1
 			if timeout.total_seconds() <= 0:
-				timeout = datetime.timedelta( seconds = 0.1 ) # FS defaults 0 to some greater timeout value
+				timeout = timedelta( seconds = 0.1 ) # FS defaults 0 to some greater timeout value
 			
 			#session:flushDigits()
 			log.info( 'executing playAndGetDigits mindig=%r maxdig=%r #atts=%r timeout=%r term=%r snd=%r err=%r re=%r var=%r dig_timeout=%r',
@@ -1442,8 +1442,8 @@ class CallState( State ):
 		log = logger.getChild( 'CallState._bridge' )
 		
 		timeout_seconds: int = await self.toint( action, 'timeout', default = 0 )
-		timeout: Opt[datetime.timedelta] = (
-			datetime.timedelta( seconds = timeout_seconds )
+		timeout: Opt[timedelta] = (
+			timedelta( seconds = timeout_seconds )
 			if timeout_seconds
 			else None
 		)
@@ -1462,7 +1462,7 @@ class CallState( State ):
 			else None
 		)
 		originate_timer = ElapsedTimer( timeout )
-		exists_timer = ElapsedTimer( datetime.timedelta( seconds = 6 ))
+		exists_timer = ElapsedTimer( timedelta( seconds = 6 ))
 		
 		try:
 			dial_string: str = expect( str, action.get( 'dial_string' ))
@@ -1533,7 +1533,7 @@ class CallState( State ):
 				await self.car_activity( 'originate successfully bridged' )
 			
 			# now we need to stay right here while the call remains bridged
-			exists_timer = ElapsedTimer( datetime.timedelta( seconds = 6 ))
+			exists_timer = ElapsedTimer( timedelta( seconds = 6 ))
 			while True:
 				async for event in self.esl.events():
 					evt_name = event.event_name
@@ -1683,7 +1683,7 @@ class CallState( State ):
 		await self.esl.uuid_break( self.uuid, 'all' )
 		
 		# check for events: if acd picked up the call, we don't want to queue more music...
-		async for event in self.esl.events( timeout = 0.01 ):
+		async for event in self.esl.events( timeout = timedelta( seconds = 0.01 )):
 			_on_event( event )
 		
 		log.info( 'playing %r', stream )
@@ -2050,11 +2050,11 @@ class CallState( State ):
 		pagd = PAGD(
 			min_digits = 1,
 			max_digits = 1,
-			timeout = datetime.timedelta( seconds = 0.1 ), # TODO FIXME: customizable?
+			timeout = timedelta( seconds = 0.1 ), # TODO FIXME: customizable?
 			terminators = '',
 			digit_regex = '',
 			variable_name = '',
-			digit_timeout = datetime.timedelta( seconds = 0.1 ), # TODO FIXME: customizable?
+			digit_timeout = timedelta( seconds = 0.1 ), # TODO FIXME: customizable?
 		)
 		if STOP == await self._exec_branch( which, greeting_branch, pagd, log = log ):
 			return None
@@ -2300,9 +2300,9 @@ class NotifyState( State ):
 	async def _voice_deliver( self, action: ACTION_VOICE_DELIVER, number: str ) -> Tuple[bool,Opt[str]]:
 		log = logger.getChild( 'NotifyState._voice_deliver' )
 		
-		timeout = datetime.timedelta( seconds = await self.toint( action, 'timeout', default = 0 ))
+		timeout = timedelta( seconds = await self.toint( action, 'timeout', default = 0 ))
 		if timeout.total_seconds() <= 0:
-			timeout = datetime.timedelta( seconds = 60 )
+			timeout = timedelta( seconds = 60 )
 		
 		settings = await ace_settings.aload()
 		
@@ -2377,14 +2377,14 @@ class NotifyState( State ):
 	
 	async def _uuid_wait_for_answer( self,
 		uuid: str,
-		timeout: datetime.timedelta,
+		timeout: timedelta,
 		*,
 		aleg_uuid: Opt[str] = None,
 	) -> Tuple[bool,Opt[str]]:
 		log = logger.getChild( 'NotifyState._uuid_wait_for_answer' )
 		# TODO FIXME: modify _bridge to use this funcion...
 		originate_timer = ElapsedTimer( timeout )
-		exists_timer = ElapsedTimer( datetime.timedelta( seconds = 6 ))
+		exists_timer = ElapsedTimer( timedelta( seconds = 6 ))
 		terminators = { 'CHANNEL_DESTROY', 'CHANNEL_HANGUP', 'CHANNEL_UNBRIDGE' }
 		while True:
 			async for evt in self.esl.events():
