@@ -20,12 +20,12 @@ natural
 pydub
 PyOpenSSL
 python-pam
-pytz
 service_identity
 tornado
 types-aiofiles
 types-certifi
 types-flask
+types-psycopg2
 types-tornado
 types-tzlocal
 tzlocal

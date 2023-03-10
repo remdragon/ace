@@ -35,16 +35,15 @@ from threading import RLock, Thread
 from time import sleep
 from typing import(
 	Any, Callable, cast, Dict, Iterator, List, Optional as Opt,
-	Sequence as Seq, Tuple, Type, TypeVar, TYPE_CHECKING, Union,
+	Type, TypeVar, TYPE_CHECKING, Union,
 )
-from typing_extensions import Literal # Python 3.7
 from urllib.parse import urlencode, urlparse
 import uuid
 
 # 3rd-party imports:
 import accept_types # type: ignore # pip install accept-types
 from flask import( # pip install flask
-	Flask, jsonify, render_template, request, Response,
+	Flask, jsonify, request, Response,
 	send_from_directory, session, url_for,
 )
 from flask_login import( # type: ignore # pip install flask-login
@@ -379,8 +378,16 @@ if not cfg_path.is_file():
 		f'ITAS_OWNER_GROUP = {"www-data"!r}',
 		f'ITAS_FREESWITCH_JSON_CDR_PATH = {"/var/log/freeswitch/json_cdr"!r}',
 		f'ITAS_REPOSITORY_TYPE = {"fs"!r}',
+		f'ITAS_REPOSITORY_NOFS_TYPE = {"sqlite"!r}',
 		f'ITAS_REPOSITORY_FS_PATH = {"/usr/share/itas/ace/"!r}',
 		f'ITAS_REPOSITORY_SQLITE_PATH = {"/usr/share/itas/ace/ace.sqlite"!r}',
+		f'ITAS_REPOSITORY_PGSQL_HOST = {"127.0.0.1"!r}',
+		f'ITAS_REPOSITORY_PGSQL_DATABASE = {"ace"!r}',
+		f'ITAS_REPOSITORY_PGSQL_USERNAME = {"ace"!r}',
+		f'ITAS_REPOSITORY_PGSQL_PASSWORD = {""!r}',
+		f'ITAS_REPOSITORY_PGSQL_PORT = {5432!r}',
+		f"ITAS_REPOSITORY_PGSQL_SSLMODE: Opt[Literal['disable','allow','prefer','require','verify-ca','verify-full']] = None",
+		f'ITAS_REPOSITORY_PGSQL_SSLROOTCERT = None',
 		f'ITAS_FLAGS_PATH = {str(default_data_path)!r}',
 		f'ITAS_DID_FIELDS = {[]!r}',
 		f'ITAS_DID_VARIABLES_EXAMPLES = {[]!r}',
@@ -424,8 +431,16 @@ ITAS_OWNER_USER: str = ''
 ITAS_OWNER_GROUP: str = ''
 ITAS_FREESWITCH_JSON_CDR_PATH: str = ''
 ITAS_REPOSITORY_TYPE: str = ''
+ITAS_REPOSITORY_NOFS_TYPE: str = ''
 ITAS_REPOSITORY_FS_PATH: str = ''
 ITAS_REPOSITORY_SQLITE_PATH: str = ''
+ITAS_REPOSITORY_PGSQL_HOST: str = ''
+ITAS_REPOSITORY_PGSQL_DATABASE: str = ''
+ITAS_REPOSITORY_PGSQL_USERNAME: str = ''
+ITAS_REPOSITORY_PGSQL_PASSWORD: str = ''
+ITAS_REPOSITORY_PGSQL_PORT: int = 5432
+ITAS_REPOSITORY_PGSQL_SSLMODE: Opt[repo.PGSQL_SSLMODE] = None
+ITAS_REPOSITORY_PGSQL_SSLROOTCERT: Opt[str] = None
 ITAS_FLAGS_PATH: str = ''
 ITAS_DID_FIELDS: List[Field] = []
 ITAS_DID_VARIABLES_EXAMPLES: List[str] = []
@@ -570,21 +585,29 @@ def voicemail_box_msgs_path( box: int ) -> PurePosixPath:
 repo_config = repo.Config(
 	fs_path = Path( ITAS_REPOSITORY_FS_PATH ),
 	sqlite_path = Path( ITAS_REPOSITORY_SQLITE_PATH ),
+	pgsql_host = ITAS_REPOSITORY_PGSQL_HOST,
+	pgsql_db = ITAS_REPOSITORY_PGSQL_DATABASE,
+	pgsql_uid = ITAS_REPOSITORY_PGSQL_USERNAME,
+	pgsql_pwd = ITAS_REPOSITORY_PGSQL_PASSWORD,
+	pgsql_port = ITAS_REPOSITORY_PGSQL_PORT,
+	pgsql_sslmode = ITAS_REPOSITORY_PGSQL_SSLMODE,
+	pgsql_sslrootcert = Path( ITAS_REPOSITORY_PGSQL_SSLROOTCERT ) if ITAS_REPOSITORY_PGSQL_SSLROOTCERT else None,
 )
 
 REPO_FACTORY: Type[repo.Repository]
 
 # Setup repositories based on config
-if ITAS_REPOSITORY_TYPE == 'sqlite':
-	REPO_FACTORY = repo.RepoSqlite
-elif ITAS_REPOSITORY_TYPE == 'fs':
-	REPO_FACTORY = repo.RepoFs
-else:
-	raise Exception( f'invalid ITAS_REPOSITORY_TYPE={ITAS_REPOSITORY_TYPE!r}' )
+try:
+	REPO_FACTORY = repo.from_type( ITAS_REPOSITORY_TYPE )
+except KeyError:
+	raise Exception( f'invalid ITAS_REPOSITORY_TYPE={ITAS_REPOSITORY_TYPE!r}' ) from None
 
 REPO_FACTORY_NOFS: Type[repo.Repository] = REPO_FACTORY
 if REPO_FACTORY == repo.RepoFs:
-	REPO_FACTORY_NOFS = repo.RepoSqlite
+	try:
+		REPO_FACTORY_NOFS = repo.from_type( ITAS_REPOSITORY_NOFS_TYPE )
+	except KeyError:
+		raise Exception( f'invalid ITAS_REPOSITORY_NOFS_TYPE={ITAS_REPOSITORY_NOFS_TYPE!r}' ) from None
 
 REPO_DIDS = REPO_FACTORY( repo_config, DIDS, '.did', [
 	#repo.SqlInteger( 'id', null = False, size = 10, auto = True, primary = True ),
