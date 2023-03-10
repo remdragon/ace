@@ -2651,10 +2651,10 @@ def http_audit_item( filename: str ) -> Response:
 #region service management
 
 
-def service_command( cmd: str ) -> int:
+def service_command( cmd: str, name: str, description: str ) -> int:
 	log = logger.getChild( 'service_command' )
 	log.debug( 'cmd=%r', cmd )
-	service_name = 'ace.service'
+	service_name = f'{name}.service'
 	service_path = Path( '/lib/systemd/system/' ) / service_name
 	if cmd in ( 'add', 'install' ):
 		if service_path.is_file():
@@ -2664,7 +2664,7 @@ def service_command( cmd: str ) -> int:
 			this_py = os.path.abspath( __file__ )
 			print( '\n'.join( [
 				'[Unit]',
-				'Description=ITAS Automated Call Engine Portal',
+				f'Description={description}',
 				'After=network.target',
 				'',
 				'[Service]',
@@ -2784,7 +2784,7 @@ if __name__ == '__main__':
 	ace_logging.init( Path( ITAS_UI_LOGFILE ), ITAS_LOGLEVELS )
 	cmd: List[str] = sys.argv[1:2]
 	if cmd:
-		sys.exit( service_command( cmd[0] ))
+		sys.exit( service_command( cmd[0], 'ace', 'ITAS Automated Call Engine Portal' ))
 	login_manager.init_app( app )
 	
 	settings_path = Path( ITAS_SETTINGS_PATH )
