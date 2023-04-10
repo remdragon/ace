@@ -17,6 +17,7 @@ Flask-Login
 Flask-Session
 mypy-extensions
 natural
+psycopg2
 pydub
 PyOpenSSL
 python-pam
