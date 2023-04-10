@@ -60,7 +60,7 @@ async def hangup( esl: ESL, uuid: str, cause: CAUSE, source: str ) -> None:
 	log = logger.getChild( 'hangup' )
 	log.info( 'hangup with cause=%r from %r', cause, source )
 	
-	# TODO FIXME: there's 2 way we can hangup a call
+	# TODO FIXME: there's 2 ways we can hangup a call
 	if True:
 		r = await esl.uuid_kill( uuid, cause )
 		log.debug( 'result: %r', r )
