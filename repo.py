@@ -16,13 +16,13 @@ import sqlite3
 import threading
 from typing import (
 	Any, Callable, cast, Optional as Opt, Sequence as Seq, Tuple, Type,
-	TypeAlias, Union,
+	Union,
 )
 import uuid
 
 # 3rd-party imports:
 import psycopg2 # pip install psycopg2
-from typing_extensions import Literal # pip install typing-extensions
+from typing_extensions import Literal, TypeAlias # pip install typing-extensions
 
 # local imports:
 import auditing
@@ -71,7 +71,7 @@ class SqlBase( metaclass = ABCMeta ):
 		index: bool = False,
 	) -> None:
 		for invalid in ( '"', "'", '`', '[', ']' ):
-			assert invalid not in name, f'invalid character {invalid!r} in {name=}'
+			assert invalid not in name, f'invalid character {invalid!r} in name {name!r}'
 		assert not name.lower().startswith( 'idx_' ), '"idx_" prefix is not allowed for field names, it is reserved for indexes'
 		self.name = name
 		self.null = null
@@ -233,7 +233,7 @@ class SqlInteger( SqlBase ):
 		elif self.size <= 18:
 			typename = 'BIGSERIAL' if self.auto else 'BIGINT'
 		else:
-			assert not self.auto, f'{self.size=} too big for {self.auto=}'
+			assert not self.auto, f'size {self.size!r} too big for auto={self.auto!r}'
 			typename = f'NUMERIC({self.size})'
 		sql: list[str] = [
 			f'"{self.name}"',
@@ -420,7 +420,7 @@ repo_types: dict[str,Type[Repository]] = {}
 def repo_type( name: str ) -> Callable[[Type[Repository]],Type[Repository]]:
 	def _decorator( cls: Type[Repository] ) -> Type[Repository]:
 		global repo_types
-		assert name not in repo_types, f'duplicate repo type {name=}'
+		assert name not in repo_types, f'duplicate repo type name={name!r}'
 		repo_types[name] = cls
 		return cls
 	return _decorator
