@@ -533,44 +533,37 @@ r_valid_audit_filename = re.compile( r'^[a-zA-Z0-9_\.-]+$', re.I )
 def valid_audit_filename( filename: str ) -> bool:
 	return bool( r_valid_audit_filename.match( filename ))
 
-flags_path = Path( ITAS_FLAGS_PATH )
-flags_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
-chown( str( flags_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
-os.chmod( str( flags_path ), 0o775 )
+AnyPath = TypeVar( 'AnyPath', Path, PurePosixPath )
+def mkdir_with_permissions( path: AnyPath ) -> AnyPath:
+	path2 = str( path )
+	Path( path ).mkdir( mode = 0o775, parents = True, exist_ok = True )
+	chown( path2, ITAS_OWNER_USER, ITAS_OWNER_GROUP )
+	os.chmod( path2, 0o775 )
+	return path
+
+flags_path = mkdir_with_permissions( Path( ITAS_FLAGS_PATH ))
 def flag_file_path( flag: str ) -> Path:
 	return flags_path / f'{flag}.flag'
 
 # TODO FIXME: replace this with REPO_DIDS...
 DIDS = 'dids'
-dids_path = Path( ITAS_REPOSITORY_FS_PATH ) / DIDS
-dids_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
-chown( str( dids_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
-os.chmod( str( dids_path ), 0o775 )
+dids_path = mkdir_with_permissions( Path( ITAS_REPOSITORY_FS_PATH ) / DIDS )
 def did_file_path( did: int ) -> Path:
 	return dids_path / f'{did}.did'
 
 # TODO FIXME: replace this with REPO_ANIS...
 ANIS = 'anis'
-anis_path = Path( ITAS_REPOSITORY_FS_PATH ) / ANIS
-anis_path.mkdir( mode = 0o775, parents = True, exist_ok = True )
-chown( str( anis_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
-os.chmod( str( anis_path ), 0o775 )
+anis_path = mkdir_with_permissions( Path( ITAS_REPOSITORY_FS_PATH ) / ANIS )
 def ani_file_path( ani: int ) -> Path:
 	return anis_path / f'{ani}.ani'
 
-voicemail_meta_path = PurePosixPath( ITAS_VOICEMAIL_BOXES_PATH )
-Path( voicemail_meta_path ).mkdir( mode = 0o775, parents = True, exist_ok = True )
-chown( str( voicemail_meta_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
-os.chmod( str( voicemail_meta_path ), 0o775 )
+voicemail_meta_path = mkdir_with_permissions( PurePosixPath( ITAS_VOICEMAIL_BOXES_PATH ))
 def voicemail_settings_path( box: Union[int,str] ) -> PurePosixPath:
 	return voicemail_meta_path / f'{box}.box'
 def voicemail_greeting_path( box: int, greeting: int ) -> PurePosixPath:
 	return voicemail_meta_path / f'{box}' / f'greeting{greeting}.wav'
 
-voicemail_msgs_path = PurePosixPath( ITAS_VOICEMAIL_MSGS_PATH )
-Path( voicemail_msgs_path ).mkdir( mode = 0o775, parents = True, exist_ok = True )
-chown( str( voicemail_msgs_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
-os.chmod( str( voicemail_msgs_path ), 0o775 )
+voicemail_msgs_path = mkdir_with_permissions( PurePosixPath( ITAS_VOICEMAIL_MSGS_PATH ))
 def voicemail_box_msgs_path( box: int ) -> PurePosixPath:
 	return voicemail_msgs_path / str( box )
 
