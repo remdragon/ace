@@ -561,7 +561,7 @@ def ani_file_path( ani: int ) -> Path:
 voicemail_meta_path = PurePosixPath( ITAS_VOICEMAIL_BOXES_PATH )
 Path( voicemail_meta_path ).mkdir( mode = 0o775, parents = True, exist_ok = True )
 chown( str( voicemail_meta_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
-os.chmod( str( anis_path ), 0o775 )
+os.chmod( str( voicemail_meta_path ), 0o775 )
 def voicemail_settings_path( box: Union[int,str] ) -> PurePosixPath:
 	return voicemail_meta_path / f'{box}.box'
 def voicemail_greeting_path( box: int, greeting: int ) -> PurePosixPath:
@@ -570,7 +570,7 @@ def voicemail_greeting_path( box: int, greeting: int ) -> PurePosixPath:
 voicemail_msgs_path = PurePosixPath( ITAS_VOICEMAIL_MSGS_PATH )
 Path( voicemail_msgs_path ).mkdir( mode = 0o775, parents = True, exist_ok = True )
 chown( str( voicemail_msgs_path ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
-os.chmod( str( anis_path ), 0o775 )
+os.chmod( str( voicemail_msgs_path ), 0o775 )
 def voicemail_box_msgs_path( box: int ) -> PurePosixPath:
 	return voicemail_msgs_path / str( box )
 
