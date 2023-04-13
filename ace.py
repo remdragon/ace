@@ -30,7 +30,7 @@ import tempfile
 from threading import RLock, Thread
 from time import sleep
 from typing import(
-	Any, Callable, cast, Dict, Iterator, List, Optional as Opt,
+	Any, Callable, cast, Iterator, Optional as Opt,
 	Type, TypeVar, TYPE_CHECKING, Union,
 )
 from urllib.parse import urlencode, urlparse
@@ -214,7 +214,7 @@ def html_text( text: str ) -> str:
 def html_att( text: str ) -> str:
 	return html.escape( text, quote = True )
 
-def html_page( *lines: str, stylesheets: Opt[List[str]] = None, status_code: Opt[int] = None ) -> Response:
+def html_page( *lines: str, stylesheets: Opt[list[str]] = None, status_code: Opt[int] = None ) -> Response:
 	
 	settings = ace_settings.load()
 	
@@ -250,7 +250,7 @@ def html_page( *lines: str, stylesheets: Opt[List[str]] = None, status_code: Opt
 	)
 
 def accept_type(
-	accepted_types: List[str] = [ 'text/html', 'application/json' ],
+	accepted_types: list[str] = [ 'text/html', 'application/json' ],
 ) -> str:
 	#log = logger.getChild( 'accept_type' )
 	accept_header: str = request.headers.get( 'Accept' ) or 'text/html'
@@ -267,7 +267,7 @@ class HttpFailure( Exception ):
 		cls = type( self )
 		return f'{cls.__module__}.{cls.__name__}(error={self.error!r}, status_code={self.status_code!r})'
 
-def rest_success( rows: Opt[List[Dict[str,Any]]] = None ) -> Response:
+def rest_success( rows: Opt[list[dict[str,Any]]] = None ) -> Response:
 	return cast( Response, jsonify( success = True, rows = rows or [] ))
 
 def rest_failure( error: str, status_code: Opt[int] = None ) -> Response:
@@ -281,9 +281,9 @@ def _http_failure( return_type: str, error: str, status_code: int = 400 ) -> Res
 	else:
 		return html_page( html_text( error ), status_code = status_code )
 
-def inputs() -> Dict[str,Any]:
+def inputs() -> dict[str,Any]:
 	if request.content_type == 'application/json':
-		return cast( Dict[str,Any], request.json )
+		return cast( dict[str,Any], request.json )
 	else:
 		return request.form
 
@@ -438,15 +438,15 @@ ITAS_REPOSITORY_PGSQL_PORT: int = 5432
 ITAS_REPOSITORY_PGSQL_SSLMODE: Opt[repo.PGSQL_SSLMODE] = None
 ITAS_REPOSITORY_PGSQL_SSLROOTCERT: Opt[str] = None
 ITAS_FLAGS_PATH: str = ''
-ITAS_DID_FIELDS: List[Field] = []
-ITAS_DID_VARIABLES_EXAMPLES: List[str] = []
-ITAS_ANI_OVERRIDES_EXAMPLES: List[str] = []
+ITAS_DID_FIELDS: list[Field] = []
+ITAS_DID_VARIABLES_EXAMPLES: list[str] = []
+ITAS_ANI_OVERRIDES_EXAMPLES: list[str] = []
 ITAS_VOICEMAIL_BOXES_PATH: str
 ITAS_VOICEMAIL_MSGS_PATH: str
 ITAS_SETTINGS_PATH: str
 ITAS_UI_LOGFILE: str = ''
 ITAS_ENGINE_LOGFILE: str = ''
-ITAS_LOGLEVELS: Dict[str,str] = {}
+ITAS_LOGLEVELS: dict[str,str] = {}
 exec( cfg_raw + '\n' ) # this exec overrides the variables from flask.cfg
 assert ITAS_AUDIT_DIR, f'flask.cfg missing ITAS_AUDIT_DIR'
 assert ITAS_UI_LOGFILE, f'flask.cfg missing ITAS_UI_LOGFILE'
@@ -464,8 +464,8 @@ app.config['APP_NAME'] = 'Automated Call Experience (ACE)'
 class AutoBan:
 	def __init__( self ) -> None:
 		self._lock = RLock()
-		self._fails: Dict[str,List[datetime.datetime]] = {}
-		self._bans: Dict[str,datetime.datetime] = {}
+		self._fails: dict[str,list[datetime.datetime]] = {}
+		self._bans: dict[str,datetime.datetime] = {}
 	
 	def try_auth( self, usernm: str, secret: str ) -> bool:
 		log = logger.getChild( 'AutoBan.try_auth' )
@@ -545,21 +545,7 @@ flags_path = mkdir_with_permissions( Path( ITAS_FLAGS_PATH ))
 def flag_file_path( flag: str ) -> Path:
 	return flags_path / f'{flag}.flag'
 
-# TODO FIXME: replace this with REPO_DIDS...
-DIDS = 'dids'
-dids_path = mkdir_with_permissions( Path( ITAS_REPOSITORY_FS_PATH ) / DIDS )
-def did_file_path( did: int ) -> Path:
-	return dids_path / f'{did}.did'
-
-# TODO FIXME: replace this with REPO_ANIS...
-ANIS = 'anis'
-anis_path = mkdir_with_permissions( Path( ITAS_REPOSITORY_FS_PATH ) / ANIS )
-def ani_file_path( ani: int ) -> Path:
-	return anis_path / f'{ani}.ani'
-
 voicemail_meta_path = mkdir_with_permissions( PurePosixPath( ITAS_VOICEMAIL_BOXES_PATH ))
-def voicemail_settings_path( box: Union[int,str] ) -> PurePosixPath:
-	return voicemail_meta_path / f'{box}.box'
 def voicemail_greeting_path( box: int, greeting: int ) -> PurePosixPath:
 	return voicemail_meta_path / f'{box}' / f'greeting{greeting}.wav'
 
@@ -598,20 +584,50 @@ if REPO_FACTORY == repo.RepoFs:
 	except KeyError:
 		raise Exception( f'invalid ITAS_REPOSITORY_NOFS_TYPE={ITAS_REPOSITORY_NOFS_TYPE!r}' ) from None
 
-REPO_DIDS = REPO_FACTORY( repo_config, DIDS, '.did', [
-	#repo.SqlInteger( 'id', null = False, size = 10, auto = True, primary = True ),
-	#repo.SqlText( 'name', null = True ),
-], ITAS_OWNER_USER, ITAS_OWNER_GROUP )
+REPO_DIDS = REPO_FACTORY( repo_config, 'dids', '.did', [
+	repo.SqlInteger( 'did', null = False, size = 10, auto = False, primary = True ),
+	repo.SqlText( 'tollfree', null = True ),
+	repo.SqlText( 'category', null = True ),
+	repo.SqlInteger( 'acct', size = 4, null = True ),
+	repo.SqlText( 'name', null = True ),
+	repo.SqlText( 'acct_flag', null = True ),
+	repo.SqlVarChar( 'route', size = 20, null = False ),
+	repo.SqlText( 'did_flag', null = True ),
+	repo.SqlText( 'variables', null = True ),
+	repo.SqlText( 'notes', null = True ),
+	*[
+		repo.SqlText( field.field, null = True )
+		for field in ITAS_DID_FIELDS
+	]
+], ITAS_OWNER_USER, ITAS_OWNER_GROUP, keyname = 'did' )
 
-REPO_ANIS = REPO_FACTORY( repo_config, ANIS, '.ani', [], ITAS_OWNER_USER, ITAS_OWNER_GROUP )
+REPO_ANIS = REPO_FACTORY( repo_config, 'anis', '.ani', [
+	repo.SqlInteger( 'ani', null = False, size = 10, auto = False, primary = True ),
+	repo.SqlVarChar( 'route', size = 20, null = True ),
+	repo.SqlText( 'overrides', null = True ),
+	repo.SqlText( 'notes', null = True ),
+], ITAS_OWNER_USER, ITAS_OWNER_GROUP, keyname = 'ani' )
 
 REPO_ROUTES = REPO_FACTORY( repo_config, 'routes', '.route', [
-	repo.SqlInteger( 'id', null = False, size = 10, auto = True, primary = True ),
+	repo.SqlInteger( 'route', null = False, size = 10, auto = False, primary = True ),
 	repo.SqlText( 'name', null = True ),
-	repo.SqlJson( 'json', null = False ),
-], ITAS_OWNER_USER, ITAS_OWNER_GROUP )
+	repo.SqlText( 'type', null = True ),
+	repo.SqlJson( 'nodes', null = False ),
+], ITAS_OWNER_USER, ITAS_OWNER_GROUP, keyname = 'route' )
 
-REPO_BOXES = REPO_FACTORY( repo_config, 'boxes', '.box', [], ITAS_OWNER_USER, ITAS_OWNER_GROUP )
+REPO_BOXES = REPO_FACTORY( repo_config, 'boxes', '.box', [
+	repo.SqlInteger( 'box', null = False, size = 10, auto = False, primary = True ),
+	repo.SqlText( 'name', null = True, unique = False ),
+	repo.SqlText( 'type', null = True ),
+	repo.SqlVarChar( 'pin', size = 20, null = False ),
+	repo.SqlInteger( 'max_greeting_seconds', size = 4, null = False ),
+	repo.SqlInteger( 'max_message_seconds', size = 4, null = False ),
+	repo.SqlBool( 'allow_guest_urgent', null = False ),
+	repo.SqlVarChar( 'format', size = 20, null = False ),
+	repo.SqlJson( 'branches', null = True ),
+	repo.SqlJson( 'greetingBranch', null = True ),
+	repo.SqlJson( 'delivery', null = True ),
+], ITAS_OWNER_USER, ITAS_OWNER_GROUP, keyname = 'box' )
 
 REPO_JSON_CDR = REPO_FACTORY_NOFS( repo_config, 'cdr', '.cdr', [
 	repo.SqlInteger( 'id', null = False, size = 16, auto = True, primary = True ),
@@ -620,7 +636,7 @@ REPO_JSON_CDR = REPO_FACTORY_NOFS( repo_config, 'cdr', '.cdr', [
 	repo.SqlDateTime( 'answered_stamp', null = True ),
 	repo.SqlDateTime( 'end_stamp', null = False ),
 	repo.SqlJson( 'json', null = False ),
-], ITAS_OWNER_USER, ITAS_OWNER_GROUP , auditing = False )
+], ITAS_OWNER_USER, ITAS_OWNER_GROUP, auditing = False )
 
 # CAR = Caller Activity Report
 REPO_CAR = REPO_FACTORY_NOFS( repo_config, 'car', '.car', [
@@ -633,8 +649,8 @@ REPO_CAR = REPO_FACTORY_NOFS( repo_config, 'car', '.car', [
 	repo.SqlVarChar( 'acct_name', size = ACCT_NAME_MAX_LENGTH, null = True ),
 	repo.SqlFloat( 'start', null = False ),
 	repo.SqlFloat( 'end', null = True ),
-	repo.SqlJson( 'activity',  null = False ),
-], ITAS_OWNER_USER, ITAS_OWNER_GROUP , auditing = False )
+	repo.SqlJson( 'activity', null = False ),
+], ITAS_OWNER_USER, ITAS_OWNER_GROUP, auditing = False )
 
 #endregion repo config
 #region session management
@@ -673,7 +689,7 @@ def load_user( user_id: str ) -> UserMixin:
 	#log.debug( 'user_id %r -> %r', user_id, user )
 	return user
 
-login_manager.setup_app( app )
+login_manager.init_app( app )
 
 def try_login( usernm: str, secret: str, remember: bool = False ) -> bool:
 	log = logger.getChild( 'try_login' )
@@ -825,7 +841,7 @@ def _iter_sounds( sounds: Path ) -> Iterator[str]:
 @login_required # type: ignore
 def http_sounds() -> Response:
 	return_type = accept_type()
-	sounds: List[Dict[str,str]] = []
+	sounds: list[dict[str,str]] = []
 	settings = ace_settings.load()
 	for path in map( Path, settings.freeswitch_sounds ):
 		sounds.extend( [
@@ -855,61 +871,33 @@ def http_dids() -> Response:
 	q_limit = qry_int( 'limit', 20, min = 1, max = 1000 )
 	q_offset = qry_int( 'offset', 0, min = 0 )
 	
-	q_did = request.args.get( 'did', '' ).strip()
-	q_tf = request.args.get( 'tf', '' ).strip()
-	q_acct = request.args.get( 'acct', '' ).strip()
-	q_name = request.args.get( 'name', '' ).strip()
-	q_route = request.args.get( 'route', '' ).strip()
-	q_notes = request.args.get( 'notes', '' ).strip()
+	filters: dict[str,str] = {}
+	for key in 'did tollfree acct name route notes'.split():
+		val = request.args.get( key, '' ).strip()
+		if val:
+			filters[key] = val
+	q_did = filters.get( 'did', '' )
+	q_tf = filters.get( 'tollfree', '' )
+	q_acct = filters.get( 'acct', '' )
+	q_name = filters.get( 'name', '' )
+	q_route = filters.get( 'route', '' )
+	q_notes = filters.get( 'notes', '' )
 	
-	dids: List[Dict[str,Any]] = []
-	pattern = f'*{q_did}*.did' if q_did else '*.did'
-	files = list( dids_path.glob( pattern ))
-	files.sort ( key = lambda file: file.stem )
-	skipped = 0
-	datadefs: Dict[str,Any] = {
+	datadefs: dict[str,Any] = {
 		'acct': '',
 		'name': '',
 	}
-	for file in files:
-		data: Dict[str,Any] = {}
-		if q_tf or q_acct or q_name or q_route or q_notes:
-			with file.open( 'r' ) as f:
-				try:
-					data = cast( Dict[str,Any], json.load( f ))
-				except Exception as e:
-					log.exception( f'Corrupt DID file {str(file)!r}:' )
-					data = {}
-			if q_tf and q_tf not in data.get( 'tollfree', '' ):
-				#log.debug( f'rejecting {str(file)!r} b/c {q_tf!r} not in {data.get("tollfree","")!r}' )
-				continue
-			if q_acct and q_acct not in str( data.get( 'acct', '' )):
-				#log.debug( f'rejecting {str(file)!r} b/c {q_acct!r} not in {data.get("acct","")!r}' )
-				continue
-			if q_name and q_name not in data.get( 'name', '' ):
-				#log.debug( f'rejecting {str(file)!r} b/c {q_name!r} not in {data.get("name","")!r}' )
-				continue
-			if q_route and q_route not in str( data.get( 'route', '' )):
-				#log.debug( f'rejecting {str(file)!r} b/c {q_route!r} not in {data.get("route","")!r}' )
-				continue
-			if q_notes and q_notes not in data.get( 'notes', '' ):
-				#log.debug( f'rejecting {str(file)!r} b/c {q_notes!r} not in {data.get("notes","")!r}' )
-				continue
-		if skipped < q_offset:
-			skipped += 1
-			continue
-		did2 = int( file.stem )
-		if not data:
-			with file.open( 'r' ) as f:
-				try:
-					data = cast( Dict[str,Any], json.loads( f.read() ))
-				except Exception as e:
-					log.exception( f'Corrupt DID file {str(file)!r}:' )
-					data = {}
+	
+	dids: list[dict[str,Any]] = []
+	for did, did_data in REPO_DIDS.list(
+		filters = filters,
+		limit = q_limit,
+		offset = q_offset,
+	):
+		data: dict[str,Any] = {}
+		did2 = int( did )
 		data['did'] = did2
 		dids.append({ **datadefs, **data })
-		if len( dids ) >= q_limit:
-			break
 	if return_type == 'application/json':
 		return rest_success( dids )
 	row_html = (
@@ -919,9 +907,9 @@ def http_dids() -> Response:
 		'<td><a href="/dids/{did}">{name}</a></td>'
 		'</tr>'
 	)
-	body = '\n'.join( [
+	body = '\n'.join([
 		row_html.format( **d ) for d in dids
-	] )
+	])
 	
 	did_tip = 'Performs substring search of all DIDs'
 	tf_tip = 'Performs substring search of all TF #s'
@@ -930,8 +918,8 @@ def http_dids() -> Response:
 	route_tip = 'Performs substring search of all Routes'
 	notes_tip = 'Performs substring search of all Notes'
 	
-	prevpage = urlencode( { 'did': q_did, 'tf': q_tf, 'acct': q_acct, 'name': q_name, 'route': q_route, 'notes': q_notes, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit ) } )
-	nextpage = urlencode( { 'did': q_did, 'tf': q_tf, 'acct': q_acct, 'name': q_name, 'route': q_route, 'notes': q_notes, 'limit': q_limit, 'offset': q_offset + q_limit } )
+	prevpage = urlencode({ 'did': q_did, 'tollfree': q_tf, 'acct': q_acct, 'name': q_name, 'route': q_route, 'notes': q_notes, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit )})
+	nextpage = urlencode({ 'did': q_did, 'tollfree': q_tf, 'acct': q_acct, 'name': q_name, 'route': q_route, 'notes': q_notes, 'limit': q_limit, 'offset': q_offset + q_limit })
 	return html_page(
 		'<table width="100%"><tr>',
 		'<td align="center">',
@@ -940,7 +928,7 @@ def http_dids() -> Response:
 		'<td align="center">'
 		'<form method="GET">'
 		f'<span tooltip="{html_att(did_tip)}"><input type="text" name="did" placeholder="DID" value="{html_att(q_did)}" maxlength="10" size="10" /></span>',
-		f'<span tooltip="{html_att(tf_tip)}"><input type="text" name="tf" placeholder="TF#" value="{html_att(q_tf)}" maxlength="10" size="10" /></span>',
+		f'<span tooltip="{html_att(tf_tip)}"><input type="text" name="tollfree" placeholder="TF#" value="{html_att(q_tf)}" maxlength="10" size="10" /></span>',
 		f'<span tooltip="{html_att(acct_tip)}"><input type="text" name="acct" placeholder="Acct#" value="{html_att(q_acct)}" maxlength="4" size="4" /></span>',
 		f'<span tooltip="{html_att(name_tip)}"><input type="text" name="name" placeholder="Name" value="{html_att(q_name)}" size="10" /></span>',
 		f'<span tooltip="{html_att(route_tip)}"><input type="text" name="route" placeholder="Route" value="{html_att(q_route)}" size="4" /></span>',
@@ -958,7 +946,7 @@ def http_dids() -> Response:
 		'</table>',
 	)
 
-def try_post_did( did: int, data: Dict[str,str] ) -> int:
+def try_post_did( did: int, data: dict[str,str] ) -> int:
 	log = logger.getChild( 'try_post_did' )
 	try:
 		did2 = did or int( data.get( 'did' ) or '' )
@@ -967,7 +955,7 @@ def try_post_did( did: int, data: Dict[str,str] ) -> int:
 	if len( str( did2 )) != 10:
 		raise ValidationError( 'invalid DID: must be 10 digits exactly' )
 	
-	data2: Dict[str,Union[int,str]] = {}
+	data2: dict[str,Union[int,str]] = { 'did': did2 }
 	
 	try:
 		tollfree = data.get( 'tollfree', '' )
@@ -1039,38 +1027,11 @@ def try_post_did( did: int, data: Dict[str,str] ) -> int:
 	if notes:
 		data2['notes'] = notes
 	
-	path = did_file_path( did2 )
-	if did:
-		with path.open( 'r' ) as f:
-			try:
-				olddata = json.load( f )
-			except json.JSONDecodeError:
-				log.exception( f'Corrupt DID file {str(path)!r}:' )
-				olddata = {}
-	else:
-		olddata = {}
-	keys = set( olddata.keys() ) | set( data2.keys() )
-	auditdata_: List[str] = []
-	for key in sorted( keys ):
-		oldval = coalesce( olddata.get( key ), '' )
-		newval = coalesce( data2.get( key ), '' )
-		if oldval != newval:
-			auditdata_.append( f'\t{key}: {oldval!r} -> {newval!r}' )
-		else:
-			auditdata_.append( f'\t{key}: {oldval!r} (unchanged)' )
-	auditdata = '\n'.join( auditdata_ )
-	
 	audit = new_audit()
-	
-	glue = ':\n' if auditdata else ''
 	if did:
-		audit.audit( f'Changed DID {did} at {str(path)!r}{glue}{auditdata}' )
+		REPO_DIDS.update( did2, data2, audit = audit )
 	else:
-		if path.exists():
-			raise ValidationError( f'DID already exists: {did2}' )
-		audit.audit( f'Created DID {did2} at {str(path)!r}{glue}{auditdata}' )
-	with path.open( 'w' ) as f:
-		print( repo.json_dumps( data2 ), file = f )
+		REPO_DIDS.create( did2, data2, audit = audit )
 	
 	return did2
 
@@ -1079,21 +1040,13 @@ def try_post_did( did: int, data: Dict[str,str] ) -> int:
 def http_did( did: int ) -> Response:
 	log = logger.getChild( 'http_did' )
 	return_type = accept_type()
-	path = did_file_path( did )
 	audit = new_audit()
 	
 	if request.method == 'DELETE':
-		if not path.is_file():
-			return _http_failure( return_type, 'DID not found', 404 )
 		try:
-			path.unlink()
+			REPO_DIDS.delete( did, audit = audit )
 		except Exception as e1:
 			return _http_failure( return_type, repr( e1 ), 500 )
-		else:
-			audit.audit( f'Deleted DID {did} at {str(path)!r}' )
-			if return_type == 'application/json':
-				return rest_success( [] )
-			return redirect( '/dids/' )
 	
 	err: str = ''
 	if request.method == 'POST':
@@ -1104,24 +1057,19 @@ def http_did( did: int ) -> Response:
 			err = e2.args[0]
 		except Exception as e3:
 			log.exception( 'Unexpected error posting DID:' )
-			err = repr ( e3 )
+			err = repr( e3 )
 		else:
 			if return_type == 'application/json':
 				return rest_success( [] )
-			return redirect ( f'/dids/{did2}' )
+			return redirect( f'/dids/{did2}' )
 		if return_type == 'application/json':
 			return rest_failure( err )
 	else:
 		if did:
 			try:
-				with path.open() as f:
-					raw = f.read()
-					try:
-						data = json.loads( raw )
-					except json.JSONDecodeError as e:
-						log.exception( f'Corrupt DID file {str(path)!r}:' )
-						data = {}
-						err = f'Corrupt DID file {str(path)!r}: {e!r}\nRaw File Content:\n{raw!r}'
+				data = REPO_DIDS.get_by_id( did )
+			except repo.ResourceNotFound:
+				return _http_failure( return_type, f'DID {did!r} not found', 404 )
 			except Exception as e4:
 				return _http_failure( return_type, repr( e4 ), 500 )
 			if return_type == 'application/json':
@@ -1168,7 +1116,7 @@ def http_did( did: int ) -> Response:
 	
 	settings = ace_settings.load()
 	
-	category_options: List[str] = [ '<option value="">(None)</option>' ]
+	category_options: list[str] = [ '<option value="">(None)</option>' ]
 	for cat in settings.did_categories:
 		att = ' selected' if category == cat else ''
 		category_options.append( f'<option{att}>{cat}</option>' )
@@ -1176,7 +1124,7 @@ def http_did( did: int ) -> Response:
 	try:
 		routes = REPO_ROUTES.list()
 	except Exception as e:
-		#raise e
+		log.exception( 'Error querying routes list:' )
 		return _http_failure(
 			return_type,
 			f'Error querying routes list: {e!r}',
@@ -1186,13 +1134,14 @@ def http_did( did: int ) -> Response:
 	try:
 		boxes = REPO_BOXES.list()
 	except Exception as e:
+		log.exception( 'Error querying box list:' )
 		return _http_failure(
 			return_type,
 			f'Error querying voicemail box list: {e!r}',
 			500,
 		)
 	
-	route_options: List[str] = []
+	route_options: list[str] = []
 	found = False
 	for r, routedata in routes:
 		att = ''
@@ -1277,9 +1226,9 @@ def http_did( did: int ) -> Response:
 		
 		f'<b>Notes:</b><br/><textarea name="notes" cols="80" rows="4">{html_text(str(notes))}</textarea><br/><br/>',
 	])
-	if did:
-		mtime = datetime.datetime.fromtimestamp( path.stat().st_mtime ).strftime( '%Y-%m-%d %I:%M:%S %p' )
-		html_rows.append( f'Last Modified: {html_text(mtime)}<br/><br/>' )
+	#if did:
+	#	mtime = datetime.datetime.fromtimestamp( path.stat().st_mtime ).strftime( '%Y-%m-%d %I:%M:%S %p' )
+	#	html_rows.append( f'Last Modified: {html_text(mtime)}<br/><br/>' )
 	submit = 'Save' if did else 'Create'
 	cloneparams = urlencode( data )
 	cloneaction = f"window.location='/dids/0?{cloneparams}'"
@@ -1311,12 +1260,13 @@ def http_anis() -> Response:
 	q_offset = qry_int( 'offset', 0, min = 0 )
 	
 	search = request.args.get( 'search', '' )
-	anis: List[Dict[str,int]] = []
-	pattern = f'*{search}*.ani' if search else '*.ani'
-	for f in anis_path.glob( pattern ):
-		anis.append( { 'ani': int( f.stem ) } )
-	anis.sort ( key = lambda d: d['ani'] )
-	anis = anis[q_offset:q_offset + q_limit]
+	filters: dict[str,str] = {}
+	if search:
+		filters['search'] = search
+	
+	anis: list[dict[str,int]] = []
+	for ani, _ in REPO_ANIS.list( filters = filters ):
+		anis.append({ 'ani': int( ani )})
 	if return_type == 'application/json':
 		return rest_success( anis )
 	row_html = (
@@ -1324,9 +1274,9 @@ def http_anis() -> Response:
 		'<td><a href="/anis/{ani}">{ani}</a></td>'
 		'</tr>'
 	)
-	body = '\n'.join( [
+	body = '\n'.join([
 		row_html.format( **d ) for d in anis
-	] )
+	])
 	
 	search_tip = 'Performs substring search of all ANIs'
 	
@@ -1353,7 +1303,7 @@ def http_anis() -> Response:
 		'</table>',
 	)
 
-def try_post_ani( ani: int, data: Dict[str,str] ) -> int:
+def try_post_ani( ani: int, data: dict[str,str] ) -> int:
 	log = logger.getChild( 'try_post_ani' )
 	
 	try:
@@ -1363,7 +1313,7 @@ def try_post_ani( ani: int, data: Dict[str,str] ) -> int:
 	if len( str( ani2 )) != 10:
 		raise ValidationError( 'invalid ANI: must be 10 digits exactly' )
 	
-	data2: Dict[str,Union[int,str]] = {}
+	data2: dict[str,Union[int,str]] = { 'ani': ani2 }
 	
 	try:
 		route_ = data.get( 'route', '' )
@@ -1441,18 +1391,15 @@ def try_post_ani( ani: int, data: Dict[str,str] ) -> int:
 	if notes:
 		data2['notes'] = notes
 	
-	path = ani_file_path( ani2 )
 	if ani:
-		with path.open( 'r' ) as f:
-			try:
-				olddata = json.loads( f.read() )
-			except json.JSONDecodeError:
-				log.exception( f'Corrupt ANI file: {str(path)!r}:' )
-				olddata = {}
+		try:
+			olddata = REPO_ANIS.get_by_id( ani )
+		except repo.ResourceNotFound:
+			olddata = {}
 	else:
 		olddata = {}
 	keys = set( olddata.keys() ) | set( data2.keys() )
-	auditdata_: List[str] = []
+	auditdata_: list[str] = []
 	for key in sorted( keys ):
 		oldval = coalesce( olddata.get( key ), '' )
 		newval = coalesce( data2.get( key ), '' )
@@ -1464,37 +1411,25 @@ def try_post_ani( ani: int, data: Dict[str,str] ) -> int:
 	
 	audit = new_audit()
 	
-	glue = ':\n' if auditdata else ''
 	if ani:
-		audit.audit( f'Changed ANI {ani} at {str(path)!r}{glue}{auditdata}' )
+		REPO_ANIS.update( ani2, data2, audit = audit )
 	else:
-		if path.exists():
-			raise ValidationError( f'ANI already exists: {ani2}' )
-		audit.audit( f'Created ANI {ani2} at {str(path)!r}{glue}{auditdata}' )
-	with path.open( 'w' ) as f:
-		print( repo.json_dumps( data2 ), file = f )
+		REPO_ANIS.create( ani2, data2, audit = audit )
 	
 	return ani2
 
 @app.route( '/anis/<int:ani>', methods = [ 'GET', 'POST', 'DELETE' ] )
 @login_required # type: ignore
 def http_ani( ani: int ) -> Response:
-	#log = logger.getChild( 'http_ani' )
+	log = logger.getChild( 'http_ani' )
 	return_type = accept_type()
-	path = ani_file_path( ani )
+	audit = new_audit()
 	
 	if request.method == 'DELETE':
-		if not path.is_file():
-			return _http_failure( return_type, 'ANI not found', 404 )
 		try:
-			path.unlink()
+			REPO_ANIS.delete( ani, audit = audit )
 		except Exception as e1:
 			return _http_failure( return_type, repr( e1 ), 500 )
-		else:
-			new_audit().audit( f'Deleted ANI {ani} at {str(path)!r}' )
-			if return_type == 'application/json':
-				return rest_success( [] )
-			return redirect( '/anis/' )
 	
 	err: str = ''
 	if request.method == 'POST':
@@ -1514,12 +1449,13 @@ def http_ani( ani: int ) -> Response:
 	else:
 		if ani:
 			try:
-				with path.open() as f:
-					data = json.loads( f.read() )
+				data = REPO_ANIS.get_by_id( ani )
+			except repo.ResourceNotFound:
+				return _http_failure( return_type, f'ANI {ani!r} not found', 404 )
 			except Exception as e4:
 				return _http_failure( return_type, repr( e4 ), 500 )
 			if return_type == 'application/json':
-				return rest_success( [ data ] )
+				return rest_success([ data ])
 		else:
 			data = request.args
 	
@@ -1538,14 +1474,14 @@ def http_ani( ani: int ) -> Response:
 	try:
 		routes = REPO_ROUTES.list()
 	except Exception as e:
-		#raise e
+		log.exception( 'Error querying routes list:' )
 		return _http_failure(
 			return_type,
 			f'Error querying routes list: {e!r}',
 			500,
 		)
 	
-	route_options: List[str] = [ '<option value="">(Do Nothing)</option>' ]
+	route_options: list[str] = [ '<option value="">(Do Nothing)</option>' ]
 	for r, data in routes:
 		att = ' selected' if route == r else ''
 		lbl = data.get( 'name', '(Unnamed)' )
@@ -1572,9 +1508,9 @@ def http_ani( ani: int ) -> Response:
 		
 		f'<b>Notes:</b><br/><textarea name="notes" cols="80" rows="4">{html_text(str(notes))}</textarea><br/><br/>',
 	])
-	if ani:
-		mtime = datetime.datetime.fromtimestamp( path.stat().st_mtime ).strftime( '%Y-%m-%d %I:%M:%S %p' )
-		html_rows.append( f'Last Modified: {html_text(mtime)}<br/><br/>' )
+	#if ani:
+	#	mtime = datetime.datetime.fromtimestamp( path.stat().st_mtime ).strftime( '%Y-%m-%d %I:%M:%S %p' )
+	#	html_rows.append( f'Last Modified: {html_text(mtime)}<br/><br/>' )
 	submit = 'Save' if ani else 'Create'
 	cloneparams = urlencode( data )
 	cloneaction = f"window.location='/anis/0?{cloneparams}'"
@@ -1643,7 +1579,7 @@ def http_flags() -> Response:
 		if return_type == 'application/json':
 			return rest_success( [] )
 	
-	h: List[str] = []
+	h: list[str] = []
 	def flag_form( name: str, label: str ) -> None:
 		last_modified: str = '(never)'
 		value = ''
@@ -1701,7 +1637,11 @@ def http_routes() -> Response:
 			)
 		
 		try:
-			REPO_ROUTES.create( route, { 'name': '', 'nodes': [] }, audit = new_audit() )
+			REPO_ROUTES.create( route, {
+				'route': route,
+				'name': '',
+				'nodes': [],
+			}, audit = new_audit() )
 		except repo.ResourceAlreadyExists:
 			return _http_failure(
 				return_type,
@@ -1715,7 +1655,7 @@ def http_routes() -> Response:
 				e.status_code,
 			)
 		if return_type == 'application/json':
-			return rest_success( [ { 'route': route } ] )
+			return rest_success([{ 'route': route }])
 		url = url_for( 'http_route', route = id )
 		return redirect( url )
 		# END route creation
@@ -1726,7 +1666,7 @@ def http_routes() -> Response:
 	q_route = request.args.get( 'route', '' ).strip()
 	q_name = request.args.get( 'name', '' ).strip()
 	
-	filters: Dict[str,str] = {}
+	filters: dict[str,str] = {}
 	if q_route:
 		filters['id'] = q_route
 	if q_name:
@@ -1859,12 +1799,12 @@ def http_route( route: int ) -> Response:
 		
 		if request.method == 'GET':
 			data = REPO_ROUTES.get_by_id( id_ )
-			return rest_success( [ data ] )
+			return rest_success([ data ])
 		elif request.method == 'PATCH':
 			data = inputs()
 			log.debug( data )
 			REPO_ROUTES.update( route, data, audit = new_audit() )
-			return rest_success( [ data ] )
+			return rest_success([ data ])
 		elif request.method == 'DELETE':
 			return route_delete( route )
 		else:
@@ -1934,12 +1874,9 @@ def route_delete( route: int ) -> Response:
 			raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by route {route2!r}' )
 	
 	# check if route is referenced by a voicemail box
-	for file in Path( voicemail_settings_path( 1 )).parent.glob( '*.box' ):
-		with file.open( 'r' ) as f:
-			raw = f.read()
-		box_settings = json.loads( raw ) if raw else {}
+	for box, box_settings in REPO_BOXES.list():
 		if walk_json_dicts( box_settings, json_dict_route_check ):
-			raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by voicemail box {file.stem}' )
+			raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by voicemail box {box!r}' )
 	
 	REPO_ROUTES.delete( route, audit = new_audit() )
 	return rest_success( [] )
@@ -1988,9 +1925,7 @@ def http_voicemails() -> Response:
 				400,
 			)
 		
-		path: PurePosixPath = voicemail_settings_path( box )
-		path_ = Path( path )
-		if path_.is_file():
+		if REPO_BOXES.exists( box ):
 			return _http_failure(
 				return_type,
 				f'voicemail box number {box!r} already exists',
@@ -2006,6 +1941,7 @@ def http_voicemails() -> Response:
 			digits = list( '1234567890' )
 			random.shuffle( digits )
 			settings = {
+				'box': box,
 				'pin': ''.join( digits[:8] ),
 				'max_greeting_seconds': 120, # TODO FIXME: system default?
 				'max_message_seconds': 120, # TODO FIXME: system default?
@@ -2013,19 +1949,10 @@ def http_voicemails() -> Response:
 				'format': 'mp3',
 			}
 		
-		with path_.open( 'w' ) as f:
-			f.write( repo.json_dumps( settings ))
-		chown( str( path_ ), ITAS_OWNER_USER, ITAS_OWNER_GROUP )
-		os.chmod( str( path_ ), 0o770 )
-		
-		auditdata = ''.join (
-			f'\n\t{k}={v!r}' for k, v in settings.items()
-			if k != 'pin' and v not in ( None, '' )
-		)
-		new_audit().audit( f'Created voicemail {box!r} at {str(path)!r}:{auditdata}' )
+		REPO_BOXES.create( box, settings, audit = new_audit() )
 		
 		if return_type == 'application/json':
-			return rest_success( [ { 'box': box } ] )
+			return rest_success([{ 'box': box }])
 		
 		url = url_for( 'http_voicemail', box = box )
 		log.warning( 'url=%r', url )
@@ -2039,19 +1966,15 @@ def http_voicemails() -> Response:
 	
 	q_box = request.args.get( 'box', '' ).strip()
 	q_name = request.args.get( 'name', '' ).strip()
-	
+	filters: dict[str,str] = {}
+	if q_box:
+		filters['box'] = q_box
+	if q_name:
+		filters['name'] = q_name
 	try:
-		path = voicemail_settings_path( '*' )
-		boxes: List[Dict[str,Any]] = []
-		for box_path in Path( path.parent ).glob( path.name ):
-			with box_path.open( 'r' ) as f:
-				settings = json.loads( f.read() )
-			boxid = int( box_path.stem )
-			if q_box and q_box not in str( boxid ):
-				continue
-			boxdata: Dict[str,Any] = { 'box': boxid, 'name': '(Unnamed)', **settings }
-			if q_name and q_name.lower() not in str( boxdata['name'] ).lower():
-				continue
+		boxes: list[dict[str,Any]] = []
+		for box, boxdata in REPO_BOXES.list( filters = filters, limit = q_limit, offset = q_offset ):
+			boxdata['box'] = box
 			boxes.append( boxdata )
 	except Exception as e:
 		return _http_failure(
@@ -2060,38 +1983,32 @@ def http_voicemails() -> Response:
 			500,
 		)
 	
-	boxes.sort( key = lambda box: cast( int, box['box'] ))
-	if q_offset:
-		boxes = boxes[q_offset:]
-	if q_limit:
-		boxes = boxes[:q_limit]
-	
 	if return_type == 'application/json':
 		return rest_success( boxes )
 	
 	# TODO FIXME: pagination anyone?
 	
-	row_html = '\n'.join( [
+	row_html = '\n'.join([
 		'<tr>',
 			'<td><a href="{url}">{box}</a></td>',
 			'<td><a href="{url}">{name}</a></td>',
 			'<td><button class="clone" box="{box}">Clone {box} {name}</button></td>',
 			'<td><button class="delete" box="{box}">Delete {box} {name}</button></td>',
 		'</tr>',
-	] )
-	body = '\n'.join( [
+	])
+	body = '\n'.join([
 		row_html.format(
 			box = box['box'],
 			name = box.get( 'name' ) or '(Unnamed)',
 			url = url_for( 'http_voicemail', box = box['box'] ),
 		) for box in boxes
-	] )
+	])
 	
 	box_tip = 'Performs substring search of all Box numbers'
 	name_tip = 'Performs substring search of all Box Names'
 	
-	prevpage = urlencode( { 'box': q_box, 'name': q_name, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit ) } )
-	nextpage = urlencode( { 'box': q_box, 'name': q_name, 'limit': q_limit, 'offset': q_offset + q_limit } )
+	prevpage = urlencode({ 'box': q_box, 'name': q_name, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit )})
+	nextpage = urlencode({ 'box': q_box, 'name': q_name, 'limit': q_limit, 'offset': q_offset + q_limit })
 	return html_page(
 		'<table width="100%"><tr>',
 		f'<td align="left"><a href="?{prevpage}">Prev Page</a></td>',
@@ -2177,32 +2094,22 @@ def http_voicemail( box: int ) -> Response:
 					405,
 				)
 		
-		path = Path( voicemail_settings_path( box ))
-		if not path.is_file():
+		try:
+			settings = REPO_BOXES.get_by_id( box )
+		except repo.ResourceNotFound:
 			raise HttpFailure( 'Voicemail box not found', 404 )
 		if request.method == 'GET':
-			with path.open( 'r' ) as f:
-				settings = json.loads( f.read() )
-			return rest_success( [ settings ] )
+			return rest_success([ settings ])
 		elif request.method == 'PATCH':
 			data = inputs()
 			log.debug( data )
-			with path.open( 'r' ) as f:
-				settings = json.loads( f.read() )
 			for k, v in data.items():
 				settings[k] = v
 			try:
 				validate_voicemail_settings( settings )
 			except ValidationError as e:
 				raise HttpFailure( e.args[0] ) from None
-			with path.open( 'w' ) as f:
-				f.write( repo.json_dumps( settings ))
-			
-			auditdata = ''.join (
-				f'\n\t{k}={v!r}' for k, v in settings.items()
-				if k != 'pin' and v not in ( None, '' )
-			)
-			new_audit().audit( f'Updated voicemail {box!r} at {str(path)!r}:{auditdata}' )
+			REPO_BOXES.update( box, settings, audit = new_audit() )
 			
 			return rest_success( [ settings ] )
 		elif request.method == 'DELETE':
@@ -2225,12 +2132,10 @@ def http_voicemail( box: int ) -> Response:
 					return rest_failure( f'Could not delete box {box!r} greetings: {e2!r}' )
 			
 			try:
-				path.unlink()
-			except OSError as e3:
+				REPO_BOXES.delete( box, audit = new_audit() )
+			except Exception as e3:
 				log.exception( 'Could not delete box %r settings file:', box )
 				return rest_failure( f'Could not delete box {box!r} settings file: {e3!r}' )
-			
-			new_audit().audit( f'Deleted voicemail {box!r} at {str(path)!r}' )
 			
 			return rest_success( [] )
 		else:
@@ -2257,7 +2162,7 @@ def http_settings() -> Response:
 	if return_type == 'application/json':
 		return rest_success([ asdict( settings )])
 	
-	h: List[str] = [
+	h: list[str] = [
 		'<table class="fancy" style="width:auto">',
 		'<tr><th>Field</th><th>Value</th>',
 	]
@@ -2326,7 +2231,7 @@ def http_cars() -> Response:
 	q_did = request.args.get( 'did', '' ).strip()
 	q_ani = request.args.get( 'ani', '' ).strip()
 	
-	filters: Dict[str,str] = {}
+	filters: dict[str,str] = {}
 	if q_did:
 		filters['did'] = q_did
 	if q_ani:
@@ -2350,7 +2255,7 @@ def http_cars() -> Response:
 	
 	if return_type == 'application/json':
 		return rest_success([
-			data for _, data in cars
+			{ 'id': uuid, **data } for uuid, data in cars
 		])
 	
 	row_html = '\n'.join([
@@ -2365,8 +2270,8 @@ def http_cars() -> Response:
 			'<td><a href="{url}">{end}</a></td>',
 		'</tr>',
 	])
-	body_: List[str] = []
-	for _, data in cars:
+	body_: list[str] = []
+	for uuid, data in cars:
 		try:
 			start = (
 				datetime.datetime.utcfromtimestamp( data['start'] )
@@ -2385,8 +2290,7 @@ def http_cars() -> Response:
 			)
 		except Exception as e:
 			end = repr( e )
-		uuid = data['id']
-		data2: Dict[str,Any] = dict( **data )
+		data2: dict[str,Any] = dict( **data )
 		data2['uuid'] = uuid
 		data2['start'] = start
 		data2['end'] = end
@@ -2480,7 +2384,7 @@ def http_car( uuid: str ) -> Response:
 		else:
 			duration = '(unknown)'
 		
-		html_lines: List[str] = [
+		html_lines: list[str] = [
 			'<h2>Call Activity Record:</h2>',
 			f'<b>UUID:</b> {html_text(uuid)}<br/>',
 			f'<b>DID:</b> {html_text(did)}<br/>',
@@ -2494,7 +2398,7 @@ def http_car( uuid: str ) -> Response:
 		]
 		
 		try:
-			activity: List[Dict[str,str]] = json.loads( cast( str, data.get( 'activity' )))
+			activity: list[dict[str,str]] = json.loads( cast( str, data.get( 'activity' )))
 			assert isinstance( activity, list )
 		except Exception as e:
 			log.exception( 'Error loading car activity:' )
@@ -2545,7 +2449,7 @@ def http_audits() -> Response:
 	
 	try:
 		path = Path( ITAS_AUDIT_DIR )
-		logfile_list: List[Dict[str,str]] = []
+		logfile_list: list[dict[str,str]] = []
 		for item in path.iterdir():
 			if item.is_file() and item.exists():
 				name = item.name
@@ -2563,7 +2467,7 @@ def http_audits() -> Response:
 	if q_search:
 		stop = q_offset + q_limit
 		search = q_search.lower()
-		new_list: List[Dict[str,str]] = []
+		new_list: list[dict[str,str]] = []
 		for d in logfile_list:
 			file = path / d['filename']
 			with file.open( 'r' ) as f:
@@ -2771,7 +2675,7 @@ def spawn ( target: Callable[...,Any], *args: Any, **kwargs: Any ) -> Thread:
 
 if __name__ == '__main__':
 	ace_logging.init( Path( ITAS_UI_LOGFILE ), ITAS_LOGLEVELS )
-	cmd: List[str] = sys.argv[1:2]
+	cmd: list[str] = sys.argv[1:2]
 	if cmd:
 		sys.exit( service_command( cmd[0], 'ace', 'ITAS Automated Call Engine Portal' ))
 	login_manager.init_app( app )

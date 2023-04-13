@@ -5,7 +5,7 @@ from __future__ import annotations
 # stdlib imports:
 from abc import ABCMeta, abstractmethod
 import asyncio
-from contextlib import closing
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 import json
 import logging
@@ -15,8 +15,8 @@ import re
 import sqlite3
 import threading
 from typing import (
-	Any, Callable, cast, Optional as Opt, Sequence as Seq, Tuple, Type,
-	Union,
+	Any, Callable, cast, Iterator, Optional as Opt, Sequence as Seq, Tuple,
+	Type, Union,
 )
 import uuid
 
@@ -117,6 +117,11 @@ class SqlBase( metaclass = ABCMeta ):
 		if self.index:
 			sql.append( 'CREATE INDEX "idx_{table}_{self.name}" ON "{table}" ({self.name})' )
 		return sql
+	
+	def encode_postgres( self, val: Any ) -> Any:
+		return val
+	def decode_postgres( self, val: Any ) -> Any:
+		return val
 
 
 class SqlVarChar( SqlBase ):
@@ -346,6 +351,37 @@ class SqlJson( SqlBase ):
 			'NULL' if self.null else 'NOT NULL',
 		]
 		return ' '.join( filter( None, sql ))
+	
+	def encode_postgres( self, val: Any ) -> Any:
+		return json.dumps( val )
+	def decode_postgres( self, val: Any ) -> Any:
+		return json.loads( val ) if val is not None else None
+
+
+class SqlBool( SqlBase ):
+	def __init__( self, name: str, *,
+		null: bool,
+	) -> None:
+		super().__init__( name, null = null )
+	
+	def validate( self ) -> None:
+		pass
+	
+	def to_sqlite( self ) -> str:
+		sql: list[str] = [
+			self.name,
+			'BOOL',
+			'NULL' if self.null else 'NOT NULL',
+		]
+		return ' '.join( filter( None, sql ))
+	
+	def to_postgres( self ) -> str:
+		sql: list[str] = [
+			f'"{self.name}"',
+			'BOOL',
+			'NULL' if self.null else 'NOT NULL',
+		]
+		return ' '.join( filter( None, sql ))
 
 
 class Repository( metaclass = ABCMeta ):
@@ -359,13 +395,19 @@ class Repository( metaclass = ABCMeta ):
 		fields: list[SqlBase],
 		owner_user: str,
 		owner_group: str,
+		*,
 		auditing: bool = True,
+		keyname: str = 'id',
 	) -> None:
 		assert tablename not in Repository.schemas, f'duplicate schema definition for table {tablename!r}'
 		Repository.schemas[tablename] = fields
 		self.tablename = tablename
 		self.ending = ending
 		self.auditing = auditing
+		self.keyname = keyname
+		self.fields: dict[str,SqlBase] = {
+			field.name: field for field in fields
+		}
 	
 	@abstractmethod
 	def valid_id( self, id: REPOID ) -> REPOID:
@@ -430,6 +472,18 @@ def from_type( name: str ) -> Type[Repository]:
 	cls: Type[Repository] = repo_types[name]
 	return cls
 
+def auditdata_from_update( olddata: dict[str,Any], newdata: dict[str,Any] ) -> str:
+	keys = set( olddata.keys() ) | set( newdata.keys() )
+	auditlines: list[str] = []
+	for key in sorted( keys ):
+		oldval = olddata.get( key, '' )
+		newval = newdata.get( key, '' )
+		if oldval != newval:
+			auditlines.append( f'\t{key}: {oldval!r} -> {newval!r}' )
+		else:
+			auditlines.append( f'\t{key}: {oldval!r} (unchanged)' )
+	return '\n'.join( auditlines )
+
 #endregion repo base
 #region repo sqlite
 
@@ -453,10 +507,6 @@ class RepoSqlite( Repository ):
 		if not sqlite_path.exists():
 			sqlite_path.touch()
 		cls.sqlite_path = sqlite_path
-		#with closing( cls.database.cursor() ) as cur:
-		#	#cur.execute(
-		#	#	'CREATE TABLE IF NOT EXISTS "audits" (id INTEGER PRIMARY KEY AUTOINCREMENT)' )
-		#	#cur.execute( 'CREATE TABLE IF NOT EXISTS "users" (id INTEGER PRIMARY KEY AUTOINCREMENT)' )
 	
 	def __init__( self,
 		config: Config,
@@ -465,7 +515,9 @@ class RepoSqlite( Repository ):
 		fields: list[SqlBase],
 		owner_user: str,
 		owner_group: str,
+		*,
 		auditing: bool = True,
+		keyname: str = 'id',
 	) -> None:
 		assert re.match( r'^[a-z][a-z_0-9]+$', tablename )
 		
@@ -474,7 +526,11 @@ class RepoSqlite( Repository ):
 		if not hasattr( RepoSqlite, 'sqlite_path' ):
 			RepoSqlite.setup( config )
 		
-		super().__init__( config, tablename, ending, fields, owner_user, owner_group, auditing )
+		super().__init__(
+			config, tablename, ending, fields, owner_user, owner_group,
+			auditing = auditing,
+			keyname = keyname,
+		)
 		#if not RepoSqlite.schemas:
 		#	RepoSqlite.setup( config )
 		
@@ -520,14 +576,14 @@ class RepoSqlite( Repository ):
 	def exists( self, id: REPOID ) -> bool:
 		assert isinstance( id, ( int, str )), f'invalid id={id!r}'
 		with closing( self.database.cursor() ) as cur:
-			cur.execute( f'select count(*) as "qty" from "{self.tablename}" WHERE id = ?', ( id, ) )
+			cur.execute( f'select count(*) as "qty" from "{self.tablename}" WHERE "{self.keyname}" = ?', ( id, ) )
 			row: dict[str,int] = cur.fetchone()
 		return row['qty'] > 0
 	
 	def get_by_id( self, id: REPOID ) -> dict[str,Any]:
 		assert isinstance( id, ( int, str )), f'invalid id={id!r}'
 		with closing( self.database.cursor() ) as cur:
-			cur.execute( f'select * from "{self.tablename}" WHERE id = ?', [ id ])
+			cur.execute( f'select * from "{self.tablename}" WHERE "{self.keyname}" = ?', [ id ])
 			item: Opt[dict[str,Any]] = cur.fetchone() # TODO FIXME: EOF?
 		if item is None:
 			raise ResourceNotFound( id )
@@ -546,7 +602,7 @@ class RepoSqlite( Repository ):
 			wheres: list[str] = []
 			for k, v in filters.items():
 				wheres.append( f'"{k}" like ?' )
-				params.append( f'%{v}%' )
+				params.append( f'%{str(v).replace("%","%%")}%' )
 			_where_ = f'where {" and ".join(wheres)}'
 		else:
 			_where_ = ''
@@ -558,7 +614,7 @@ class RepoSqlite( Repository ):
 				paging.append( f'offset {int(offset or 0)!r}' )
 		_paging_ = ' '.join( paging )
 		
-		orderby = orderby.strip() or 'id'
+		orderby = orderby.strip() or self.keyname
 		assert '"' not in orderby, f'invalid orderby={orderby!r}'
 		direction = 'desc' if reverse else 'asc'
 		sql = f'select * from "{self.tablename}" {_where_} order by "{orderby}" {direction} {_paging_}'
@@ -566,13 +622,13 @@ class RepoSqlite( Repository ):
 		with closing( self.database.cursor() ) as cur:
 			cur.execute( sql, params )
 			for row in cur.fetchall():
-				id = row['id']
+				id = row.pop( self.keyname )
 				items.append(( id, row ))
 		
 		return items
 	
 	def create( self, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> None:
-		sql1 = f'SELECT COUNT(*) AS "qty" FROM "{self.tablename}" WHERE "id"=?'
+		sql1 = f'SELECT COUNT(*) AS "qty" FROM "{self.tablename}" WHERE "{self.keyname}"=?'
 		conn = self.database
 		with closing( conn.cursor() ) as cur:
 			cur.execute( sql1, [ id ] )
@@ -616,8 +672,10 @@ class RepoSqlite( Repository ):
 			params.append( v )
 		_values_ = ','.join( values )
 		
+		olddata = self.get_by_id( id )
+		
 		assert '"' not in self.tablename, f'invalid tablename={self.tablename!r}'
-		sql = f'UPDATE "{self.tablename}" SET {_values_} WHERE id=?'
+		sql = f'UPDATE "{self.tablename}" SET {_values_} WHERE "{self.keyname}"=?'
 		params.append( id )
 		
 		conn = self.database
@@ -626,10 +684,7 @@ class RepoSqlite( Repository ):
 		conn.commit()
 		
 		if self.auditing:
-			auditdata = ''.join (
-				f'\n\t{k}={v!r}' for k, v in resource.items()
-				if v not in ( None, '' )
-			)
+			auditdata = auditdata_from_update( olddata, resource )
 			audit.audit( f'Updated {self.tablename} {id!r}:{auditdata}' )
 		
 		return resource
@@ -639,7 +694,7 @@ class RepoSqlite( Repository ):
 		data = self.get_by_id( id )
 		
 		assert '"' not in self.tablename, f'invalid tablename={self.tablename!r}'
-		sql = f'DELETE FROM "{self.tablename}" WHERE id=?;'
+		sql = f'DELETE FROM "{self.tablename}" WHERE "{self.keyname}"=?;'
 		
 		conn = self.database
 		with closing( conn.cursor() ) as cur:
@@ -689,7 +744,9 @@ class RepoPostgres( Repository ):
 		fields: list[SqlBase],
 		owner_user: str,
 		owner_group: str,
+		*,
 		auditing: bool = True,
+		keyname: str = 'id',
 	) -> None:
 		assert re.match( r'^[a-z][a-z_0-9]+$', tablename )
 		
@@ -698,7 +755,11 @@ class RepoPostgres( Repository ):
 		if not hasattr( RepoPostgres, 'pgsql_host' ):
 			RepoPostgres.setup( config )
 		
-		super().__init__( config, tablename, ending, fields, owner_user, owner_group, auditing )
+		super().__init__(
+			config, tablename, ending, fields, owner_user, owner_group,
+			auditing = auditing,
+			keyname = keyname,
+		)
 		#if not RepoPostgres.schemas:
 		#	RepoPostgres.setup( config )
 		
@@ -714,12 +775,10 @@ class RepoPostgres( Repository ):
 		sql: list[str] = [ f'CREATE TABLE IF NOT EXISTS "{tablename}" ({_flds_});' ]
 		sql.extend( fldsupp )
 		
-		conn = self.database
-		with closing( conn.cursor() ) as cur:
+		with self._cursor() as cur:
 			for sql_ in sql:
-				print( f'>>>>>> executing sql:\n{sql_}\n<<<<<<<<<<<<<<<<<<' )
+				#print( f'>>>>>> executing sql:\n{sql_}\n<<<<<<<<<<<<<<<<<<' )
 				cur.execute( sql_ )
-		conn.commit()
 	
 	@property
 	def database( self ) -> psycopg2.connection:
@@ -731,11 +790,24 @@ class RepoPostgres( Repository ):
 				user = self.pgsql_uid,
 				password = self.pgsql_pwd,
 				port = self.pgsql_port,
-				sslmode = None, # TODO FIXME: implement this
-				sslrootcert = None, # TODO FIXME: implement this
+				sslmode = self.pgsql_sslmode,
+				sslrootcert = self.pgsql_sslrootcert,
 			)
 			setattr( self.tls, 'conn', conn )
 		return conn
+	
+	@contextmanager
+	def _cursor( self ) -> Iterator[psycopg2._psycopg.cursor]:
+		log = logger.getChild( 'RepoPostgres._cursor' )
+		conn = self.database
+		with closing( conn.cursor() ) as cur:
+			try:
+				yield cur
+			except Exception:
+				conn.rollback()
+				raise
+			else:
+				conn.commit()
 	
 	def valid_id( self, id: REPOID ) -> REPOID:
 		log = logger.getChild( 'RepoSqlite.valid_id' )
@@ -751,8 +823,8 @@ class RepoPostgres( Repository ):
 	
 	def exists( self, id: REPOID ) -> bool:
 		assert isinstance( id, ( int, str )), f'invalid id={id!r}'
-		with closing( self.database.cursor() ) as cur:
-			cur.execute( f'select count(*) as "qty" from "{self.tablename}" WHERE id = ?', ( id, ) )
+		with self._cursor() as cur:
+			cur.execute( f'select count(*) as "qty" from "{self.tablename}" WHERE "{self.keyname}" = %s', ( id, ) )
 			hdrs: list[str] = [ desc[0] for desc in cur.description ]
 			vals: Opt[Tuple[Any,...]] = cur.fetchone()
 			row: dict[str,Any] = dict( zip( hdrs, vals )) if vals else {}
@@ -761,16 +833,23 @@ class RepoPostgres( Repository ):
 		except ( KeyError, ValueError ):
 			return False
 	
+	def _row_from_hdrs_vals( self, hdrs: list[str], vals: Tuple[Any,...] ) -> dict[str,Any]:
+		return {
+			hdr: self.fields[hdr].decode_postgres( val )
+			for hdr, val
+			in zip( hdrs, vals )
+		}
+	
 	def get_by_id( self, id: REPOID ) -> dict[str,Any]:
 		assert isinstance( id, ( int, str )), f'invalid id={id!r}'
-		with closing( self.database.cursor() ) as cur:
-			cur.execute( f'select * from "{self.tablename}" WHERE id = ?', [ id ])
+		with self._cursor() as cur:
+			cur.execute( f'select * from "{self.tablename}" WHERE "{self.keyname}" = %s', [ id ])
 			hdrs: list[str] = [ desc[0] for desc in cur.description ]
 			vals: Opt[Tuple[Any,...]] = cur.fetchone()
-			item: Opt[dict[str,Any]] = dict( zip( hdrs, vals )) if vals is not None else None
-		if item is None:
-			raise ResourceNotFound( id )
-		return item
+			if vals is None:
+				raise ResourceNotFound( id )
+			row = self._row_from_hdrs_vals( hdrs, vals )
+			return row
 	
 	def list( self,
 		filters: dict[str,str] = {},
@@ -784,8 +863,8 @@ class RepoPostgres( Repository ):
 		if filters:
 			wheres: list[str] = []
 			for k, v in filters.items():
-				wheres.append( f'"{k}" like ?' )
-				params.append( f'%{v}%' )
+				wheres.append( f'lower(cast("{k}" as varchar)) like %s' )
+				params.append( f'%{str(v).lower().replace("%","%%")}%' )
 			_where_ = f'where {" and ".join(wheres)}'
 		else:
 			_where_ = ''
@@ -797,24 +876,23 @@ class RepoPostgres( Repository ):
 				paging.append( f'offset {int(offset or 0)!r}' )
 		_paging_ = ' '.join( paging )
 		
-		orderby = orderby.strip() or 'id'
+		orderby = orderby.strip() or self.keyname
 		assert '"' not in orderby, f'invalid orderby={orderby!r}'
 		direction = 'desc' if reverse else 'asc'
 		sql = f'select * from "{self.tablename}" {_where_} order by "{orderby}" {direction} {_paging_}'
 		items: list[Tuple[REPOID,dict[str,Any]]] = []
-		with closing( self.database.cursor() ) as cur:
+		with self._cursor() as cur:
 			cur.execute( sql, params )
 			hdrs: list[str] = [ desc[0] for desc in cur.description ]
-			for row in map( lambda vals: dict( zip( hdrs, vals )), cur.fetchall() ):
-				id = row['id']
+			for row in map( lambda vals: self._row_from_hdrs_vals( hdrs, vals ), cur.fetchall() ):
+				id = row.pop( self.keyname )
 				items.append(( id, row ))
 		
 		return items
 	
 	def create( self, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> None:
-		sql1 = f'SELECT COUNT(*) AS "qty" FROM "{self.tablename}" WHERE "id"=?'
-		conn = self.database
-		with closing( conn.cursor() ) as cur:
+		sql1 = f'SELECT COUNT(*) AS "qty" FROM "{self.tablename}" WHERE "{self.keyname}"=%s'
+		with self._cursor() as cur:
 			cur.execute( sql1, [ id ])
 			hdrs: list[str] = [ desc[0] for desc in cur.description ]
 			vals: Opt[Tuple[Any,...]] = cur.fetchone()
@@ -830,8 +908,8 @@ class RepoPostgres( Repository ):
 		for key, val in resource.items():
 			assert '"' not in key, f'invalid key={key!r}'
 			keys.append( f'"{key}"' )
-			values.append( '?' )
-			params.append( val )
+			values.append( '%s' )
+			params.append( self.fields[key].encode_postgres( val ))
 		
 		_keys_ = ','.join( keys )
 		_values_ = ','.join( values )
@@ -839,10 +917,8 @@ class RepoPostgres( Repository ):
 		assert '"' not in self.tablename, f'invalid tablename={self.tablename!r}'
 		sql2 = f'INSERT INTO "{self.tablename}" ({_keys_}) VALUES ({_values_});'
 		
-		with closing( conn.cursor() ) as cur:
+		with self._cursor() as cur:
 			cur.execute( sql2, params )
-		
-		conn.commit()
 		
 		if self.auditing:
 			auditdata = ''.join (
@@ -855,24 +931,22 @@ class RepoPostgres( Repository ):
 		values: list[str] = []
 		params: list[Any] = []
 		for k, v in resource.items():
-			values.append( f'{k}=?' )
-			params.append( v )
+			values.append( f'"{k}"=%s' )
+			params.append( self.fields[k].encode_postgres( v ))
 		_values_ = ','.join( values )
 		
+		olddata = self.get_by_id( id )
+		
 		assert '"' not in self.tablename, f'invalid tablename={self.tablename!r}'
-		sql = f'UPDATE "{self.tablename}" SET {_values_} WHERE id=?'
+		sql = f'UPDATE "{self.tablename}" SET {_values_} WHERE "{self.keyname}"=%s'
 		params.append( id )
 		
 		conn = self.database
-		with closing( conn.cursor() ) as cur:
+		with self._cursor() as cur:
 			cur.execute( sql, params )
-		conn.commit()
 		
 		if self.auditing:
-			auditdata = ''.join (
-				f'\n\t{k}={v!r}' for k, v in resource.items()
-				if v not in ( None, '' )
-			)
+			auditdata = auditdata_from_update( olddata, resource )
 			audit.audit( f'Updated {self.tablename} {id!r}:{auditdata}' )
 		
 		return resource
@@ -882,12 +956,10 @@ class RepoPostgres( Repository ):
 		data = self.get_by_id( id )
 		
 		assert '"' not in self.tablename, f'invalid tablename={self.tablename!r}'
-		sql = f'DELETE FROM "{self.tablename}" WHERE id=?;'
+		sql = f'DELETE FROM "{self.tablename}" WHERE "{self.keyname}"=%s;'
 		
-		conn = self.database
-		with closing( conn.cursor() ) as cur:
+		with self._cursor() as cur:
 			cur.execute( sql, [ id ])
-		conn.commit()
 		
 		if self.auditing:
 			audit.audit( f'Deleted {self.tablename} {id!r}' )
@@ -916,13 +988,21 @@ class RepoFs( Repository ):
 		fields: list[SqlBase],
 		owner_user: str,
 		owner_group: str,
+		*,
 		auditing: bool = True,
+		keyname: str = 'id',
 	) -> None:
 		if not hasattr( RepoFs, 'base_path' ):
 			RepoFs.setup( config )
-		super().__init__( config, tablename, ending, fields, owner_user, owner_group, auditing )
+		super().__init__(
+			config, tablename, ending, fields, owner_user, owner_group,
+			auditing = auditing,
+			keyname = keyname,
+		)
 		self.path = self.base_path / tablename
-		self.path.mkdir( mode = 0o770, parents = True, exist_ok = True )
+		self.path.mkdir( mode = 0o775, parents = True, exist_ok = True )
+		chown( str( self.path ), owner_user, owner_group )
+		os.chmod( str( self.path ), 0o775 )
 		self.owner_user = owner_user
 		self.owner_group = owner_group
 	
@@ -960,9 +1040,10 @@ class RepoFs( Repository ):
 		items: list[Tuple[REPOID, dict[str, Any]]] = []
 		
 		def _filter( id: int, data: dict[str,Any] ) -> bool:
+			id2: str = str( id )
 			for k, v in filters.items():
-				if k == 'id':
-					if v not in str( id ):
+				if k == self.keyname:
+					if v not in id2:
 						return True
 				else:
 					if v.lower() not in data.get( k, '' ).lower():
@@ -980,11 +1061,15 @@ class RepoFs( Repository ):
 						log.exception( 'Error trying to load %r:', str( itemFile ))
 						data = {}
 					if not _filter( id, data ):
-						items.append( ( id, data ) )
+						items.append(( id, data ))
 		
 		if not orderby.strip():
-			orderby = 'id'
-		items = sorted( items, key = lambda kv: kv[0] if orderby == 'id' else kv[1].get( orderby ) or '' )
+			orderby = self.keyname
+		if orderby == self.keyname:
+			sorter = lambda kv: kv[0]
+		else:
+			sorter = lambda kv: kv[1].get( orderby ) or ''
+		items = sorted( items, key = sorter )
 		if reverse:
 			items = items[::-1]
 		if offset:
@@ -1010,16 +1095,14 @@ class RepoFs( Repository ):
 			audit.audit( f'Created {self.tablename} {id!r} at {str(path)!r}:{auditdata}' )
 	
 	def update( self, id: REPOID, resource: dict[str,Any] = {}, *, audit: auditing.Audit ) -> dict[str,Any]:
-		print( f'updating {resource}' )
 		path = self._path_from_id( id )
-		with path.open( 'w' ) as fileContent:
-			fileContent.write( json_dumps( resource ))
+		with path.open( 'r' ) as f:
+			olddata = json.loads( f.read() )
+		with path.open( 'w' ) as f:
+			f.write( json_dumps( resource ))
 		
 		if self.auditing:
-			auditdata = ''.join (
-				f'\n\t{k}={v!r}' for k, v in resource.items()
-				if v not in ( None, '' )
-			)
+			auditdata = auditdata_from_update( olddata, resource )
 			audit.audit( f'Changed {self.tablename} {id!r} at {str(path)!r}:{auditdata}' )
 		
 		return resource
