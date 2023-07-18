@@ -117,30 +117,26 @@ let delete_links = document.getElementsByClassName( 'delete' )
 for( let el of delete_links )
 {
 	let id = el.getAttribute( 'box' )
-	el.addEventListener(
-		'click',
-		function( event )
+	el.addEventListener( 'click', function( event ) {
+		event.preventDefault()
+		let id_confirm = prompt( `Type "${id}" to delete voicemail box ${id} and all it's greetings and messages:` )
+		if( id_confirm == id )
 		{
-			let id_confirm = prompt( `Type "${id}" to delete voicemail box ${id} and all it's greetings and messages?` )
-			if( id_confirm == id )
-			{
-				fetch(
-					`/voicemails/${id}`,
-					{
-						method: 'DELETE',
-						headers: { Accept: 'application/json' },
-					}
-				).then( data => {
-					if( !data.ok )
-					{
-						data.json().then( jdata => {
-							alert( jdata.error )
-						}).catch( error => alert( error ))
-					}
-					window.location.href = '/voicemails'
-				}).catch( error => alert( error ))
-			}
-		},
-		false,
-	)
+			fetch(
+				`/voicemails/${id}`,
+				{
+					method: 'DELETE',
+					headers: { Accept: 'application/json' },
+				}
+			).then( data => {
+				if( !data.ok )
+				{
+					data.json().then( jdata => {
+						alert( jdata.error )
+					}).catch( error => alert( error ))
+				}
+				window.location.href = '/voicemails'
+			}).catch( error => alert( error ))
+		}
+	}, false )
 }

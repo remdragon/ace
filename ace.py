@@ -1047,6 +1047,10 @@ def http_did( did: int ) -> Response:
 			REPO_DIDS.delete( did, audit = audit )
 		except Exception as e1:
 			return _http_failure( return_type, repr( e1 ), 500 )
+		else:
+			if return_type == 'application/json':
+				return rest_success( [] )
+			return redirect( '/dids/' )
 	
 	err: str = ''
 	if request.method == 'POST':
@@ -1102,9 +1106,9 @@ def http_did( did: int ) -> Response:
 					f'Bad route: {e!r}',
 					400,
 				)
-	variables = data.get( 'variables', '' )
-	did_flag = data.get( 'did_flag', '' )
-	notes = data.get( 'notes', '' )
+	variables = data.get( 'variables' ) or ''
+	did_flag = data.get( 'did_flag' ) or ''
+	notes = data.get( 'notes' ) or ''
 	
 	html_rows = [
 		'<form method="POST" enctype="application/x-www-form-urlencoded">',
@@ -1237,7 +1241,7 @@ def http_did( did: int ) -> Response:
 		'&nbsp;&nbsp;&nbsp;',
 		f'<button onclick="{cloneaction}" type="button" class="clone">Clone</button>' if did else '',
 		'&nbsp;&nbsp;&nbsp;',
-		'<button id="delete" class="delete">Delete</button>' if did else '',
+		f'<button id="delete" class="delete" did="{did}">Delete</button>' if did else '',
 		'<br/><br/>',
 		f'<font color="red"><pre>{html_text(err)}</pre></font>',
 		'<script src="/did.js"></script>',
@@ -1430,6 +1434,10 @@ def http_ani( ani: int ) -> Response:
 			REPO_ANIS.delete( ani, audit = audit )
 		except Exception as e1:
 			return _http_failure( return_type, repr( e1 ), 500 )
+		else:
+			if return_type == 'application/json':
+				return rest_success( [] )
+			return redirect( '/anis/' )
 	
 	err: str = ''
 	if request.method == 'POST':
@@ -1439,6 +1447,7 @@ def http_ani( ani: int ) -> Response:
 		except ValidationError as e2:
 			err = e2.args[0]
 		except Exception as e3:
+			log.exception( 'Unexpected error posting ANI:' )
 			err = repr( e3 )
 		else:
 			if return_type == 'application/json':
@@ -1459,9 +1468,9 @@ def http_ani( ani: int ) -> Response:
 		else:
 			data = request.args
 	
-	route = to_optional_int( data.get( 'route', '' ) or None )
-	overrides = data.get( 'overrides', '' )
-	notes = data.get( 'notes', '' )
+	route = to_optional_int( data.get( 'route' ) or None )
+	overrides = data.get( 'overrides' ) or ''
+	notes = data.get( 'notes' ) or ''
 	
 	html_rows = [
 		'<form method="POST" enctype="application/x-www-form-urlencoded">',
@@ -1519,39 +1528,11 @@ def http_ani( ani: int ) -> Response:
 		'&nbsp;&nbsp;&nbsp;',
 		f'<button onclick="{cloneaction}" type="button" class="clone">Clone</button>' if ani else '',
 		'&nbsp;&nbsp;&nbsp;',
-		'<button id="delete" class="delete">Delete</button>' if ani else '',
+		f'<button id="delete" class="delete" ani="{ani}">Delete</button>' if ani else '',
 		'<br/><br/>',
 		f'<font color="red">{err}</font>',
+		'<script src="/ani.js"></script>',
 		'</form>',
-		'''
-<script>
-var deleteButton = document.getElementById( 'delete' )
-
-deleteButton.addEventListener( 'click', function( event ) {
-	event.preventDefault()
-	if ( confirm( 'Delete this ANI? ' ) )
-	{
-		let url = window.location.href
-		fetch(
-			url,
-			{
-				method: 'DELETE',
-				headers: { Accept: 'application/json' }
-			},
-		).then( data => {
-			if ( !data.ok )
-			{
-				data.json().then( jdata => {
-					alert( jdata.error )
-				}).catch( error => alert( error ))
-			}
-			else
-				window.location.href = '/anis/'
-		}).catch( error => alert( error ))
-	}
-})
-</script>
-'''
 	] )
 	return html_page( *html_rows )
 

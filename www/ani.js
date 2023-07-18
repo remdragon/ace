@@ -2,8 +2,8 @@ var deleteButton = document.getElementById( 'delete' )
 
 deleteButton.addEventListener( 'click', function( event ) {
 	event.preventDefault()
-	let id = deleteButton.getAttribute( 'did' )
-	let id_confirm = prompt( `Type "${id}" to delete DID ${id}:` )
+	let id = deleteButton.getAttribute( 'ani' )
+	let id_confirm = prompt( `Type "${id}" to delete ANI ${id}:` )
 	if( id_confirm == id )
 	{
 		let url = window.location.href
@@ -11,9 +11,7 @@ deleteButton.addEventListener( 'click', function( event ) {
 			url,
 			{
 				method: 'DELETE',
-				headers: {
-					'Accept': 'application/json',
-				}
+				headers: { Accept: 'application/json' }
 			},
 		).then( data => {
 			if ( !data.ok )
@@ -23,7 +21,7 @@ deleteButton.addEventListener( 'click', function( event ) {
 				}).catch( error => alert( error ))
 			}
 			else
-				window.location.href = '/dids/'
+				window.location.href = '/anis/'
 		}).catch( error => alert( error ))
 	}
 })
