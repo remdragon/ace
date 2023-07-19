@@ -36,7 +36,8 @@ Loops forever if count is 0, otherwise stops after count is met`
 	},{
 		key: 'count',
 		type: 'int',
-		tooltip: 'How many times in total to execute the nodes inside here',
+		tooltip: 'How many times in total to execute the nodes inside here (use 0 for unlimited)',
+		default: 0,
 	}]
 	
 	getJson()

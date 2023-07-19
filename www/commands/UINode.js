@@ -279,9 +279,17 @@ export default class UINode
 			{
 				if( field.type === 'float' )
 					self[field.key] = parseFloat( newValue )
-				else if( field.type === 'int' )
-					self[field.key] = parseInt( newValue )
-				else if( field.type === 'boolean' )
+				else if( field.type === 'int' ) {
+					let intValue = parseInt( newValue )
+					if( isNaN( intValue )) {
+						if( 'default' in field )
+							intValue = field.default
+						else
+							intValue = null
+					}
+					console.log( 'newValue=', newValue, ', intValue=', intValue )
+					self[field.key] = intValue
+				} else if( field.type === 'boolean' )
 					self[field.key] = parseBoolean( newValue )
 				else
 				{
