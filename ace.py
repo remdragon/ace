@@ -30,14 +30,14 @@ import tempfile
 from threading import RLock, Thread
 from time import sleep
 from typing import(
-	Any, Callable, cast, Iterator, Optional as Opt,
+	Any, Callable, cast, Dict, Iterator, Optional as Opt,
 	Type, TypeVar, TYPE_CHECKING, Union,
 )
 from urllib.parse import urlencode, urlparse
 import uuid
 
 # 3rd-party imports:
-import accept_types # type: ignore # pip install accept-types
+import accept_types # pip install accept-types
 from flask import( # pip install flask
 	Flask, jsonify, request, Response,
 	send_from_directory, session, url_for,
@@ -254,7 +254,7 @@ def accept_type(
 ) -> str:
 	#log = logger.getChild( 'accept_type' )
 	accept_header: str = request.headers.get( 'Accept' ) or 'text/html'
-	return_type: str = accept_types.get_best_match( accept_header, accepted_types )
+	return_type: str = accept_types.get_best_match( accept_header, accepted_types ) or 'text/html'
 	assert isinstance( return_type, str ), f'invalid return_type={return_type!r}'
 	#log.debug( 'accept_header=%r, accepted_types=%r, return_type=%r', accept_header, accepted_types, return_type )
 	return return_type
@@ -283,7 +283,7 @@ def _http_failure( return_type: str, error: str, status_code: int = 400 ) -> Res
 
 def inputs() -> dict[str,Any]:
 	if request.content_type == 'application/json':
-		return cast( dict[str,Any], request.json )
+		return cast( Dict[str,Any], request.json )
 	else:
 		return request.form
 
@@ -1954,8 +1954,8 @@ def http_voicemails() -> Response:
 		filters['name'] = q_name
 	try:
 		boxes: list[dict[str,Any]] = []
-		for box, boxdata in REPO_BOXES.list( filters = filters, limit = q_limit, offset = q_offset ):
-			boxdata['box'] = box
+		for box2, boxdata in REPO_BOXES.list( filters = filters, limit = q_limit, offset = q_offset ):
+			boxdata['box'] = int( box2 )
 			boxes.append( boxdata )
 	except Exception as e:
 		return _http_failure(
