@@ -12,7 +12,7 @@
 # stdlib imports:
 from __future__ import annotations
 from dataclasses import asdict, fields
-import datetime
+import datetime # don't replace this with "from datetime import ..." b/c eval(flask.cfg)
 import html
 import json
 import logging
@@ -888,16 +888,17 @@ def http_dids() -> Response:
 		'name': '',
 	}
 	
-	dids: list[dict[str,Any]] = []
-	for did, did_data in REPO_DIDS.list(
-		filters = filters,
-		limit = q_limit,
-		offset = q_offset,
-	):
-		data: dict[str,Any] = {}
-		did2 = int( did )
-		data['did'] = did2
-		dids.append({ **datadefs, **data })
+	with repo.Connector() as ctr:
+		dids: list[dict[str,Any]] = []
+		for did, did_data in REPO_DIDS.list( ctr,
+			filters = filters,
+			limit = q_limit,
+			offset = q_offset,
+		):
+			data: dict[str,Any] = {}
+			did2 = int( did )
+			data['did'] = did2
+			dids.append({ **datadefs, **data })
 	if return_type == 'application/json':
 		return rest_success( dids )
 	row_html = (
@@ -946,7 +947,7 @@ def http_dids() -> Response:
 		'</table>',
 	)
 
-def try_post_did( did: int, data: dict[str,str] ) -> int:
+def try_post_did( ctr: repo.Connector, did: int, data: dict[str,str] ) -> int:
 	log = logger.getChild( 'try_post_did' )
 	try:
 		did2 = did or int( data.get( 'did' ) or '' )
@@ -1029,9 +1030,9 @@ def try_post_did( did: int, data: dict[str,str] ) -> int:
 	
 	audit = new_audit()
 	if did:
-		REPO_DIDS.update( did2, data2, audit = audit )
+		REPO_DIDS.update( ctr, did2, data2, audit = audit )
 	else:
-		REPO_DIDS.create( did2, data2, audit = audit )
+		REPO_DIDS.create( ctr, did2, data2, audit = audit )
 	
 	return did2
 
@@ -1042,108 +1043,109 @@ def http_did( did: int ) -> Response:
 	return_type = accept_type()
 	audit = new_audit()
 	
-	if request.method == 'DELETE':
+	with repo.Connector() as ctr:
+		if request.method == 'DELETE':
+			try:
+				REPO_DIDS.delete( ctr, did, audit = audit )
+			except Exception as e1:
+				return _http_failure( return_type, repr( e1 ), 500 )
+			else:
+				if return_type == 'application/json':
+					return rest_success( [] )
+				return redirect( '/dids/' )
+		
+		err: str = ''
+		if request.method == 'POST':
+			data = inputs()
+			try:
+				did2 = try_post_did( ctr, did, data )
+			except ValidationError as e2:
+				err = e2.args[0]
+			except Exception as e3:
+				log.exception( 'Unexpected error posting DID:' )
+				err = repr( e3 )
+			else:
+				if return_type == 'application/json':
+					return rest_success( [] )
+				return redirect( f'/dids/{did2}' )
+			if return_type == 'application/json':
+				return rest_failure( err )
+		else:
+			if did:
+				try:
+					data = REPO_DIDS.get_by_id( ctr, did )
+				except repo.ResourceNotFound:
+					return _http_failure( return_type, f'DID {did!r} not found', 404 )
+				except Exception as e4:
+					return _http_failure( return_type, repr( e4 ), 500 )
+				if return_type == 'application/json':
+					return rest_success([ data ])
+			else:
+				data = request.args
+		
+		tollfree: str = data.get( 'tollfree' ) or ''
+		category: str = data.get( 'category' ) or ''
+		acct: str = data.get( 'acct' ) or ''
+		name: str = data.get( 'name' ) or ''
+		acct_flag = data.get( 'acct_flag', '' )
+		route_: str = str( data.get( 'route' ) or '' ).strip()
+		if route_:
+			if route_.startswith( 'V' ):
+				try:
+					_ = int( route_[1:] )
+				except ValueError as e:
+					return _http_failure(
+						return_type,
+						f'Bad route: {e!r}',
+						400,
+					)
+			else:
+				try:
+					route = to_optional_int( route_ )
+				except ValueError as e:
+					return _http_failure(
+						return_type,
+						f'Bad route: {e!r}',
+						400,
+					)
+		variables = data.get( 'variables' ) or ''
+		did_flag = data.get( 'did_flag' ) or ''
+		notes = data.get( 'notes' ) or ''
+		
+		html_rows = [
+			'<form method="POST" enctype="application/x-www-form-urlencoded">',
+		]
+		if not did:
+			did_html = f'<input type="text" name="did" value="{html_att(data.get("did",""))}" size="{DID_MAX_LENGTH+1!r}" maxlength="{DID_MAX_LENGTH!r}"/>'
+		else:
+			did_html = html_text( str( did ))
+		
+		settings = ace_settings.load()
+		
+		category_options: list[str] = [ '<option value="">(None)</option>' ]
+		for cat in settings.did_categories:
+			att = ' selected' if category == cat else ''
+			category_options.append( f'<option{att}>{cat}</option>' )
+		
 		try:
-			REPO_DIDS.delete( did, audit = audit )
-		except Exception as e1:
-			return _http_failure( return_type, repr( e1 ), 500 )
-		else:
-			if return_type == 'application/json':
-				return rest_success( [] )
-			return redirect( '/dids/' )
-	
-	err: str = ''
-	if request.method == 'POST':
-		data = inputs()
+			routes = REPO_ROUTES.list( ctr )
+		except Exception as e:
+			log.exception( 'Error querying routes list:' )
+			return _http_failure(
+				return_type,
+				f'Error querying routes list: {e!r}',
+				500,
+			)
+		
 		try:
-			did2 = try_post_did( did, data )
-		except ValidationError as e2:
-			err = e2.args[0]
-		except Exception as e3:
-			log.exception( 'Unexpected error posting DID:' )
-			err = repr( e3 )
-		else:
-			if return_type == 'application/json':
-				return rest_success( [] )
-			return redirect( f'/dids/{did2}' )
-		if return_type == 'application/json':
-			return rest_failure( err )
-	else:
-		if did:
-			try:
-				data = REPO_DIDS.get_by_id( did )
-			except repo.ResourceNotFound:
-				return _http_failure( return_type, f'DID {did!r} not found', 404 )
-			except Exception as e4:
-				return _http_failure( return_type, repr( e4 ), 500 )
-			if return_type == 'application/json':
-				return rest_success([ data ])
-		else:
-			data = request.args
-	
-	tollfree: str = data.get( 'tollfree' ) or ''
-	category: str = data.get( 'category' ) or ''
-	acct: str = data.get( 'acct' ) or ''
-	name: str = data.get( 'name' ) or ''
-	acct_flag = data.get( 'acct_flag', '' )
-	route_: str = str( data.get( 'route' ) or '' ).strip()
-	if route_:
-		if route_.startswith( 'V' ):
-			try:
-				_ = int( route_[1:] )
-			except ValueError as e:
-				return _http_failure(
-					return_type,
-					f'Bad route: {e!r}',
-					400,
-				)
-		else:
-			try:
-				route = to_optional_int( route_ )
-			except ValueError as e:
-				return _http_failure(
-					return_type,
-					f'Bad route: {e!r}',
-					400,
-				)
-	variables = data.get( 'variables' ) or ''
-	did_flag = data.get( 'did_flag' ) or ''
-	notes = data.get( 'notes' ) or ''
-	
-	html_rows = [
-		'<form method="POST" enctype="application/x-www-form-urlencoded">',
-	]
-	if not did:
-		did_html = f'<input type="text" name="did" value="{html_att(data.get("did",""))}" size="{DID_MAX_LENGTH+1!r}" maxlength="{DID_MAX_LENGTH!r}"/>'
-	else:
-		did_html = html_text( str( did ))
-	
-	settings = ace_settings.load()
-	
-	category_options: list[str] = [ '<option value="">(None)</option>' ]
-	for cat in settings.did_categories:
-		att = ' selected' if category == cat else ''
-		category_options.append( f'<option{att}>{cat}</option>' )
-	
-	try:
-		routes = REPO_ROUTES.list()
-	except Exception as e:
-		log.exception( 'Error querying routes list:' )
-		return _http_failure(
-			return_type,
-			f'Error querying routes list: {e!r}',
-			500,
-		)
-	
-	try:
-		boxes = REPO_BOXES.list()
-	except Exception as e:
-		log.exception( 'Error querying box list:' )
-		return _http_failure(
-			return_type,
-			f'Error querying voicemail box list: {e!r}',
-			500,
-		)
+			boxes = REPO_BOXES.list( ctr )
+		except Exception as e:
+			log.exception( 'Error querying box list:' )
+			return _http_failure(
+				return_type,
+				f'Error querying voicemail box list: {e!r}',
+				500,
+			)
 	
 	route_options: list[str] = []
 	found = False
@@ -1269,8 +1271,9 @@ def http_anis() -> Response:
 		filters['search'] = search
 	
 	anis: list[dict[str,int]] = []
-	for ani, _ in REPO_ANIS.list( filters = filters ):
-		anis.append({ 'ani': int( ani )})
+	with repo.Connector() as ctr:
+		for ani, _ in REPO_ANIS.list( ctr, filters = filters ):
+			anis.append({ 'ani': int( ani )})
 	if return_type == 'application/json':
 		return rest_success( anis )
 	row_html = (
@@ -1284,8 +1287,8 @@ def http_anis() -> Response:
 	
 	search_tip = 'Performs substring search of all ANIs'
 	
-	prevpage = urlencode( { 'search': search, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit ) } )
-	nextpage = urlencode( { 'search': search, 'limit': q_limit, 'offset': q_offset + q_limit } )
+	prevpage = urlencode({ 'search': search, 'limit': q_limit, 'offset': max( 0, q_offset - q_limit )})
+	nextpage = urlencode({ 'search': search, 'limit': q_limit, 'offset': q_offset + q_limit })
 	return html_page(
 		'<table width="100%"><tr>',
 		f'<td align="left"><a href="?{prevpage}">Prev Page</a></td>',
@@ -1307,7 +1310,7 @@ def http_anis() -> Response:
 		'</table>',
 	)
 
-def try_post_ani( ani: int, data: dict[str,str] ) -> int:
+def try_post_ani( ctr: repo.Connector, ani: int, data: dict[str,str] ) -> int:
 	log = logger.getChild( 'try_post_ani' )
 	
 	try:
@@ -1361,7 +1364,7 @@ def try_post_ani( ani: int, data: dict[str,str] ) -> int:
 		except ValueError:
 			raise ValidationError( f'DID Overrides line {lineno} invalid: Route must be numeric' ) from None
 		
-		if not REPO_ROUTES.exists( route ):
+		if not REPO_ROUTES.exists( ctr, route ):
 			raise ValidationError( f'DID Overrides line {lineno} invalid: Route {route!r} does not exist' )
 		
 		try:
@@ -1397,7 +1400,7 @@ def try_post_ani( ani: int, data: dict[str,str] ) -> int:
 	
 	if ani:
 		try:
-			olddata = REPO_ANIS.get_by_id( ani )
+			olddata = REPO_ANIS.get_by_id( ctr, ani )
 		except repo.ResourceNotFound:
 			olddata = {}
 	else:
@@ -1411,14 +1414,14 @@ def try_post_ani( ani: int, data: dict[str,str] ) -> int:
 			auditdata_.append( f'\t{key}: {oldval!r} -> {newval!r}' )
 		else:
 			auditdata_.append( f'\t{key}: {oldval!r} (unchanged)' )
-	auditdata = '\n'.join ( auditdata_ )
+	auditdata = '\n'.join( auditdata_ )
 	
 	audit = new_audit()
 	
 	if ani:
-		REPO_ANIS.update( ani2, data2, audit = audit )
+		REPO_ANIS.update( ctr, ani2, data2, audit = audit )
 	else:
-		REPO_ANIS.create( ani2, data2, audit = audit )
+		REPO_ANIS.create( ctr, ani2, data2, audit = audit )
 	
 	return ani2
 
@@ -1429,66 +1432,67 @@ def http_ani( ani: int ) -> Response:
 	return_type = accept_type()
 	audit = new_audit()
 	
-	if request.method == 'DELETE':
-		try:
-			REPO_ANIS.delete( ani, audit = audit )
-		except Exception as e1:
-			return _http_failure( return_type, repr( e1 ), 500 )
-		else:
-			if return_type == 'application/json':
-				return rest_success( [] )
-			return redirect( '/anis/' )
-	
-	err: str = ''
-	if request.method == 'POST':
-		data = inputs()
-		try:
-			ani2 = try_post_ani( ani, data )
-		except ValidationError as e2:
-			err = e2.args[0]
-		except Exception as e3:
-			log.exception( 'Unexpected error posting ANI:' )
-			err = repr( e3 )
-		else:
-			if return_type == 'application/json':
-				return rest_success( [] )
-			return redirect( f'/anis/{ani2}' )
-		if return_type == 'application/json':
-			return rest_failure( err )
-	else:
-		if ani:
+	with repo.Connector() as ctr:
+		if request.method == 'DELETE':
 			try:
-				data = REPO_ANIS.get_by_id( ani )
-			except repo.ResourceNotFound:
-				return _http_failure( return_type, f'ANI {ani!r} not found', 404 )
-			except Exception as e4:
-				return _http_failure( return_type, repr( e4 ), 500 )
+				REPO_ANIS.delete( ctr, ani, audit = audit )
+			except Exception as e1:
+				return _http_failure( return_type, repr( e1 ), 500 )
+			else:
+				if return_type == 'application/json':
+					return rest_success( [] )
+				return redirect( '/anis/' )
+		
+		err: str = ''
+		if request.method == 'POST':
+			data = inputs()
+			try:
+				ani2 = try_post_ani( ctr, ani, data )
+			except ValidationError as e2:
+				err = e2.args[0]
+			except Exception as e3:
+				log.exception( 'Unexpected error posting ANI:' )
+				err = repr( e3 )
+			else:
+				if return_type == 'application/json':
+					return rest_success( [] )
+				return redirect( f'/anis/{ani2}' )
 			if return_type == 'application/json':
-				return rest_success([ data ])
+				return rest_failure( err )
 		else:
-			data = request.args
-	
-	route = to_optional_int( data.get( 'route' ) or None )
-	overrides = data.get( 'overrides' ) or ''
-	notes = data.get( 'notes' ) or ''
-	
-	html_rows = [
-		'<form method="POST" enctype="application/x-www-form-urlencoded">',
-	]
-	if not ani:
-		ani_html = f'<input type="text" name="ani" value="{html_att(data.get("ani",""))}" size="11" maxlength="10"/>'
-	else:
-		ani_html = html_text( str( ani ))
-	
-	try:
-		routes = REPO_ROUTES.list()
-	except Exception as e:
-		log.exception( 'Error querying routes list:' )
-		return _http_failure(
-			return_type,
-			f'Error querying routes list: {e!r}',
-			500,
-		)
+			if ani:
+				try:
+					data = REPO_ANIS.get_by_id( ctr, ani )
+				except repo.ResourceNotFound:
+					return _http_failure( return_type, f'ANI {ani!r} not found', 404 )
+				except Exception as e4:
+					return _http_failure( return_type, repr( e4 ), 500 )
+				if return_type == 'application/json':
+					return rest_success([ data ])
+			else:
+				data = request.args
+		
+		route = to_optional_int( data.get( 'route' ) or None )
+		overrides = data.get( 'overrides' ) or ''
+		notes = data.get( 'notes' ) or ''
+		
+		html_rows = [
+			'<form method="POST" enctype="application/x-www-form-urlencoded">',
+		]
+		if not ani:
+			ani_html = f'<input type="text" name="ani" value="{html_att(data.get("ani",""))}" size="11" maxlength="10"/>'
+		else:
+			ani_html = html_text( str( ani ))
+		
+		try:
+			routes = REPO_ROUTES.list( ctr )
+		except Exception as e:
+			log.exception( 'Error querying routes list:' )
+			return _http_failure(
+				return_type,
+				f'Error querying routes list: {e!r}',
+				500,
+			)
 	
 	route_options: list[str] = [ '<option value="">(Do Nothing)</option>' ]
 	for r, data in routes:
@@ -1605,68 +1609,70 @@ def http_routes() -> Response:
 	log = logger.getChild( 'http_routes' )
 	return_type = accept_type()
 	
-	if request.method == 'POST':
-		# BEGIN route creation
-		inp = inputs()
-		try:
-			route = int( inp.get( 'route', '' ).strip() )
-		except ValueError as e:
-			return _http_failure(
-				return_type,
-				f'invalid route number: {e!r}',
-				400,
-			)
+	with repo.Connector() as ctr:
+		if request.method == 'POST':
+			# BEGIN route creation
+			inp = inputs()
+			try:
+				route = int( inp.get( 'route', '' ).strip() )
+			except ValueError as e:
+				return _http_failure(
+					return_type,
+					f'invalid route number: {e!r}',
+					400,
+				)
+			
+			try:
+				REPO_ROUTES.create( ctr, route, {
+					'route': route,
+					'name': '',
+					'nodes': [],
+				}, audit = new_audit() )
+			except repo.ResourceAlreadyExists:
+				return _http_failure(
+					return_type,
+					'resource already exists',
+					400,
+				)
+			except HttpFailure as e:
+				return _http_failure(
+					return_type,
+					e.error,
+					e.status_code,
+				)
+			if return_type == 'application/json':
+				return rest_success([{ 'route': route }])
+			url = url_for( 'http_route', route = id )
+			return redirect( url )
+			# END route creation
 		
+		q_limit = qry_int( 'limit', 20, min = 1, max = 1000 )
+		q_offset = qry_int( 'offset', 0, min = 0 )
+		
+		q_route = request.args.get( 'route', '' ).strip()
+		q_name = request.args.get( 'name', '' ).strip()
+		
+		filters: dict[str,str] = {}
+		if q_route:
+			filters['id'] = q_route
+		if q_name:
+			filters['name'] = q_name
+		
+		# BEGIN route list
 		try:
-			REPO_ROUTES.create( route, {
-				'route': route,
-				'name': '',
-				'nodes': [],
-			}, audit = new_audit() )
-		except repo.ResourceAlreadyExists:
+			routes = list( REPO_ROUTES.list( ctr,
+				filters,
+				limit = q_limit,
+				offset = q_offset,
+			))
+		except Exception as e:
+			log.exception( 'Error querying routes list:' )
 			return _http_failure(
 				return_type,
-				'resource already exists',
-				400,
+				f'Error querying routes list: {e!r}',
+				500,
 			)
-		except HttpFailure as e:
-			return _http_failure(
-				return_type,
-				e.error,
-				e.status_code,
-			)
-		if return_type == 'application/json':
-			return rest_success([{ 'route': route }])
-		url = url_for( 'http_route', route = id )
-		return redirect( url )
-		# END route creation
 	
-	q_limit = qry_int( 'limit', 20, min = 1, max = 1000 )
-	q_offset = qry_int( 'offset', 0, min = 0 )
-	
-	q_route = request.args.get( 'route', '' ).strip()
-	q_name = request.args.get( 'name', '' ).strip()
-	
-	filters: dict[str,str] = {}
-	if q_route:
-		filters['id'] = q_route
-	if q_name:
-		filters['name'] = q_name
-	
-	# BEGIN route list
-	try:
-		routes = list( REPO_ROUTES.list( 
-			filters,
-			limit = q_limit,
-			offset = q_offset,
-		))
-	except Exception as e:
-		log.exception( 'Error querying routes list:' )
-		return _http_failure(
-			return_type,
-			f'Error querying routes list: {e!r}',
-			500,
-		)
 	if return_type == 'application/json':
 		return rest_success([{
 			'route': id,
@@ -1778,18 +1784,19 @@ def http_route( route: int ) -> Response:
 		except ValueError as e1:
 			raise HttpFailure( f'invalid route={route!r}: {e1!r}' ).with_traceback( e1.__traceback__ ) from None
 		
-		if request.method == 'GET':
-			data = REPO_ROUTES.get_by_id( id_ )
-			return rest_success([ data ])
-		elif request.method == 'PATCH':
-			data = inputs()
-			log.debug( data )
-			REPO_ROUTES.update( route, data, audit = new_audit() )
-			return rest_success([ data ])
-		elif request.method == 'DELETE':
-			return route_delete( route )
-		else:
-			return rest_failure( f'request method {request.method} not implemented yet', 405 )
+		with repo.Connector() as ctr:
+			if request.method == 'GET':
+				data = REPO_ROUTES.get_by_id( ctr, id_ )
+				return rest_success([ data ])
+			elif request.method == 'PATCH':
+				data = inputs()
+				log.debug( data )
+				REPO_ROUTES.update( ctr, route, data, audit = new_audit() )
+				return rest_success([ data ])
+			elif request.method == 'DELETE':
+				return route_delete( ctr, route )
+			else:
+				return rest_failure( f'request method {request.method} not implemented yet', 405 )
 	except HttpFailure as e2:
 		return _http_failure(
 			return_type,
@@ -1797,14 +1804,14 @@ def http_route( route: int ) -> Response:
 			e2.status_code,
 		)
 
-def route_delete( route: int ) -> Response:
+def route_delete( ctr: repo.Connector, route: int ) -> Response:
 	assert isinstance( route, int ) and route > 0, f'invalid route={route!r}'
 	# check if route even exists:
-	if not REPO_ROUTES.exists( route ):
+	if not REPO_ROUTES.exists( ctr, route ):
 		raise HttpFailure( f'Route {route!r} does not exist', 404 )
 	
 	# check if route is referenced by any DID
-	for did, did_data in REPO_DIDS.list():
+	for did, did_data in REPO_DIDS.list( ctr ):
 		try:
 			did_route_ = cast( Opt[Union[int,str]], did_data.get( 'route' ))
 			did_route: Opt[int] = int( did_route_ ) if did_route_ is not None else None
@@ -1815,7 +1822,7 @@ def route_delete( route: int ) -> Response:
 				raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by DID {did}' )
 	
 	# check if route is referenced by an ANI
-	for ani, ani_data in REPO_ANIS.list():
+	for ani, ani_data in REPO_ANIS.list( ctr ):
 		try:
 			route_ = cast( Opt[Union[int,str]], ani_data.get( 'route' ))
 			ani_route = int( route_ ) if route_ is not None else None
@@ -1848,18 +1855,18 @@ def route_delete( route: int ) -> Response:
 				return True
 		return None
 	
-	for route2, route_settings in REPO_ROUTES.list():
+	for route2, route_settings in REPO_ROUTES.list( ctr ):
 		if route == route2:
 			continue
 		if walk_json_dicts( route_settings, json_dict_route_check ):
 			raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by route {route2!r}' )
 	
 	# check if route is referenced by a voicemail box
-	for box, box_settings in REPO_BOXES.list():
+	for box, box_settings in REPO_BOXES.list( ctr ):
 		if walk_json_dicts( box_settings, json_dict_route_check ):
 			raise HttpFailure( f'Cannot delete route {route!r} - it is referenced by voicemail box {box!r}' )
 	
-	REPO_ROUTES.delete( route, audit = new_audit() )
+	REPO_ROUTES.delete( ctr, route, audit = new_audit() )
 	return rest_success( [] )
 
 #endregion http - routes
@@ -1894,75 +1901,76 @@ def http_voicemails() -> Response:
 	log = logger.getChild( 'http_voicemails' )
 	return_type = accept_type()
 	
-	if request.method == 'POST':
-		# BEGIN voicemail box creation
-		inp = inputs()
-		try:
-			box = int( inp.get( 'box', '' ).strip() )
-		except ValueError as e:
-			return _http_failure(
-				return_type,
-				f'invalid box number: {e!r}',
-				400,
-			)
-		
-		if REPO_BOXES.exists( box ):
-			return _http_failure(
-				return_type,
-				f'voicemail box number {box!r} already exists',
-			)
-		
-		settings = inp.get( 'settings', None )
-		if settings:
+	with repo.Connector() as ctr:
+		if request.method == 'POST':
+			# BEGIN voicemail box creation
+			inp = inputs()
 			try:
-				validate_voicemail_settings( settings )
-			except ValidationError as e:
-				return _http_failure( return_type, e.args[0] )
-		else:
-			digits = list( '1234567890' )
-			random.shuffle( digits )
-			settings = {
-				'box': box,
-				'pin': ''.join( digits[:8] ),
-				'max_greeting_seconds': 120, # TODO FIXME: system default?
-				'max_message_seconds': 120, # TODO FIXME: system default?
-				'allow_guest_urgent': True,
-				'format': 'mp3',
-			}
+				box = int( inp.get( 'box', '' ).strip() )
+			except ValueError as e:
+				return _http_failure(
+					return_type,
+					f'invalid box number: {e!r}',
+					400,
+				)
+			
+			if REPO_BOXES.exists( ctr, box ):
+				return _http_failure(
+					return_type,
+					f'voicemail box number {box!r} already exists',
+				)
+			
+			settings = inp.get( 'settings', None )
+			if settings:
+				try:
+					validate_voicemail_settings( settings )
+				except ValidationError as e:
+					return _http_failure( return_type, e.args[0] )
+			else:
+				digits = list( '1234567890' )
+				random.shuffle( digits )
+				settings = {
+					'box': box,
+					'pin': ''.join( digits[:8] ),
+					'max_greeting_seconds': 120, # TODO FIXME: system default?
+					'max_message_seconds': 120, # TODO FIXME: system default?
+					'allow_guest_urgent': True,
+					'format': 'mp3',
+				}
+			
+			REPO_BOXES.create( ctr, box, settings, audit = new_audit() )
+			
+			if return_type == 'application/json':
+				return rest_success([{ 'box': box }])
+			
+			url = url_for( 'http_voicemail', box = box )
+			log.warning( 'url=%r', url )
+			return redirect( url )
+			# END voicemail box creation
 		
-		REPO_BOXES.create( box, settings, audit = new_audit() )
+		# BEGIN voicemail boxes list
 		
-		if return_type == 'application/json':
-			return rest_success([{ 'box': box }])
+		q_limit = qry_int( 'limit', 20, min = 1, max = 1000 )
+		q_offset = qry_int( 'offset', 0, min = 0 )
 		
-		url = url_for( 'http_voicemail', box = box )
-		log.warning( 'url=%r', url )
-		return redirect( url )
-		# END voicemail box creation
-	
-	# BEGIN voicemail boxes list
-	
-	q_limit = qry_int( 'limit', 20, min = 1, max = 1000 )
-	q_offset = qry_int( 'offset', 0, min = 0 )
-	
-	q_box = request.args.get( 'box', '' ).strip()
-	q_name = request.args.get( 'name', '' ).strip()
-	filters: dict[str,str] = {}
-	if q_box:
-		filters['box'] = q_box
-	if q_name:
-		filters['name'] = q_name
-	try:
-		boxes: list[dict[str,Any]] = []
-		for box2, boxdata in REPO_BOXES.list( filters = filters, limit = q_limit, offset = q_offset ):
-			boxdata['box'] = int( box2 )
-			boxes.append( boxdata )
-	except Exception as e:
-		return _http_failure(
-			return_type,
-			f'Error querying voicemail boxes list: {e!r}',
-			500,
-		)
+		q_box = request.args.get( 'box', '' ).strip()
+		q_name = request.args.get( 'name', '' ).strip()
+		filters: dict[str,str] = {}
+		if q_box:
+			filters['box'] = q_box
+		if q_name:
+			filters['name'] = q_name
+		try:
+			boxes: list[dict[str,Any]] = []
+			for box2, boxdata in REPO_BOXES.list( ctr, filters = filters, limit = q_limit, offset = q_offset ):
+				boxdata['box'] = int( box2 )
+				boxes.append( boxdata )
+		except Exception as e:
+			return _http_failure(
+				return_type,
+				f'Error querying voicemail boxes list: {e!r}',
+				500,
+			)
 	
 	if return_type == 'application/json':
 		return rest_success( boxes )
@@ -2075,52 +2083,53 @@ def http_voicemail( box: int ) -> Response:
 					405,
 				)
 		
-		try:
-			settings = REPO_BOXES.get_by_id( box )
-		except repo.ResourceNotFound:
-			raise HttpFailure( 'Voicemail box not found', 404 )
-		if request.method == 'GET':
-			return rest_success([ settings ])
-		elif request.method == 'PATCH':
-			data = inputs()
-			log.debug( data )
-			for k, v in data.items():
-				settings[k] = v
+		with repo.Connector() as ctr:
 			try:
-				validate_voicemail_settings( settings )
-			except ValidationError as e:
-				raise HttpFailure( e.args[0] ) from None
-			REPO_BOXES.update( box, settings, audit = new_audit() )
-			
-			return rest_success( [ settings ] )
-		elif request.method == 'DELETE':
-			msgs_path = Path( voicemail_box_msgs_path( box ))
-			log.warning( f'msgs_path={msgs_path!r}' )
-			if msgs_path.is_dir():
+				settings = REPO_BOXES.get_by_id( ctr, box )
+			except repo.ResourceNotFound:
+				raise HttpFailure( 'Voicemail box not found', 404 )
+			if request.method == 'GET':
+				return rest_success([ settings ])
+			elif request.method == 'PATCH':
+				data = inputs()
+				log.debug( data )
+				for k, v in data.items():
+					settings[k] = v
 				try:
-					shutil.rmtree( str( msgs_path ))
-				except OSError as e1:
-					log.exception( 'Could not delete box %r messages:', box )
-					return rest_failure( f'Could not delete box {box!r} messages: {e1!r}' )
-			
-			greetings_path = Path( voicemail_greeting_path( box, 1 )).parent
-			log.warning( f'greetings_path={greetings_path!r}' )
-			if greetings_path.is_dir():
+					validate_voicemail_settings( settings )
+				except ValidationError as e:
+					raise HttpFailure( e.args[0] ) from None
+				REPO_BOXES.update( ctr, box, settings, audit = new_audit() )
+				
+				return rest_success( [ settings ] )
+			elif request.method == 'DELETE':
+				msgs_path = Path( voicemail_box_msgs_path( box ))
+				log.warning( f'msgs_path={msgs_path!r}' )
+				if msgs_path.is_dir():
+					try:
+						shutil.rmtree( str( msgs_path ))
+					except OSError as e1:
+						log.exception( 'Could not delete box %r messages:', box )
+						return rest_failure( f'Could not delete box {box!r} messages: {e1!r}' )
+				
+				greetings_path = Path( voicemail_greeting_path( box, 1 )).parent
+				log.warning( f'greetings_path={greetings_path!r}' )
+				if greetings_path.is_dir():
+					try:
+						shutil.rmtree( str( greetings_path ))
+					except OSError as e2:
+						log.exception( 'Could not delete box %r greetings:', box )
+						return rest_failure( f'Could not delete box {box!r} greetings: {e2!r}' )
+				
 				try:
-					shutil.rmtree( str( greetings_path ))
-				except OSError as e2:
-					log.exception( 'Could not delete box %r greetings:', box )
-					return rest_failure( f'Could not delete box {box!r} greetings: {e2!r}' )
-			
-			try:
-				REPO_BOXES.delete( box, audit = new_audit() )
-			except Exception as e3:
-				log.exception( 'Could not delete box %r settings file:', box )
-				return rest_failure( f'Could not delete box {box!r} settings file: {e3!r}' )
-			
-			return rest_success( [] )
-		else:
-			return rest_failure( f'invalid request method={request.method!r}' )
+					REPO_BOXES.delete( ctr, box, audit = new_audit() )
+				except Exception as e3:
+					log.exception( 'Could not delete box %r settings file:', box )
+					return rest_failure( f'Could not delete box {box!r} settings file: {e3!r}' )
+				
+				return rest_success( [] )
+			else:
+				return rest_failure( f'invalid request method={request.method!r}' )
 	except HttpFailure as e:
 		return _http_failure(
 			return_type,
@@ -2218,21 +2227,22 @@ def http_cars() -> Response:
 	if q_ani:
 		filters['ani'] = q_ani
 	
-	try:
-		cars = list( REPO_CAR.list(
-			filters,
-			limit = q_limit,
-			offset = q_offset,
-			orderby = 'start',
-			reverse = True,
-		))
-	except Exception as e:
-		log.exception( 'Error querying car list:' )
-		return _http_failure(
-			return_type,
-			f'Error querying car list: {e!r}',
-			500,
-		)
+	with repo.Connector() as ctr:
+		try:
+			cars = list( REPO_CAR.list( ctr,
+				filters,
+				limit = q_limit,
+				offset = q_offset,
+				orderby = 'start',
+				reverse = True,
+			))
+		except Exception as e:
+			log.exception( 'Error querying car list:' )
+			return _http_failure(
+				return_type,
+				f'Error querying car list: {e!r}',
+				500,
+			)
 	
 	if return_type == 'application/json':
 		return rest_success([
@@ -2264,7 +2274,7 @@ def http_cars() -> Response:
 			start = repr( e )
 		try:
 			end = (
-				datetime.datetime.utcfromtimestamp( data['end'] )
+				datetime.utcfromtimestamp( data['end'] )
 				.replace( tzinfo = datetime.timezone.utc ) # assign correct tz
 				.astimezone() # convert to local time
 				.strftime( '%Y-%m-%d %H:%M:%S.%f%z' )
@@ -2325,7 +2335,8 @@ def http_car( uuid: str ) -> Response:
 		except ValueError as e1:
 			raise HttpFailure( f'invalid uuid={uuid!r}: {e1!r}' ).with_traceback( e1.__traceback__ ) from None
 		
-		data = REPO_CAR.get_by_id( id_ )
+		with repo.Connector() as ctr:
+			data = REPO_CAR.get_by_id( ctr, id_ )
 		
 		if return_type == 'application/json':
 			return rest_success([ data ])
@@ -2588,7 +2599,7 @@ def _uepoch_to_timestamp( uepoch: Union[int,str] ) -> str:
 	return float_datetime.strftime( '%Y-%m-%d %H:%M:%S.%f' )
 
 
-def _cdr_vacuum() -> None:
+def _cdr_vacuum( ctr: repo.Connector ) -> None:
 	log = logger.getChild( 'cdr_processor._vacuum' )
 	assert ITAS_FREESWITCH_JSON_CDR_PATH
 	path = Path( ITAS_FREESWITCH_JSON_CDR_PATH )
@@ -2607,7 +2618,7 @@ def _cdr_vacuum() -> None:
 				answered_stamp = _uepoch_to_timestamp(data['variables']['answered_uepoch'])
 				end_stamp = _uepoch_to_timestamp(data['variables']['end_uepoch'])
 				try:
-					REPO_JSON_CDR.create( call_uuid, {
+					REPO_JSON_CDR.create( ctr, call_uuid, {
 						'call_uuid': call_uuid,
 						'start_stamp': start_stamp,
 						'answered_stamp': answered_stamp,
@@ -2628,19 +2639,20 @@ def cdr_processor() -> None:
 	log = logger.getChild( 'cdr_processor' )
 	while running:
 		try:
-			_cdr_vacuum()
+			with repo.Connector() as ctr:
+				_cdr_vacuum( ctr )
 		except Exception:
 			log.exception( 'CDR processor exception:' )
 		sleep( 60 )
 
-def spawn ( target: Callable[...,Any], *args: Any, **kwargs: Any ) -> Thread:
-	def _target ( *args: Any, **kwargs: Any ) -> Any:
-		log = logger.getChild ( 'spawn._target' )
+def spawn( target: Callable[...,Any], *args: Any, **kwargs: Any ) -> Thread:
+	def _target( *args: Any, **kwargs: Any ) -> Any:
+		log = logger.getChild( 'spawn._target' )
 		try:
-			return target ( *args, **kwargs )
+			return target( *args, **kwargs )
 		except Exception:
-			log.exception ( 'Unhandled exception exit from thread:' )
-	thread = Thread (
+			log.exception( 'Unhandled exception exit from thread:' )
+	thread = Thread(
 		target = _target,
 		args = args,
 		kwargs = kwargs,

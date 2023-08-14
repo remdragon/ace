@@ -22,6 +22,7 @@ class CAR:
 	activity: Any
 
 async def create(
+	ctr: repo.Connector,
 	repo: repo.AsyncRepository,
 	uuid: str,
 	did: str,
@@ -31,7 +32,7 @@ async def create(
 ) -> None:
 	if start is None:
 		start = datetime.now().astimezone()
-	await repo.create( uuid,
+	await repo.create( ctr, uuid,
 		{
 			'id': uuid,
 			'did': did,
@@ -43,23 +44,32 @@ async def create(
 		audit = auditing.NoAudit(),
 	)
 
-async def activity( repo: repo.AsyncRepository, lock: MPLock, uuid: str,
+async def activity(
+	ctr: repo.Connector,
+	repo: repo.AsyncRepository,
+	lock: MPLock,
+	uuid: str,
 	description: str,
 ) -> None:
 	with lock:
-		record = await repo.get_by_id( uuid )
+		record = await repo.get_by_id( ctr, uuid )
 		activity: List[Dict[str,str]] = json.loads( record['activity'] )
 		activity.append({
 			'time': datetime.now().astimezone().strftime( '%H:%M:%S.%f' ),
 			'description': description
 		})
 		record['activity'] = json.dumps( activity )
-		await repo.update( uuid, record, audit = auditing.NoAudit() )
+		await repo.update( ctr, uuid, record, audit = auditing.NoAudit() )
 
-async def finish( repo: repo.AsyncRepository, uuid: str, end: Opt[datetime] = None ) -> None:
+async def finish(
+	ctr: repo.Connector,
+	repo: repo.AsyncRepository,
+	uuid: str,
+	end: Opt[datetime] = None,
+) -> None:
 	if end is None:
 		end = datetime.now().astimezone()
-	await repo.update( uuid,
+	await repo.update( ctr, uuid,
 		{
 			'end': end.astimezone( timezone.utc ).timestamp(),
 		},

@@ -381,7 +381,8 @@ class State( metaclass = ABCMeta ):
 	route: int
 	goto_uuid: Opt[str] = None
 	
-	def __init__( self, esl: ESL, uuid: str ) -> None:
+	def __init__( self, ctr: repo.Connector, esl: ESL, uuid: str ) -> None:
+		self.ctr = ctr
 		self.esl = esl
 		self.uuid = uuid
 		self.state = EXEC
@@ -516,7 +517,7 @@ class State( metaclass = ABCMeta ):
 		raise ValueError( f'Expecting {name!r} of type convertable to int/float but got {value!r}' )
 	
 	async def car_activity( self, msg: str ) -> None:
-		await ace_car.activity(
+		await ace_car.activity( self.ctr,
 			self.config.repo_car,
 			self.config.car_mplock,
 			self.uuid,
@@ -524,7 +525,7 @@ class State( metaclass = ABCMeta ):
 		)
 	
 	async def load_route( self, route: int ) -> Dict[str,Any]:
-		return await self.config.repo_routes.get_by_id( route )
+		return await self.config.repo_routes.get_by_id( self.ctr, route )
 	
 	async def exec_branch( self, action: ACTION, which: str, pagd: Opt[PAGD], *, log: logging.Logger ) -> RESULT:
 		branch: BRANCH = cast( BRANCH, expect( dict, action.get( which ), default = {} ))
@@ -951,8 +952,14 @@ class CallState( State ):
 	box: Opt[int] = None # set to an integer if we're inside of a specific voicemail box
 	hangup_on_exit: bool = True
 	
-	def __init__( self, esl: ESL, uuid: str, did: str, ani: str ) -> None:
-		super().__init__( esl, uuid )
+	def __init__( self,
+		ctr: repo.Connector,
+		esl: ESL,
+		uuid: str,
+		did: str,
+		ani: str,
+	) -> None:
+		super().__init__( ctr, esl, uuid )
 		self.did = did
 		self.ani = ani
 	
@@ -975,7 +982,7 @@ class CallState( State ):
 		log = logger.getChild( 'CallState.try_ani' )
 		
 		try:
-			data = await self.config.repo_anis.get_by_id( self.ani )
+			data = await self.config.repo_anis.get_by_id( self.ctr, self.ani )
 		except repo.ResourceNotFound as e:
 			log.debug( 'no config found for ani %r', self.ani )
 			await self.car_activity( f'no ANI config for {self.ani!r}' )
@@ -1019,7 +1026,7 @@ class CallState( State ):
 	async def try_did( self, ani_route: Opt[Union[int,str]] ) -> Tuple[Opt[Union[int,str]],Opt[Dict[str,Any]]]:
 		log = logger.getChild( 'CallState.try_did' )
 		try:
-			data = await self.config.repo_dids.get_by_id( self.did )
+			data = await self.config.repo_dids.get_by_id( self.ctr, self.did )
 		except repo.ResourceNotFound as e:
 			log.debug( 'no config found for did %r', self.did )
 			await self.car_activity( f'no DID config for {self.did!r}' )
@@ -1030,7 +1037,7 @@ class CallState( State ):
 		if acct_num is not None or acct_name:
 			await self.esl.uuid_setvar( self.uuid, 'ace-acct-num', str( acct_num or '' ))
 			await self.esl.uuid_setvar( self.uuid, 'ace-acct-name', str( acct_name or '' ))
-			await self.config.repo_car.update( self.uuid,
+			await self.config.repo_car.update( self.ctr, self.uuid,
 				{
 					'acct_num': acct_num,
 					'acct_name': acct_name,
@@ -2168,7 +2175,7 @@ class CallState( State ):
 			await self.car_activity( f'notify starting for box {box!r} named {boxsettings.get("name")!r}' )
 			esl = ESL()
 			await esl.connect_to( settings.esl_host, settings.esl_port, settings.esl_pass )
-			state = NotifyState( esl, self.uuid, box, msg, boxsettings, settings.vm_checkin )
+			state = NotifyState( self.ctr, esl, self.uuid, box, msg, boxsettings, settings.vm_checkin )
 			delivery = boxsettings.get( 'delivery' ) or {}
 			nodes = delivery.get( 'nodes' ) or []
 			await state.exec_top_actions( nodes )
@@ -2185,8 +2192,16 @@ class CallState( State ):
 
 
 class NotifyState( State ):
-	def __init__( self, esl: ESL, uuid: str, box: int, msg: MSG, boxsettings: BOXSETTINGS, checkin: str ) -> None:
-		super().__init__( esl, uuid )
+	def __init__( self,
+		ctr: repo.Connector,
+		esl: ESL,
+		uuid: str,
+		box: int,
+		msg: MSG,
+		boxsettings: BOXSETTINGS,
+		checkin: str,
+	) -> None:
+		super().__init__( ctr, esl, uuid )
 		self.box = box
 		self.msg = msg
 		self.boxsettings = boxsettings
@@ -2464,144 +2479,145 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 	log = logger.getChild( '_handler' )
 	esl = ESL()
 	state: Opt[CallState] = None
-	try:
-		headers: Dict[str,str] = await esl.connect_from( reader, writer )
-		
-		await asyncio.sleep( 0.5 ) # wait for media to establish
-		
-		#for k, v in headers.items():
-		#	print( f'{k!r}: {v!r}' )
-		uuid = headers['Unique-ID']
-		did = headers.get( 'ace-destination' ) or headers['Caller-Destination-Number']
-		ani = headers['Caller-ANI']
-		cpn = '' # TODO FIXME what field has this?
-		log.debug( 'uuid=%r raw did=%r ani=%r', uuid, did, ani )
-		
-		did = normalize_phone_number( did )
-		ani = normalize_phone_number( ani )
-		log.debug( 'uuid=%r normalized did=%r ani=%r', uuid, did, ani )
-		
-		await ace_car.create( State.config.repo_car, uuid, did, ani, cpn )
-		
-		log.debug( 'calling myevents' )
-		await esl.myevents()
-		await esl.filter( 'Unique-ID', uuid )
-		await esl.event_plain_all()
-		
-		r1 = await esl.linger()
-		log.debug( 'linger reply-text=%r, body=%r', r1.reply_text, r1.reply_body )
-		
-		state = CallState( esl, uuid, did, ani )
-		
-		if did.startswith( '*95' ): # direct to voicemail with greeting
-			box = int( did[3:].strip() )
-			await state.car_activity( f'_handler: *95 direct access to box {box!r} w/ default greeting behavior' )
-			routedata = {
-				#'type': 'root_route',
-				'nodes': [{
-					'type': 'voicemail',
-					'box': box,
-					'greeting_override': '',
-				}]
-			}
-		elif did.startswith( '*99' ): # direct to voicemail with no greeting
-			box = int( did[3:].strip() )
-			await state.car_activity( f'_handler: *99 direct access to box {box!r} w/ no greeting' )
-			routedata = {
-				#'type': 'root_route',
-				'nodes': [{
-					'type': 'voicemail',
-					'box': box,
-					'greeting_override': 'X',
-				}]
-			}
-		else:
-			ani_route = await state.try_ani()
-			route, didinfo = await state.try_did( ani_route )
-			if route:
-				await state.car_activity( f'_handler: setting channel variable "route"={route!r}' )
-				await esl.uuid_setvar( uuid, 'route', str( route ))
-			if didinfo is not None:
-				await state.set_preannounce( didinfo )
+	with repo.Connector() as ctr:
+		try:
+			headers: Dict[str,str] = await esl.connect_from( reader, writer )
 			
-			if not route:
-				log.error( 'no route to execute: route=%r', route )
-				cause1: Final = 'UNALLOCATED_NUMBER'
-				await state.car_activity( f'_handler: hangup call with {cause1!r} b/c no route was found' )
-				await util.hangup( esl, uuid, cause1, 'ace_engine._handler#1' )
-				return
+			await asyncio.sleep( 0.5 ) # wait for media to establish
 			
-			route_ = str( route or '' )
-			if route_.startswith( 'V' ):
-				box_ = route_[1:]
-				try:
-					box = int( box_ )
-				except ValueError:
-					log.error( 'Could not interpret %r as an integer vm box #', box_ )
-					cause2: Final = 'UNALLOCATED_NUMBER'
-					await state.car_activity( f'_handler: hangup call with {cause2!r} b/c {box_!r} not an integer vm box #' )
-					await util.hangup( esl, uuid, cause2, 'ace_engine._handler#2' )
-					return
-				await state.car_activity( f'_handler: routing call directly to vm box {box!r}' )
+			#for k, v in headers.items():
+			#	print( f'{k!r}: {v!r}' )
+			uuid = headers['Unique-ID']
+			did = headers.get( 'ace-destination' ) or headers['Caller-Destination-Number']
+			ani = headers['Caller-ANI']
+			cpn = '' # TODO FIXME what field has this?
+			log.debug( 'uuid=%r raw did=%r ani=%r', uuid, did, ani )
+			
+			did = normalize_phone_number( did )
+			ani = normalize_phone_number( ani )
+			log.debug( 'uuid=%r normalized did=%r ani=%r', uuid, did, ani )
+			
+			await ace_car.create( ctr, State.config.repo_car, uuid, did, ani, cpn )
+			
+			log.debug( 'calling myevents' )
+			await esl.myevents()
+			await esl.filter( 'Unique-ID', uuid )
+			await esl.event_plain_all()
+			
+			r1 = await esl.linger()
+			log.debug( 'linger reply-text=%r, body=%r', r1.reply_text, r1.reply_body )
+			
+			state = CallState( ctr, esl, uuid, did, ani )
+			
+			if did.startswith( '*95' ): # direct to voicemail with greeting
+				box = int( did[3:].strip() )
+				await state.car_activity( f'_handler: *95 direct access to box {box!r} w/ default greeting behavior' )
 				routedata = {
 					#'type': 'root_route',
 					'nodes': [{
 						'type': 'voicemail',
 						'box': box,
+						'greeting_override': '',
+					}]
+				}
+			elif did.startswith( '*99' ): # direct to voicemail with no greeting
+				box = int( did[3:].strip() )
+				await state.car_activity( f'_handler: *99 direct access to box {box!r} w/ no greeting' )
+				routedata = {
+					#'type': 'root_route',
+					'nodes': [{
+						'type': 'voicemail',
+						'box': box,
+						'greeting_override': 'X',
 					}]
 				}
 			else:
-				try:
-					routedata = await state.config.repo_routes.get_by_id( route )
-				except repo.ResourceNotFound:
-					log.error( 'route does not exist: route=%r', route )
-					await state.car_activity( '_handler: hangup call because route {route!r} does not exist' )
-					await util.hangup( esl, uuid, 'UNALLOCATED_NUMBER', 'ace_engine._handler#3' )
+				ani_route = await state.try_ani()
+				route, didinfo = await state.try_did( ani_route )
+				if route:
+					await state.car_activity( f'_handler: setting channel variable "route"={route!r}' )
+					await esl.uuid_setvar( uuid, 'route', str( route ))
+				if didinfo is not None:
+					await state.set_preannounce( didinfo )
+				
+				if not route:
+					log.error( 'no route to execute: route=%r', route )
+					cause1: Final = 'UNALLOCATED_NUMBER'
+					await state.car_activity( f'_handler: hangup call with {cause1!r} b/c no route was found' )
+					await util.hangup( esl, uuid, cause1, 'ace_engine._handler#1' )
 					return
+				
+				route_ = str( route or '' )
+				if route_.startswith( 'V' ):
+					box_ = route_[1:]
+					try:
+						box = int( box_ )
+					except ValueError:
+						log.error( 'Could not interpret %r as an integer vm box #', box_ )
+						cause2: Final = 'UNALLOCATED_NUMBER'
+						await state.car_activity( f'_handler: hangup call with {cause2!r} b/c {box_!r} not an integer vm box #' )
+						await util.hangup( esl, uuid, cause2, 'ace_engine._handler#2' )
+						return
+					await state.car_activity( f'_handler: routing call directly to vm box {box!r}' )
+					routedata = {
+						#'type': 'root_route',
+						'nodes': [{
+							'type': 'voicemail',
+							'box': box,
+						}]
+					}
+				else:
+					try:
+						routedata = await state.config.repo_routes.get_by_id( ctr, route )
+					except repo.ResourceNotFound:
+						log.error( 'route does not exist: route=%r', route )
+						await state.car_activity( '_handler: hangup call because route {route!r} does not exist' )
+						await util.hangup( esl, uuid, 'UNALLOCATED_NUMBER', 'ace_engine._handler#3' )
+						return
+			
+			nodes = cast( ACTIONS, routedata.get( 'nodes' ) or [] )
+			r = await state.exec_top_actions( nodes )
+			log.info( 'route %r exited with %r', route, r )
+			await state.car_activity( f'_handler: route {route!r} exited with {r!r}' )
+			
+			if state.hangup_on_exit:
+				#try:
+				#	await esl.uuid_setvar( uuid, ACE_STATE, STATE_KILL )
+				#except TimeoutError:
+				#	log.warning( 'timeout waiting for uuid_setvar' )
+				cause3: Final = 'NORMAL_CLEARING'
+				log.debug( 'hangup call with %r', cause3 )
+				await state.car_activity( f'hangup call with {cause3!r}' )
+				try:
+					await util.hangup( esl, uuid, cause3, 'ace_engine._handler' )
+				except TimeoutError:
+					log.warning( 'timeout waiting for hangup request' )
+			else:
+				await state.car_activity( f'NOT hangup call because hangup_on_exit={state.hangup_on_exit!r}' )
+				#cause = 'NORMAL_CLEARING'
+				#log.debug( 'hangup call with %r because route exited with %r and we have no way to signal inband lua yet', cause, r )
+				#await esl.uuid_setvar( uuid, ACE_STATE, STATE_CONTINUE )
 		
-		nodes = cast( ACTIONS, routedata.get( 'nodes' ) or [] )
-		r = await state.exec_top_actions( nodes )
-		log.info( 'route %r exited with %r', route, r )
-		await state.car_activity( f'_handler: route {route!r} exited with {r!r}' )
-		
-		if state.hangup_on_exit:
-			#try:
-			#	await esl.uuid_setvar( uuid, ACE_STATE, STATE_KILL )
-			#except TimeoutError:
-			#	log.warning( 'timeout waiting for uuid_setvar' )
-			cause3: Final = 'NORMAL_CLEARING'
-			log.debug( 'hangup call with %r', cause3 )
-			await state.car_activity( f'hangup call with {cause3!r}' )
-			try:
-				await util.hangup( esl, uuid, cause3, 'ace_engine._handler' )
-			except TimeoutError:
-				log.warning( 'timeout waiting for hangup request' )
-		else:
-			await state.car_activity( f'NOT hangup call because hangup_on_exit={state.hangup_on_exit!r}' )
-			#cause = 'NORMAL_CLEARING'
-			#log.debug( 'hangup call with %r because route exited with %r and we have no way to signal inband lua yet', cause, r )
-			#await esl.uuid_setvar( uuid, ACE_STATE, STATE_CONTINUE )
-	
-	except AcdConnected as e1:
-		log.info( f'call processing finished because {e1!r}' )
-		if state is not None:
-			await state.car_activity( f'call processing finished because {e1!r}' )
-	except ChannelHangup as e2:
-		log.warning( repr( e2 ))
-		if state is not None:
-			await state.car_activity( f'call processing finished because {e2!r}' )
-	except Exception as e3:
-		log.exception( 'Unexpected error:' )
-		if state is not None:
-			await state.car_activity( f'call processing aborted with {e3!r}' )
-	finally:
-		try:
+		except AcdConnected as e1:
+			log.info( f'call processing finished because {e1!r}' )
 			if state is not None:
-				await ace_car.finish( State.config.repo_car, uuid )
-			log.debug( 'closing down client' )
-			await esl.close()
-		except Exception:
-			log.exception( 'Unexpected error in finally handling:' )
+				await state.car_activity( f'call processing finished because {e1!r}' )
+		except ChannelHangup as e2:
+			log.warning( repr( e2 ))
+			if state is not None:
+				await state.car_activity( f'call processing finished because {e2!r}' )
+		except Exception as e3:
+			log.exception( 'Unexpected error:' )
+			if state is not None:
+				await state.car_activity( f'call processing aborted with {e3!r}' )
+		finally:
+			try:
+				if state is not None:
+					await ace_car.finish( ctr, State.config.repo_car, uuid )
+				log.debug( 'closing down client' )
+				await esl.close()
+			except Exception:
+				log.exception( 'Unexpected error in finally handling:' )
 
 async def _server(
 	config: Config,

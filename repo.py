@@ -13,7 +13,9 @@ import os
 from pathlib import Path
 import re
 import sqlite3
+import sys
 import threading
+from types import TracebackType
 from typing import (
 	Any, Callable, cast, Iterator, Optional as Opt, Sequence as Seq, Tuple,
 	Type, Union,
@@ -22,7 +24,13 @@ import uuid
 
 # 3rd-party imports:
 import psycopg2 # pip install psycopg2
-from typing_extensions import Literal, TypeAlias # pip install typing-extensions
+from typing_extensions import Literal, TypeAlias # pip install typing_extensions
+
+if __name__ == '__main__':
+	sys.path.append( 'incpy' )
+
+# incpy imports
+from safe_exit import safe_exit
 
 # local imports:
 import auditing
@@ -43,6 +51,78 @@ def json_dumps( data: Any ) -> str:
 	return json.dumps( data, indent = '\t', separators = ( ',', ': ' ))
 
 #endregion globals/exceptions
+#region connector
+
+
+class Connector:
+	pg_conns: dict[str,psycopg2.connection]
+	sqlite_conns: dict[str,sqlite3.Connection]
+	
+	def __enter__( self ) -> Connector:
+		self.pg_conns = {}
+		self.sqlite_conns = {}
+		return self
+	
+	@safe_exit
+	def __exit__( self,
+		exc_type: Opt[Type[BaseException]],
+		exc_val: Opt[BaseException],
+		exc_tb: Opt[TracebackType],
+	) -> Literal[False]:
+		log = logger.getChild( 'Connector.__exit__' )
+		
+		for pgcon in self.pg_conns.values():
+			try:
+				pgcon.close()
+			except Exception:
+				log.exception( 'Error closing postgres connection:' )
+		del self.pg_conns
+		
+		for sql3con in self.sqlite_conns.values():
+			try:
+				sql3con.close()
+			except Exception:
+				log.exception( 'Error closing sqlite3 connection:' )
+		del self.sqlite_conns
+		
+		return False
+	
+	def postgres( self,
+		host: str,
+		database: str,
+		user: str,
+		password: str,
+		port: int,
+		sslmode: Opt[Literal['disable','allow','prefer','require','verify-ca','verify-full']],
+		sslrootcert: Opt[Path],
+	) -> psycopg2.connection:
+		assert hasattr( self, 'pg_conns' ), 'Attempt to use Connector outside of with context'
+		key = f'{host}:{port}:{database}'
+		conn = self.pg_conns.get( key )
+		if conn is None:
+			conn = psycopg2.connect(
+				host = host,
+				database = database,
+				user = user,
+				password = password,
+				port = port,
+				sslmode = sslmode,
+				sslrootcert = sslrootcert,
+			)
+			self.pg_conns[key] = conn
+		return conn
+	
+	def sqlite( self, path: str ) -> sqlite3.Connection:
+		assert hasattr( self, 'sqlite_conns' ), 'Attempt to use Connector outside of with context'
+		conn = self.sqlite_conns.get( path )
+		if conn is None:
+			conn = sqlite3.connect( path )
+			setattr( conn, 'row_factory', dict_factory )
+			self.sqlite_conns[path] = conn
+		return conn
+
+
+#endregion connector
 #region repo base
 
 
@@ -415,19 +495,20 @@ class Repository( metaclass = ABCMeta ):
 		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.valid_id' )
 	
 	@abstractmethod
-	def exists( self, id: REPOID ) -> bool:
+	def exists( self, ctr: Connector, id: REPOID ) -> bool:
 		# does the indicated id exist?
 		cls = type( self )
 		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.exists' )
 	
 	@abstractmethod
-	def get_by_id( self, id: REPOID ) -> dict[str, Any]:
+	def get_by_id( self, ctr: Connector, id: REPOID ) -> dict[str, Any]:
 		# Return single dictionary by id
 		cls = type( self )
 		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.get_by_id' )
 	
 	@abstractmethod
 	def list( self,
+		ctr: Connector,
 		filters: dict[str,str] = {},
 		*,
 		limit: Opt[int] = None,
@@ -440,19 +521,19 @@ class Repository( metaclass = ABCMeta ):
 		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.list' )
 	
 	@abstractmethod
-	def create( self, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> None:
+	def create( self, ctr: Connector, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> None:
 		# Persist new dictionary and return it
 		cls = type( self )
 		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.create' )
 	
 	@abstractmethod
-	def update( self, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> dict[str,Any]:
+	def update( self, ctr: Connector, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> dict[str,Any]:
 		# Update by id and return updated dict
 		cls = type( self )
 		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.update' )
 	
 	@abstractmethod
-	def delete( self, id: REPOID, *, audit: auditing.Audit ) -> dict[str,Any]:
+	def delete( self, ctr: Connector, id: REPOID, *, audit: auditing.Audit ) -> dict[str,Any]:
 		# delete by id and return deleted dict
 		cls = type( self )
 		raise NotImplementedError( f'{cls.__module__}.{cls.__name__}.delete' )
@@ -546,20 +627,15 @@ class RepoSqlite( Repository ):
 		sql: list[str] = [ f'CREATE TABLE IF NOT EXISTS "{tablename}" ({_flds_});' ]
 		sql.extend( fldsupp )
 		
-		conn = self.database
-		with closing( conn.cursor() ) as cur:
-			for sql_ in sql:
-				cur.execute( sql_ )
+		with Connector() as ctr:
+			conn = self.connect( ctr )
+			with closing( conn.cursor() ) as cur:
+				for sql_ in sql:
+					cur.execute( sql_ )
 		conn.commit()
 	
-	@property
-	def database( self ) -> sqlite3.Connection:
-		conn = getattr( self.tls, 'conn', None )
-		if conn is None:
-			conn = sqlite3.connect( str( self.sqlite_path ))
-			setattr( conn, 'row_factory', dict_factory )
-			setattr( self.tls, 'conn', conn )
-		return conn
+	def connect( self, ctr: Connector ) -> sqlite3.Connection:
+		return ctr.sqlite( str( self.sqlite_path ))
 	
 	def valid_id( self, id: REPOID ) -> REPOID:
 		log = logger.getChild( 'RepoSqlite.valid_id' )
@@ -573,16 +649,18 @@ class RepoSqlite( Repository ):
 				raise ValueError( f'Invalid uuid {id!r}: {e!r}' ).with_traceback( e.__traceback__ ) from None
 		return id
 	
-	def exists( self, id: REPOID ) -> bool:
+	def exists( self, ctr: Connector, id: REPOID ) -> bool:
 		assert isinstance( id, ( int, str )), f'invalid id={id!r}'
-		with closing( self.database.cursor() ) as cur:
+		conn: sqlite3.Connection = self.connect( ctr )
+		with closing( conn.cursor() ) as cur:
 			cur.execute( f'select count(*) as "qty" from "{self.tablename}" WHERE "{self.keyname}" = ?', ( id, ) )
 			row: dict[str,int] = cur.fetchone()
 		return row['qty'] > 0
 	
-	def get_by_id( self, id: REPOID ) -> dict[str,Any]:
+	def get_by_id( self, ctr: Connector, id: REPOID ) -> dict[str,Any]:
 		assert isinstance( id, ( int, str )), f'invalid id={id!r}'
-		with closing( self.database.cursor() ) as cur:
+		conn = self.connect( ctr )
+		with closing( conn.cursor() ) as cur:
 			cur.execute( f'select * from "{self.tablename}" WHERE "{self.keyname}" = ?', [ id ])
 			item: Opt[dict[str,Any]] = cur.fetchone() # TODO FIXME: EOF?
 		if item is None:
@@ -590,6 +668,7 @@ class RepoSqlite( Repository ):
 		return item
 	
 	def list( self,
+		ctr: Connector,
 		filters: dict[str,str] = {},
 		*,
 		limit: Opt[int] = None,
@@ -619,7 +698,8 @@ class RepoSqlite( Repository ):
 		direction = 'desc' if reverse else 'asc'
 		sql = f'select * from "{self.tablename}" {_where_} order by "{orderby}" {direction} {_paging_}'
 		items: list[Tuple[REPOID,dict[str,Any]]] = []
-		with closing( self.database.cursor() ) as cur:
+		conn: sqlite3.Connection = self.connect( ctr )
+		with closing( conn.cursor() ) as cur:
 			cur.execute( sql, params )
 			for row in cur.fetchall():
 				id = row.pop( self.keyname )
@@ -627,9 +707,9 @@ class RepoSqlite( Repository ):
 		
 		return items
 	
-	def create( self, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> None:
+	def create( self, ctr: Connector, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> None:
 		sql1 = f'SELECT COUNT(*) AS "qty" FROM "{self.tablename}" WHERE "{self.keyname}"=?'
-		conn = self.database
+		conn: sqlite3.Connection = self.connect( ctr )
 		with closing( conn.cursor() ) as cur:
 			cur.execute( sql1, [ id ] )
 			row = cur.fetchone()
@@ -664,7 +744,7 @@ class RepoSqlite( Repository ):
 			)
 			audit.audit( f'Created {self.tablename} {id!r}:{auditdata}' )
 	
-	def update( self, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> dict[str,Any]:
+	def update( self, ctr: Connector, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> dict[str,Any]:
 		values: list[str] = []
 		params: list[Any] = []
 		for k, v in resource.items():
@@ -672,13 +752,13 @@ class RepoSqlite( Repository ):
 			params.append( v )
 		_values_ = ','.join( values )
 		
-		olddata = self.get_by_id( id )
+		olddata = self.get_by_id( ctr, id )
 		
 		assert '"' not in self.tablename, f'invalid tablename={self.tablename!r}'
 		sql = f'UPDATE "{self.tablename}" SET {_values_} WHERE "{self.keyname}"=?'
 		params.append( id )
 		
-		conn = self.database
+		conn: sqlite3.Connection = self.connect( ctr )
 		with closing( conn.cursor() ) as cur:
 			cur.execute( sql, params )
 		conn.commit()
@@ -689,14 +769,14 @@ class RepoSqlite( Repository ):
 		
 		return resource
 	
-	def delete( self, id: REPOID, *, audit: auditing.Audit ) -> dict[str,Any]:
+	def delete( self, ctr: Connector, id: REPOID, *, audit: auditing.Audit ) -> dict[str,Any]:
 		# delete by id and return deleted dict
-		data = self.get_by_id( id )
+		data = self.get_by_id( ctr, id )
 		
 		assert '"' not in self.tablename, f'invalid tablename={self.tablename!r}'
 		sql = f'DELETE FROM "{self.tablename}" WHERE "{self.keyname}"=?;'
 		
-		conn = self.database
+		conn: sqlite3.Connection = self.connect( ctr )
 		with closing( conn.cursor() ) as cur:
 			cur.execute( sql, [ id ])
 		conn.commit()
@@ -775,31 +855,27 @@ class RepoPostgres( Repository ):
 		sql: list[str] = [ f'CREATE TABLE IF NOT EXISTS "{tablename}" ({_flds_});' ]
 		sql.extend( fldsupp )
 		
-		with self._cursor() as cur:
-			for sql_ in sql:
-				#print( f'>>>>>> executing sql:\n{sql_}\n<<<<<<<<<<<<<<<<<<' )
-				cur.execute( sql_ )
+		with Connector() as ctr:
+			with self._cursor( ctr ) as cur:
+				for sql_ in sql:
+					#print( f'>>>>>> executing sql:\n{sql_}\n<<<<<<<<<<<<<<<<<<' )
+					cur.execute( sql_ )
 	
-	@property
-	def database( self ) -> psycopg2.connection:
-		conn = getattr( self.tls, 'conn', None )
-		if conn is None:
-			conn = psycopg2.connect(
-				host = self.pgsql_host,
-				database = self.pgsql_db,
-				user = self.pgsql_uid,
-				password = self.pgsql_pwd,
-				port = self.pgsql_port,
-				sslmode = self.pgsql_sslmode,
-				sslrootcert = self.pgsql_sslrootcert,
-			)
-			setattr( self.tls, 'conn', conn )
-		return conn
+	def connect( self, ctr: Connector ) -> psycopg2.connection:
+		return ctr.postgres(
+			host = self.pgsql_host,
+			database = self.pgsql_db,
+			user = self.pgsql_uid,
+			password = self.pgsql_pwd,
+			port = self.pgsql_port,
+			sslmode = self.pgsql_sslmode,
+			sslrootcert = self.pgsql_sslrootcert,
+		)
 	
 	@contextmanager
-	def _cursor( self ) -> Iterator[psycopg2._psycopg.cursor]:
+	def _cursor( self, ctr: Connector ) -> Iterator[psycopg2._psycopg.cursor]:
 		log = logger.getChild( 'RepoPostgres._cursor' )
-		conn = self.database
+		conn = self.connect( ctr )
 		with closing( conn.cursor() ) as cur:
 			try:
 				yield cur
@@ -821,9 +897,9 @@ class RepoPostgres( Repository ):
 				raise ValueError( f'Invalid uuid {id!r}: {e!r}' ).with_traceback( e.__traceback__ ) from None
 		return id
 	
-	def exists( self, id: REPOID ) -> bool:
+	def exists( self, ctr: Connector, id: REPOID ) -> bool:
 		assert isinstance( id, ( int, str )), f'invalid id={id!r}'
-		with self._cursor() as cur:
+		with self._cursor( ctr ) as cur:
 			cur.execute( f'select count(*) as "qty" from "{self.tablename}" WHERE "{self.keyname}" = %s', ( id, ) )
 			hdrs: list[str] = [ desc[0] for desc in cur.description ]
 			vals: Opt[Tuple[Any,...]] = cur.fetchone()
@@ -840,9 +916,9 @@ class RepoPostgres( Repository ):
 			in zip( hdrs, vals )
 		}
 	
-	def get_by_id( self, id: REPOID ) -> dict[str,Any]:
+	def get_by_id( self, ctr: Connector, id: REPOID ) -> dict[str,Any]:
 		assert isinstance( id, ( int, str )), f'invalid id={id!r}'
-		with self._cursor() as cur:
+		with self._cursor( ctr ) as cur:
 			cur.execute( f'select * from "{self.tablename}" WHERE "{self.keyname}" = %s', [ id ])
 			hdrs: list[str] = [ desc[0] for desc in cur.description ]
 			vals: Opt[Tuple[Any,...]] = cur.fetchone()
@@ -852,6 +928,7 @@ class RepoPostgres( Repository ):
 			return row
 	
 	def list( self,
+		ctr: Connector,
 		filters: dict[str,str] = {},
 		*,
 		limit: Opt[int] = None,
@@ -881,7 +958,7 @@ class RepoPostgres( Repository ):
 		direction = 'desc' if reverse else 'asc'
 		sql = f'select * from "{self.tablename}" {_where_} order by "{orderby}" {direction} {_paging_}'
 		items: list[Tuple[REPOID,dict[str,Any]]] = []
-		with self._cursor() as cur:
+		with self._cursor( ctr ) as cur:
 			cur.execute( sql, params )
 			hdrs: list[str] = [ desc[0] for desc in cur.description ]
 			for row in map( lambda vals: self._row_from_hdrs_vals( hdrs, vals ), cur.fetchall() ):
@@ -890,9 +967,9 @@ class RepoPostgres( Repository ):
 		
 		return items
 	
-	def create( self, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> None:
+	def create( self, ctr: Connector, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> None:
 		sql1 = f'SELECT COUNT(*) AS "qty" FROM "{self.tablename}" WHERE "{self.keyname}"=%s'
-		with self._cursor() as cur:
+		with self._cursor( ctr ) as cur:
 			cur.execute( sql1, [ id ])
 			hdrs: list[str] = [ desc[0] for desc in cur.description ]
 			vals: Opt[Tuple[Any,...]] = cur.fetchone()
@@ -917,7 +994,7 @@ class RepoPostgres( Repository ):
 		assert '"' not in self.tablename, f'invalid tablename={self.tablename!r}'
 		sql2 = f'INSERT INTO "{self.tablename}" ({_keys_}) VALUES ({_values_});'
 		
-		with self._cursor() as cur:
+		with self._cursor( ctr ) as cur:
 			cur.execute( sql2, params )
 		
 		if self.auditing:
@@ -927,7 +1004,7 @@ class RepoPostgres( Repository ):
 			)
 			audit.audit( f'Created {self.tablename} {id!r}:{auditdata}' )
 	
-	def update( self, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> dict[str,Any]:
+	def update( self, ctr: Connector, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> dict[str,Any]:
 		values: list[str] = []
 		params: list[Any] = []
 		for k, v in resource.items():
@@ -935,14 +1012,13 @@ class RepoPostgres( Repository ):
 			params.append( self.fields[k].encode_postgres( v ))
 		_values_ = ','.join( values )
 		
-		olddata = self.get_by_id( id )
+		olddata = self.get_by_id( ctr, id )
 		
 		assert '"' not in self.tablename, f'invalid tablename={self.tablename!r}'
 		sql = f'UPDATE "{self.tablename}" SET {_values_} WHERE "{self.keyname}"=%s'
 		params.append( id )
 		
-		conn = self.database
-		with self._cursor() as cur:
+		with self._cursor( ctr ) as cur:
 			cur.execute( sql, params )
 		
 		if self.auditing:
@@ -951,14 +1027,14 @@ class RepoPostgres( Repository ):
 		
 		return resource
 	
-	def delete( self, id: REPOID, *, audit: auditing.Audit ) -> dict[str,Any]:
+	def delete( self, ctr: Connector, id: REPOID, *, audit: auditing.Audit ) -> dict[str,Any]:
 		# delete by id and return deleted dict
-		data = self.get_by_id( id )
+		data = self.get_by_id( ctr, id )
 		
 		assert '"' not in self.tablename, f'invalid tablename={self.tablename!r}'
 		sql = f'DELETE FROM "{self.tablename}" WHERE "{self.keyname}"=%s;'
 		
-		with self._cursor() as cur:
+		with self._cursor( ctr ) as cur:
 			cur.execute( sql, [ id ])
 		
 		if self.auditing:
@@ -1015,11 +1091,11 @@ class RepoFs( Repository ):
 		#	raise HttpFailure( f'Invalid uuid {id!r}: {e!r}', 400 )
 		return id
 	
-	def exists( self, id: REPOID ) -> bool:
+	def exists( self, ctr: Connector, id: REPOID ) -> bool:
 		itemFile = self._path_from_id( id )
 		return itemFile.is_file()
 	
-	def get_by_id( self, id: REPOID ) -> dict[str,Any]:
+	def get_by_id( self, ctr: Connector, id: REPOID ) -> dict[str,Any]:
 		itemFile = self._path_from_id( id )
 		try:
 			with itemFile.open( 'r' ) as fileContent: # TODO FIXME: this can raise FileNotFoundError
@@ -1029,6 +1105,7 @@ class RepoFs( Repository ):
 		return item
 	
 	def list( self,
+		ctr: Connector,
 		filters: dict[str,str] = {},
 		*,
 		limit: Opt[int] = None,
@@ -1078,7 +1155,7 @@ class RepoFs( Repository ):
 			items = items[:limit]
 		return items
 	
-	def create( self, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> None:
+	def create( self, ctr: Connector, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> None:
 		path = self._path_from_id( id )
 		if path.is_file():
 			raise ResourceAlreadyExists()
@@ -1094,7 +1171,7 @@ class RepoFs( Repository ):
 			)
 			audit.audit( f'Created {self.tablename} {id!r} at {str(path)!r}:{auditdata}' )
 	
-	def update( self, id: REPOID, resource: dict[str,Any] = {}, *, audit: auditing.Audit ) -> dict[str,Any]:
+	def update( self, ctr: Connector, id: REPOID, resource: dict[str,Any] = {}, *, audit: auditing.Audit ) -> dict[str,Any]:
 		path = self._path_from_id( id )
 		with path.open( 'r' ) as f:
 			olddata = json.loads( f.read() )
@@ -1107,7 +1184,7 @@ class RepoFs( Repository ):
 		
 		return resource
 	
-	def delete( self, id: REPOID, *, audit: auditing.Audit ) -> dict[str,Any]:
+	def delete( self, ctr: Connector, id: REPOID, *, audit: auditing.Audit ) -> dict[str,Any]:
 		path = self._path_from_id( id )
 		with path.open( 'r' ) as fileContent:
 			resource: dict[str,Any] = json.loads( fileContent.read() )
@@ -1130,19 +1207,20 @@ class AsyncRepository:
 	def __init__( self, repo: Repository ) -> None:
 		self.repo = repo
 	
-	async def exists( self, id: REPOID ) -> bool:
+	async def exists( self, ctr: Connector, id: REPOID ) -> bool:
 		loop = asyncio.get_running_loop()
 		return await loop.run_in_executor( None, lambda:
-			self.repo.exists( id )
+			self.repo.exists( ctr, id )
 		)
 	
-	async def get_by_id( self, id: REPOID ) -> dict[str, Any]:
+	async def get_by_id( self, ctr: Connector, id: REPOID ) -> dict[str, Any]:
 		loop = asyncio.get_running_loop()
 		return await loop.run_in_executor( None, lambda:
-			self.repo.get_by_id( id )
+			self.repo.get_by_id( ctr, id )
 		)
 	
 	async def list( self,
+		ctr: Connector,
 		filters: dict[str,str] = {},
 		*,
 		limit: Opt[int] = None,
@@ -1152,25 +1230,25 @@ class AsyncRepository:
 	) -> Seq[Tuple[REPOID, dict[str, Any]]]:
 		loop = asyncio.get_running_loop()
 		return await loop.run_in_executor( None, lambda:
-			self.repo.list( filters, limit = limit, offset = offset, orderby = orderby )
+			self.repo.list( ctr, filters, limit = limit, offset = offset, orderby = orderby )
 		)
 	
-	async def create( self, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> None:
+	async def create( self, ctr: Connector, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> None:
 		loop = asyncio.get_running_loop()
 		return await loop.run_in_executor( None, lambda:
-			self.repo.create( id, resource, audit = audit )
+			self.repo.create( ctr, id, resource, audit = audit )
 		)
 	
-	async def update( self, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> dict[str,Any]:
+	async def update( self, ctr: Connector, id: REPOID, resource: dict[str,Any], *, audit: auditing.Audit ) -> dict[str,Any]:
 		loop = asyncio.get_running_loop()
 		return await loop.run_in_executor( None, lambda:
-			self.repo.update( id, resource, audit = audit )
+			self.repo.update( ctr, id, resource, audit = audit )
 		)
 	
-	async def delete( self, id: REPOID, *, audit: auditing.Audit ) -> dict[str,Any]:
+	async def delete( self, ctr: Connector, id: REPOID, *, audit: auditing.Audit ) -> dict[str,Any]:
 		loop = asyncio.get_running_loop()
 		return await loop.run_in_executor( None, lambda:
-			self.repo.delete( id, audit = audit )
+			self.repo.delete( ctr, id, audit = audit )
 		)
 
 
