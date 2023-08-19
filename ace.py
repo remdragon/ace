@@ -2274,7 +2274,7 @@ def http_cars() -> Response:
 			start = repr( e )
 		try:
 			end = (
-				datetime.utcfromtimestamp( data['end'] )
+				datetime.datetime.utcfromtimestamp( data['end'] )
 				.replace( tzinfo = datetime.timezone.utc ) # assign correct tz
 				.astimezone() # convert to local time
 				.strftime( '%Y-%m-%d %H:%M:%S.%f%z' )
