@@ -381,14 +381,13 @@ class State( metaclass = ABCMeta ):
 	route: int
 	goto_uuid: Opt[str] = None
 	
-	def __init__( self, ctr: repo.Connector, esl: ESL, uuid: str ) -> None:
-		self.ctr = ctr
+	def __init__( self, esl: ESL, uuid: str ) -> None:
 		self.esl = esl
 		self.uuid = uuid
 		self.state = EXEC
 	
 	@abstractmethod
-	async def can_continue( self ) -> bool:
+	async def can_continue( self, ctr: repo.Connector ) -> bool:
 		cls = type( self )
 		raise NotImplementedError( f'{cls.__module__}.{cls.__qualname__}.can_continue()' )
 	
@@ -516,99 +515,99 @@ class State( metaclass = ABCMeta ):
 				pass
 		raise ValueError( f'Expecting {name!r} of type convertable to int/float but got {value!r}' )
 	
-	async def car_activity( self, msg: str ) -> None:
-		await ace_car.activity( self.ctr,
+	async def car_activity( self, ctr: repo.Connector, msg: str ) -> None:
+		await ace_car.activity( ctr,
 			self.config.repo_car,
 			self.config.car_mplock,
 			self.uuid,
 			msg,
 		)
 	
-	async def load_route( self, route: int ) -> Dict[str,Any]:
-		return await self.config.repo_routes.get_by_id( self.ctr, route )
+	async def load_route( self, ctr: repo.Connector, route: int ) -> Dict[str,Any]:
+		return await self.config.repo_routes.get_by_id( ctr, route )
 	
-	async def exec_branch( self, action: ACTION, which: str, pagd: Opt[PAGD], *, log: logging.Logger ) -> RESULT:
+	async def exec_branch( self, ctr: repo.Connector, action: ACTION, which: str, pagd: Opt[PAGD], *, log: logging.Logger ) -> RESULT:
 		branch: BRANCH = cast( BRANCH, expect( dict, action.get( which ), default = {} ))
-		return await self._exec_branch( which, branch, pagd, log = log )
+		return await self._exec_branch( ctr, which, branch, pagd, log = log )
 	
-	async def _exec_branch( self, which: str, branch: BRANCH, pagd: Opt[PAGD], *, log: logging.Logger ) -> RESULT:
+	async def _exec_branch( self, ctr: repo.Connector, which: str, branch: BRANCH, pagd: Opt[PAGD], *, log: logging.Logger ) -> RESULT:
 		name: Opt[str] = branch.get( 'name' )
 		nodes: ACTIONS = expect( list, branch.get( 'nodes' ) or [] )
 		if which:
 			log.info( 'executing %s branch %r', which, name )
-			await self.car_activity( f'executing {which} branch {name!r}' )
-		return await self.exec_actions( nodes, pagd )
+			await self.car_activity( ctr, f'executing {which} branch {name!r}' )
+		return await self.exec_actions( ctr, nodes, pagd )
 	
-	async def exec_actions( self, actions: ACTIONS, pagd: Opt[PAGD] = None ) -> RESULT:
+	async def exec_actions( self, ctr: repo.Connector, actions: ACTIONS, pagd: Opt[PAGD] = None ) -> RESULT:
 		for action in actions or []:
-			r = await self.exec_action( action, pagd )
+			r = await self.exec_action( ctr, action, pagd )
 			if r != CONTINUE: return r
 			if pagd and pagd.digits: return CONTINUE
 		return CONTINUE
 	
-	async def exec_action( self, action: ACTION, pagd: Opt[PAGD] ) -> RESULT:
+	async def exec_action( self, ctr: repo.Connector, action: ACTION, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.exec_action' )
 		action_type = expect( str, action.get( 'type' ), default = '' )
 		if not action_type:
 			log.error( 'action.type is missing' ) # TODO FIXME: diagnostic info?
-			await self.car_activity(
+			await self.car_activity( ctr,
 				f'ERROR: cannot execute action named {action.get("name")!r} missing "type"'
 			)
 			return CONTINUE
 		fname = f'action_{action_type}'
-		f: Opt[Callable[[ACTION,Opt[PAGD]],Awaitable[RESULT]]] = getattr( self, fname, None )
+		f: Opt[Callable[[repo.Connector,ACTION,Opt[PAGD]],Awaitable[RESULT]]] = getattr( self, fname, None )
 		if not f or not callable( f ):
 			log.error( 'action invalid or unavailable in this context: %r', action_type )
-			await self.car_activity(
+			await self.car_activity( ctr,
 				f'ERROR: action {action_type!r} invalid or unavailable in this context'
 			)
 			return CONTINUE
 		log.debug( 'executing %r', fname )
-		await self.car_activity(
+		await self.car_activity( ctr,
 			f'exec_action: executing {action_type!r} action named {action.get("name")!r}'
 		)
-		r = await f( action, pagd )
+		r = await f( ctr, action, pagd )
 		log.debug( '%s -> %r', fname, r )
 		if r not in ( CONTINUE, STOP ):
 			log.error( '%s returned %r but should have returned %r or %r',
 				fname, r, CONTINUE, STOP,
 			)
-			await self.car_activity(
+			await self.car_activity( ctr,
 				f'ERROR: ACE bug - action {action_type!r} returned {r!r}'
 				f' but should have returned {CONTINUE!r} or {STOP!r}'
 			)
 			r = CONTINUE # assume CONTINUE for now..
 		if r == CONTINUE:
-			if not await self.can_continue():
+			if not await self.can_continue( ctr ):
 				return STOP
 		return r
 	
-	async def exec_top_actions( self, actions: ACTIONS ) -> RESULT:
-		log = logger.getChild( 'State.exec_top_actions' )
+	async def exec_top_actions( self, ctr: repo.Connector, actions: ACTIONS ) -> RESULT:
+		#log = logger.getChild( 'State.exec_top_actions' )
 		while True:
-			r = await self.exec_actions( actions )
+			r = await self.exec_actions( ctr, actions )
 			if self.state == GOTO:
 				self.state = HUNT
 			else:
 				return r
 	
-	async def action_goto( self, action: ACTION_GOTO, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_goto( self, ctr: repo.Connector, action: ACTION_GOTO, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_goto' )
 		if self.state == HUNT: return CONTINUE
 		
 		self.goto_uuid = expect( str, action.get( 'destination' ))
 		log.info( 'destination=%r', self.goto_uuid )
-		await self.car_activity( f'goto initiated, looking for {self.goto_uuid!r}' )
+		await self.car_activity( ctr, f'goto initiated, looking for {self.goto_uuid!r}' )
 		self.state = GOTO
 		return STOP
 	
-	async def action_ifnum( self, action: ACTION_IFNUM, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_ifnum( self, ctr: repo.Connector, action: ACTION_IFNUM, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_ifnum' )
 		
 		if self.state == HUNT:
-			if STOP == await self.exec_branch( action, 'trueBranch', pagd, log = log ): return STOP
+			if STOP == await self.exec_branch( ctr, action, 'trueBranch', pagd, log = log ): return STOP
 			if self.state != HUNT: return CONTINUE
-			return await self.exec_branch( action, 'falseBranch', pagd, log = log )
+			return await self.exec_branch( ctr, action, 'falseBranch', pagd, log = log )
 		
 		lhs: Union[int,float] = await self.tonumber( action, 'lhs', expand = True )
 		op: str = await self.expand( expect( str, action.get( 'op' )))
@@ -633,16 +632,16 @@ class State( metaclass = ABCMeta ):
 		log.info( 'lhs=%r op=%r rhs=%r result=%r', lhs, op, rhs, result )
 		
 		which = 'trueBranch' if result else 'falseBranch'
-		await self.car_activity( f'ifnum lhs={lhs!r} op={op!r} rhs={rhs!r} result={result!r} branch={which!r}' )
-		return await self.exec_branch( action, which, pagd, log = log )
+		await self.car_activity( ctr, f'ifnum lhs={lhs!r} op={op!r} rhs={rhs!r} result={result!r} branch={which!r}' )
+		return await self.exec_branch( ctr, action, which, pagd, log = log )
 	
-	async def action_ifstr( self, action: ACTION_IFSTR, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_ifstr( self, ctr: repo.Connector, action: ACTION_IFSTR, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_ifstr' )
 		
 		if self.state == HUNT:
-			if STOP == await self.exec_branch( action, 'trueBranch', pagd, log = log ): return STOP
+			if STOP == await self.exec_branch( ctr, action, 'trueBranch', pagd, log = log ): return STOP
 			if self.state != HUNT: return CONTINUE
-			return await self.exec_branch( action, 'falseBranch', pagd, log = log )
+			return await self.exec_branch( ctr, action, 'falseBranch', pagd, log = log )
 		
 		lhs: str = await self.expand( expect( str, action.get( 'lhs' )))
 		op: str = await self.expand( expect( str, action.get( 'op' )))
@@ -676,10 +675,10 @@ class State( metaclass = ABCMeta ):
 		log.info( 'lhs=%r op=%r rhs=%r result=%r', lhs, op, rhs, result )
 		
 		which = 'trueBranch' if result else 'falseBranch'
-		await self.car_activity( f'ifstr lhs={lhs!r} op={op!r} rhs={rhs!r} result={result!r} branch={which!r}' )
-		return await self.exec_branch( action, which, pagd, log = log )
+		await self.car_activity( ctr, f'ifstr lhs={lhs!r} op={op!r} rhs={rhs!r} result={result!r} branch={which!r}' )
+		return await self.exec_branch( ctr, action, which, pagd, log = log )
 	
-	async def action_label( self, action: ACTION_LABEL, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_label( self, ctr: repo.Connector, action: ACTION_LABEL, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_label' )
 		try:
 			label_uuid = action['uuid']
@@ -688,13 +687,13 @@ class State( metaclass = ABCMeta ):
 		else:
 			if self.state == HUNT and self.goto_uuid == label_uuid:
 				log.info( 'HIT name=%r', action.get( 'name' ))
-				await self.car_activity( f'goto found {self.goto_uuid!r}' )
+				await self.car_activity( ctr, f'goto found {self.goto_uuid!r}' )
 				self.state = EXEC
 			else:
 				log.info( 'PASS name=%r', action.get( 'name' ))
 		return CONTINUE
 	
-	async def action_log( self, action: ACTION_LOG, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_log( self, ctr: repo.Connector, action: ACTION_LOG, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_log' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -702,11 +701,11 @@ class State( metaclass = ABCMeta ):
 		text = await self.expand( action.get( 'text' ) or '?' )
 		log.debug( 'level=%r text=%r', level, text )
 		await self.esl.log( level, text )
-		await self.car_activity( f'[{level}] {text}' )
+		await self.car_activity( ctr, f'[{level}] {text}' )
 		
 		return CONTINUE
 	
-	async def action_lua( self, action: ACTION_LUA, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_lua( self, ctr: repo.Connector, action: ACTION_LUA, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_lua' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -716,34 +715,34 @@ class State( metaclass = ABCMeta ):
 		#	return CONTINUE
 		
 		log.error( 'TODO FIXME: inline lua not implemented in current version of ace' )
-		await self.car_activity( f'ERROR: TODO FIXME: inline lua not implemented in current version of ace' )
+		await self.car_activity( ctr, f'ERROR: TODO FIXME: inline lua not implemented in current version of ace' )
 		
 		return CONTINUE
 	
-	async def action_laufile( self, action: ACTION_LUAFILE, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_laufile( self, ctr: repo.Connector, action: ACTION_LUAFILE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_luafile' )
 		if self.state == HUNT: return CONTINUE
 		
 		file = ( action.get( 'file' ) or '' ).strip()
 		if not file:
 			log.error( 'cannot execute lua file: no filename provided' ) # TODO FIXME: log some of this stuff to freeswitch console?
-			await self.car_activity( f'ERROR: cannot execute lua b/c file={file!r}' )
+			await self.car_activity( ctr, f'ERROR: cannot execute lua b/c file={file!r}' )
 			return CONTINUE
 		
 		log.error( 'TODO FIXME: lua file not implemented in current version of ace' )
 		
 		return CONTINUE
 	
-	async def action_python( self, action: ACTION_PYTHON, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_python( self, ctr: repo.Connector, action: ACTION_PYTHON, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_python' )
 		if self.state == HUNT: return CONTINUE
 		
 		log.error( 'TODO FIXME: python not implemented in current version of ace' )
-		await self.car_activity( f'ERROR: TODO FIXME: python not implemented in current version of ace' )
+		await self.car_activity( ctr, f'ERROR: TODO FIXME: python not implemented in current version of ace' )
 		
 		return CONTINUE
 	
-	async def action_repeat( self, action: ACTION_REPEAT, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_repeat( self, ctr: repo.Connector, action: ACTION_REPEAT, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_repeat' )
 		count: int = await self.toint( action, 'count', default = 0 )
 		nodes = cast( ACTIONS, expect( list, action.get( 'nodes' ), default = [] ))
@@ -751,14 +750,14 @@ class State( metaclass = ABCMeta ):
 		while count == 0 or i <= count:
 			if self.state != HUNT:
 				log.info( 'starting loop %r of %s', i, count or 'infinite' )
-				await self.car_activity( f'repeat node starting loop {i!r} of {count or "infinite"!r}' )
-			if STOP == await self.exec_actions( nodes, pagd ):
+				await self.car_activity( ctr, f'repeat node starting loop {i!r} of {count or "infinite"!r}' )
+			if STOP == await self.exec_actions( ctr, nodes, pagd ):
 				return STOP
 			if self.state == HUNT: return CONTINUE
 			i += 1
 		return CONTINUE
 	
-	async def _sms_thinq( self, smsto: str, message: str, settings: ace_settings.Settings ) -> RESULT:
+	async def _sms_thinq( self, ctr: repo.Connector, smsto: str, message: str, settings: ace_settings.Settings ) -> RESULT:
 		log = logger.getChild( 'State._sms_thinq' )
 		
 		url = f'https://api.thinq.com/account/{settings.sms_thinq_account}/product/origination/sms/send'
@@ -782,24 +781,24 @@ class State( metaclass = ABCMeta ):
 					text = await rsp.text()
 				except Exception as e1:
 					log.error( 'sms to %r failure: %r', smsto, e1 )
-					await self.car_activity( f'ERROR: sms to {smsto!r} failed: {e1!r}' )
+					await self.car_activity( ctr, f'ERROR: sms to {smsto!r} failed: {e1!r}' )
 				else:
 					try:
 						jdata = json.loads( text ) # TODO FIXME: json decoding failure
 					except Exception as e2:
 						log.error( 'sms to %r failure: %r decoding json=%r', smsto, e2, text )
-						await self.car_activity( f'ERROR: sms to {smsto!r} got {e2!r} decoding response {text!r}' )
+						await self.car_activity( ctr, f'ERROR: sms to {smsto!r} got {e2!r} decoding response {text!r}' )
 					else:
 						guid = jdata.get( 'guid' ) if isinstance( jdata, dict ) else None
 						if guid:
 							log.info( 'sms to %r success (guid=%r)', smsto, guid )
-							await self.car_activity( f'sms to {smsto!r} success (guid={guid!r})' )
+							await self.car_activity( ctr, f'sms to {smsto!r} success (guid={guid!r})' )
 						else:
 							log.error( 'sms to %r failure: %r', smsto, jdata )
-							await self.car_activity( f'ERROR: sms to {smsto!r} failed: {jdata!r}' )
+							await self.car_activity( ctr, f'ERROR: sms to {smsto!r} failed: {jdata!r}' )
 		return CONTINUE
 	
-	async def _sms_twilio( self, smsto: str, message: str, settings: ace_settings.Settings ) -> RESULT:
+	async def _sms_twilio( self, ctr: repo.Connector, smsto: str, message: str, settings: ace_settings.Settings ) -> RESULT:
 		log = logger.getChild( 'State._sms_twilio' )
 		
 		url = f'https://api.twilio.com/2010-04-01/Accounts/{settings.sms_twilio_sid}/Messages.json'
@@ -823,29 +822,29 @@ class State( metaclass = ABCMeta ):
 					text = await rsp.text()
 				except Exception as e1:
 					log.error( 'sms to %r failure: %r', smsto, e1 )
-					await self.car_activity( f'ERROR: sms to {smsto!r} failed: {e1!r}' )
+					await self.car_activity( ctr, f'ERROR: sms to {smsto!r} failed: {e1!r}' )
 				else:
 					try:
 						jdata = json.loads( text ) # TODO FIXME: json decoding failure
 					except Exception as e2:
 						log.error( 'sms to %r failure: %r decoding json=%r', smsto, e2, text )
-						await self.car_activity( f'ERROR: sms to {smsto!r} got {e2!r} decoding response {text!r}' )
+						await self.car_activity( ctr, f'ERROR: sms to {smsto!r} got {e2!r} decoding response {text!r}' )
 					else:
 						status = jdata.get( 'status' )
 						if status == 'queued':
 							log.info( 'sms to %r success: status=%r', smsto, status )
-							await self.car_activity( f'sms to {smsto!r} success: status={status!r}' )
+							await self.car_activity( ctr, f'sms to {smsto!r} success: status={status!r}' )
 						else:
 							errmsg = jdata.get( 'message' )
 							if errmsg:
 								log.error( 'sms to %r failure: %r %r', smsto, status, errmsg )
-								await self.car_activity( f'ERROR: sms to {smsto!r} failure: {status!r} {errmsg!r}' )
+								await self.car_activity( ctr, f'ERROR: sms to {smsto!r} failure: {status!r} {errmsg!r}' )
 							else:
 								log.error( 'sms to %r failure: %r', smsto, jdata )
-								await self.car_activity( f'ERROR: sms to {smsto!r} failure: {jdata!r}' )
+								await self.car_activity( ctr, f'ERROR: sms to {smsto!r} failure: {jdata!r}' )
 		return CONTINUE
 	
-	async def action_sms( self, action: ACTION_SMS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_sms( self, ctr: repo.Connector, action: ACTION_SMS, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_sms' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -865,25 +864,25 @@ class State( metaclass = ABCMeta ):
 		
 		if not smsto:
 			log.warning( 'cannot send sms - no recipient' )
-			await self.car_activity( f'ERROR: cannot send sms b/c smsto={smsto!r}' )
+			await self.car_activity( ctr, f'ERROR: cannot send sms b/c smsto={smsto!r}' )
 			return CONTINUE
 		
 		if settings.sms_carrier == 'thinq':
-			return await self._sms_thinq( smsto, message, settings )
+			return await self._sms_thinq( ctr, smsto, message, settings )
 		elif settings.sms_carrier == 'twilio':
-			return await self._sms_twilio( smsto, message, settings )
+			return await self._sms_twilio( ctr, smsto, message, settings )
 		else:
 			log.error( 'cannot send sms, invalid sms_carrier=%r', settings.sms_carrier )
-			await self.car_activity( f'ERROR: cannot send sms b/c sms_carrier={settings.sms_carrier!r}' )
+			await self.car_activity( ctr, f'ERROR: cannot send sms b/c sms_carrier={settings.sms_carrier!r}' )
 			return CONTINUE
 	
-	async def action_tod( self, action: ACTION_TOD, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_tod( self, ctr: repo.Connector, action: ACTION_TOD, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_tod' )
 		if self.state == HUNT:
-			if STOP == await self.exec_branch( action, 'hit', pagd, log = log ):
+			if STOP == await self.exec_branch( ctr, action, 'hit', pagd, log = log ):
 				return STOP
 			if self.state != HUNT: return CONTINUE
-			return await self.exec_branch( action, 'miss', pagd, log = log )
+			return await self.exec_branch( ctr, action, 'miss', pagd, log = log )
 		
 		which = 'miss'
 		if match_tod( expect( str, action.get( 'times' ) or '' )):
@@ -891,10 +890,10 @@ class State( metaclass = ABCMeta ):
 			log.warning( 'TODO FIXME: implement holidays' )
 			which = 'hit'
 		
-		await self.car_activity( f'tod executing {which!r} branch' )
-		return await self.exec_branch( action, which, pagd, log = log )
+		await self.car_activity( ctr, f'tod executing {which!r} branch' )
+		return await self.exec_branch( ctr, action, which, pagd, log = log )
 	
-	async def action_wait( self, action: ACTION_WAIT, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_wait( self, ctr: repo.Connector, action: ACTION_WAIT, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_wait' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -909,11 +908,11 @@ class State( metaclass = ABCMeta ):
 				divisor = 0,
 			)
 			log.info( 'executing silence instead (b/c pagd is active)' )
-			await self.car_activity( 'action_wait: playing silence for {seconds!r} second(s) b/c pagd is active' )
-			return await self.action_silence( params2, pagd )
+			await self.car_activity( ctr, 'action_wait: playing silence for {seconds!r} second(s) b/c pagd is active' )
+			return await self.action_silence( ctr, params2, pagd )
 		else:
 			log.info( 'waiting for %r second(s)', seconds )
-			await self.car_activity( f'waiting for {seconds!r} second(s)' )
+			await self.car_activity( ctr, f'waiting for {seconds!r} second(s)' )
 			done = time.time() + seconds
 			while True:
 				remaining = done - time.time()
@@ -953,39 +952,38 @@ class CallState( State ):
 	hangup_on_exit: bool = True
 	
 	def __init__( self,
-		ctr: repo.Connector,
 		esl: ESL,
 		uuid: str,
 		did: str,
 		ani: str,
 	) -> None:
-		super().__init__( ctr, esl, uuid )
+		super().__init__( esl, uuid )
 		self.did = did
 		self.ani = ani
 	
-	async def can_continue( self ) -> bool:
+	async def can_continue( self, ctr: repo.Connector ) -> bool:
 		log = logger.getChild( 'CallState.can_continue' )
 		if not await self.esl.uuid_exists( self.uuid ):
 			log.debug( 'uuid_exists -> false' )
-			await self.car_activity( f'route terminating b/c uuid {self.uuid!r} no longer exists' )
+			await self.car_activity( ctr, f'route terminating b/c uuid {self.uuid!r} no longer exists' )
 			return False
 		if await self.esl.uuid_getvar( self.uuid, 'bridge_uuid' ):
 			log.debug( 'bridge_uuid ~= nil' )
-			await self.car_activity( f'route terminating b/c uuid {self.uuid!r} was bridged' )
+			await self.car_activity( ctr, f'route terminating b/c uuid {self.uuid!r} was bridged' )
 			return False
 		return True
 	
 	async def set_state( self, state: AceState ) -> None:
 		await self.esl.uuid_setvar( self.uuid, ACE_STATE, state.value )
 	
-	async def try_ani( self ) -> Opt[Union[int,str]]:
+	async def try_ani( self, ctr: repo.Connector ) -> Opt[Union[int,str]]:
 		log = logger.getChild( 'CallState.try_ani' )
 		
 		try:
-			data = await self.config.repo_anis.get_by_id( self.ctr, self.ani )
+			data = await self.config.repo_anis.get_by_id( ctr, self.ani )
 		except repo.ResourceNotFound as e:
 			log.debug( 'no config found for ani %r', self.ani )
-			await self.car_activity( f'no ANI config for {self.ani!r}' )
+			await self.car_activity( ctr, f'no ANI config for {self.ani!r}' )
 			return None
 		
 		# first check for DID overrides
@@ -1001,7 +999,7 @@ class CallState( State ):
 				#log.debug( 'route=%r, exp=%r', route_, exp )
 				if not expired( exp ):
 					log.debug( 'ani=%r did=%r -> route=%r', self.ani, self.did, route_ )
-					await self.car_activity( f'ANI {self.ani!r} override line # {lineno!r} -> route {route_!r}' )
+					await self.car_activity( ctr, f'ANI {self.ani!r} override line # {lineno!r} -> route {route_!r}' )
 					await self.esl.uuid_setvar( self.uuid, 'route', route_ )
 					try:
 						return int( route_ ) # TODO FIXME: ability to send to a voicemail box, too?
@@ -1013,23 +1011,23 @@ class CallState( State ):
 		route = cast( Opt[int], data.get( 'route' ))
 		if isinstance( route, int ):
 			log.debug( 'ani=%r did=* -> route=%r', self.ani, route )
-			await self.car_activity( f'ANI {self.ani!r} no override match, using default route={route!r}' )
+			await self.car_activity( ctr, f'ANI {self.ani!r} no override match, using default route={route!r}' )
 			await self.esl.uuid_setvar( self.uuid, 'route', str( route ))
 			return route
 		elif route is not None:
-			await self.car_activity( f'ERROR ani {self.ani} has invalid route={route!r}' )
+			await self.car_activity( ctr, f'ERROR ani {self.ani} has invalid route={route!r}' )
 			log.warning( 'invalid route=%r', route )
 		
-		await self.car_activity( f'config found for ANI {self.ani}, but no matching overrides and no default route specified' )
+		await self.car_activity( ctr, f'config found for ANI {self.ani}, but no matching overrides and no default route specified' )
 		return None
 	
-	async def try_did( self, ani_route: Opt[Union[int,str]] ) -> Tuple[Opt[Union[int,str]],Opt[Dict[str,Any]]]:
+	async def try_did( self, ctr: repo.Connector, ani_route: Opt[Union[int,str]] ) -> Tuple[Opt[Union[int,str]],Opt[Dict[str,Any]]]:
 		log = logger.getChild( 'CallState.try_did' )
 		try:
-			data = await self.config.repo_dids.get_by_id( self.ctr, self.did )
+			data = await self.config.repo_dids.get_by_id( ctr, self.did )
 		except repo.ResourceNotFound as e:
 			log.debug( 'no config found for did %r', self.did )
-			await self.car_activity( f'no DID config for {self.did!r}' )
+			await self.car_activity( ctr, f'no DID config for {self.did!r}' )
 			return None, None
 		
 		acct_num = data.get( 'acct' )
@@ -1037,7 +1035,7 @@ class CallState( State ):
 		if acct_num is not None or acct_name:
 			await self.esl.uuid_setvar( self.uuid, 'ace-acct-num', str( acct_num or '' ))
 			await self.esl.uuid_setvar( self.uuid, 'ace-acct-name', str( acct_name or '' ))
-			await self.config.repo_car.update( self.ctr, self.uuid,
+			await self.config.repo_car.update( ctr, self.uuid,
 				{
 					'acct_num': acct_num,
 					'acct_name': acct_name,
@@ -1047,18 +1045,18 @@ class CallState( State ):
 		
 		if ani_route:
 			log.debug( 'DID config ignoring route b/c ani_route=%r', ani_route )
-			await self.car_activity( f'DID config ignoring route b/c ani_route={ani_route!r}' )
+			await self.car_activity( ctr, f'DID config ignoring route b/c ani_route={ani_route!r}' )
 			route: Opt[Union[int,str]] = ani_route
 		else:
 			route = data.get( 'route' ) or None
 			log.debug( 'DID config got route=%r', route )
-			await self.car_activity( f'DID config got route={route!r}' )
+			await self.car_activity( ctr, f'DID config got route={route!r}' )
 		
 		for fld in self.config.did_fields:
 			value = str( data.get( fld.field ) or '' ).strip()
 			if value is not None:
 				log.debug( 'setting field %r to %r', fld.field, value )
-				await self.car_activity( f'DID config setting channel variable {fld.field!r}={value!r}' )
+				await self.car_activity( ctr, f'DID config setting channel variable {fld.field!r}={value!r}' )
 				await self.esl.uuid_setvar( self.uuid, fld.field, value )
 			#else:
 			#	log.debug( 'skipping field %r b/c value %r', fld.field, value )
@@ -1068,10 +1066,10 @@ class CallState( State ):
 			field, _, value = map( str.strip, variable.partition( '=' ))
 			if field and value:
 				log.debug( 'setting variable %r to %r', field, value )
-				await self.car_activity( f'DID config setting channel variable {field!r}={value!r}' )
+				await self.car_activity( ctr, f'DID config setting channel variable {field!r}={value!r}' )
 				await self.esl.uuid_setvar( self.uuid, field, value )
 		
-		await self.car_activity( f'DID config returning route={route!r}' )
+		await self.car_activity( ctr, f'DID config returning route={route!r}' )
 		return route, data
 	
 	async def load_flag( self, flag_name: str ) -> Opt[str]:
@@ -1084,25 +1082,25 @@ class CallState( State ):
 			return None
 		return flag.strip() or None
 	
-	async def try_wav( self, filename: str ) -> Opt[Path]:
+	async def try_wav( self, ctr: repo.Connector, filename: str ) -> Opt[Path]:
 		log = logger.getChild( 'CallState.try_wav' )
 		settings = await ace_settings.aload()
 		path = Path( settings.preannounce_path ) / f'{filename}.wav'
 		path_ = str( path )
 		if not path.is_file():
 			log.debug( 'path not found: %r', str( path ))
-			await self.car_activity( f'try_wav: preannounce path not found: {path_!r}' )
+			await self.car_activity( ctr, f'try_wav: preannounce path not found: {path_!r}' )
 			return None
 		log.debug( 'found path: %r', path_ )
 		return path
 	
-	async def set_preannounce( self, didinfo: Dict[str,Any] ) -> None:
+	async def set_preannounce( self, ctr: repo.Connector, didinfo: Dict[str,Any] ) -> None:
 		log = logger.getChild( 'CallState.set_preannounce' )
 		
 		path: Opt[Path] = None
 		
 		async def _setvar( key: str, val: str ) -> None:
-			await self.car_activity( f'set_preannounce: setting channel variable {key!r}={val!r}' )
+			await self.car_activity( ctr, f'set_preannounce: setting channel variable {key!r}={val!r}' )
 			await self.esl.uuid_setvar( self.uuid, key, val )
 		
 		global_flag = await self.load_flag( 'global_flag' )
@@ -1110,11 +1108,11 @@ class CallState( State ):
 		if global_flag:
 			await _setvar( 'ace-global_flag', global_flag )
 			if not path:
-				path2 = await self.try_wav( f'global_{global_flag}' )
+				path2 = await self.try_wav( ctr, f'global_{global_flag}' )
 				if path2:
 					path = path2
 		else:
-			await self.car_activity( 'set_preannounce: global flag not set' )
+			await self.car_activity( ctr, 'set_preannounce: global flag not set' )
 		
 		category = ( didinfo.get( 'category' ) or '' ).strip()
 		if category:
@@ -1123,13 +1121,13 @@ class CallState( State ):
 			if cat_flag:
 				await _setvar( 'ace-category_flag', cat_flag )
 				if not path:
-					path2 = await self.try_wav( f'category_{category}_{cat_flag}' )
+					path2 = await self.try_wav( ctr, f'category_{category}_{cat_flag}' )
 					if path2:
 						path = path2
 			else:
-				await self.car_activity( f'set_preannounce: category flag {category!r} not set' )
+				await self.car_activity( ctr, f'set_preannounce: category flag {category!r} not set' )
 		else:
-			await self.car_activity( 'set_preannounce: no category configured' )
+			await self.car_activity( ctr, 'set_preannounce: no category configured' )
 		
 		acct = str( didinfo.get( 'acct' ) or '' ).strip()
 		if acct:
@@ -1137,36 +1135,36 @@ class CallState( State ):
 			if acct_flag:
 				await _setvar( 'ace-acct_flag', acct_flag )
 				if not path:
-					path2 = await self.try_wav( f'{acct}_{acct_flag}' )
+					path2 = await self.try_wav( ctr, f'{acct}_{acct_flag}' )
 					if path2:
 						path = path2
 			else:
-				await self.car_activity( 'set_preannounce: acct # flag not set' )
+				await self.car_activity( ctr, 'set_preannounce: acct # flag not set' )
 		else:
-			await self.car_activity( 'set_preannounce: acct # not set' )
+			await self.car_activity( ctr, 'set_preannounce: acct # not set' )
 		
 		did_flag = ( didinfo.get( 'did_flag' ) or '' ).strip()
 		if did_flag:
 			await _setvar( 'ace-did_flag', did_flag )
 			if not path:
-				path2 = await self.try_wav( f'{self.did}_{did_flag}' )
+				path2 = await self.try_wav( ctr, f'{self.did}_{did_flag}' )
 				if path2:
 					path = path2
 		else:
-			await self.car_activity( 'set_preannounce: did flag not set' )
+			await self.car_activity( ctr, 'set_preannounce: did flag not set' )
 		
 		if not path:
 			holiday = await self.holiday_today()
 			if holiday is not None:
-				path2 = await self.try_wav( f'{self.did}_{holiday}' )
+				path2 = await self.try_wav( ctr, f'{self.did}_{holiday}' )
 				if path2:
 					path = path2
 				if not path:
-					path2 = await self.try_wav( f'{self.did}_HOLIDAY' )
+					path2 = await self.try_wav( ctr, f'{self.did}_HOLIDAY' )
 					if path2:
 						path = path2
 			else:
-				await self.car_activity( 'set_preannounce: not a holiday' )
+				await self.car_activity( ctr, 'set_preannounce: not a holiday' )
 		
 		async def _uuid_gethhmm( key: str, default: str ) -> str:
 			value = await self.esl.uuid_getvar( self.uuid, key )
@@ -1205,17 +1203,17 @@ class CallState( State ):
 				log.debug( 'dow mismatch' )
 			
 			tod_preannounce: str = ( await self.esl.uuid_getvar( self.uuid, f'{tod.lower()}_preannounce' ) or '' ).strip()
-			path2 = await self.try_wav( tod_preannounce or f'{self.did}_{tod}' )
+			path2 = await self.try_wav( ctr, tod_preannounce or f'{self.did}_{tod}' )
 			if path2:
 				path = path2
 		
 		if not path:
-			path2 = await self.try_wav( str( self.did ))
+			path2 = await self.try_wav( ctr, str( self.did ))
 			if path2:
 				path = path2
 		
 		if not path:
-			path2 = await self.try_wav( 'default' )
+			path2 = await self.try_wav( ctr, 'default' )
 			if path2:
 				path = path2
 		
@@ -1225,9 +1223,9 @@ class CallState( State ):
 			await _setvar( varname, path_ )
 		else:
 			log.debug( 'no preannounce recording found' )
-			await self.car_activity( 'set_preannounce: no preannounce recording found' )
+			await self.car_activity( ctr, 'set_preannounce: no preannounce recording found' )
 	
-	async def _pagd( self, action_type: str, action: Union[ACTION_IVR,ACTION_PAGD], success: Callable[[str],Coroutine[Any,Any,Opt[RESULT]]] ) -> RESULT:
+	async def _pagd( self, ctr: repo.Connector, action_type: str, action: Union[ACTION_IVR,ACTION_PAGD], success: Callable[[str],Coroutine[Any,Any,Opt[RESULT]]] ) -> RESULT:
 		log = logger.getChild( 'CallState._pagd' )
 		timeout = timedelta( seconds = await self.tonumber( action, 'timeout', default = 3 ))
 		pagd = PAGD(
@@ -1244,12 +1242,12 @@ class CallState( State ):
 		r: RESULT
 		while attempt <= max_attempts:
 			if not pagd.digits:
-				await self.car_activity( f'{action_type} beginning greeting attempt {attempt!r} of {max_attempts!r}' )
-				r = await self.exec_branch( action, 'greetingBranch', pagd, log = log )
+				await self.car_activity( ctr, f'{action_type} beginning greeting attempt {attempt!r} of {max_attempts!r}' )
+				r = await self.exec_branch( ctr, action, 'greetingBranch', pagd, log = log )
 				if r == STOP: return STOP
 				if not pagd.digits:
-					await self.car_activity( f'{action_type} post-greeting auto-silence b/c digits={pagd.digits!r}' )
-					r = await self.action_silence( ACTION_SILENCE(
+					await self.car_activity( ctr, f'{action_type} post-greeting auto-silence b/c digits={pagd.digits!r}' )
+					r = await self.action_silence( ctr, ACTION_SILENCE(
 						type = 'silence',
 						name = '',
 						seconds = 3,
@@ -1258,13 +1256,13 @@ class CallState( State ):
 					log.info( 'back from post-greeting auto-silence with r=%r, digits=%r, valid=%r',
 						r, pagd.digits, pagd.valid
 					)
-					await self.car_activity( f'{action_type} post-greeting auto-silence result={r!r}, digits={pagd.digits!r}, valid={pagd.valid!r}' )
+					await self.car_activity( ctr, f'{action_type} post-greeting auto-silence result={r!r}, digits={pagd.digits!r}, valid={pagd.valid!r}' )
 					if r == STOP: return STOP
 			else:
 				log.info( 'skipped greeting branch because digits=%r, valid=%r',
 					pagd.digits, pagd.valid,
 				)
-				await self.car_activity( f'{action_type} skipped greeting b/c digits={pagd.digits!r}, valid={pagd.valid!r}' )
+				await self.car_activity( ctr, f'{action_type} skipped greeting b/c digits={pagd.digits!r}, valid={pagd.valid!r}' )
 			
 			if pagd.digits and pagd.valid:
 				result = await success( pagd.digits )
@@ -1273,21 +1271,21 @@ class CallState( State ):
 			if attempt < max_attempts:
 				if pagd.digits:
 					pagd.digits = None
-					await self.car_activity( f'{action_type} executing invalid branch b/c digits={pagd.digits!r}' )
-					r = await self.exec_branch( action, 'invalidBranch', pagd, log = log )
+					await self.car_activity( ctr, f'{action_type} executing invalid branch b/c digits={pagd.digits!r}' )
+					r = await self.exec_branch( ctr, action, 'invalidBranch', pagd, log = log )
 					if r == STOP: return STOP
 				else:
-					await self.car_activity( f'{action_type} executing timeout branch b/c digits={pagd.digits!r}' )
-					r = await self.exec_branch( action, 'timeoutBranch', pagd, log = log )
+					await self.car_activity( ctr, f'{action_type} executing timeout branch b/c digits={pagd.digits!r}' )
+					r = await self.exec_branch( ctr, action, 'timeoutBranch', pagd, log = log )
 					if r == STOP: return STOP
 			else:
-				await self.car_activity( f'{action_type} executing failure branch b/c attempt {attempt!r} of max_attempts {max_attempts!r}' )
-				r = await self.exec_branch( action, 'failureBranch', None, log = log )
+				await self.car_activity( ctr, f'{action_type} executing failure branch b/c attempt {attempt!r} of max_attempts {max_attempts!r}' )
+				r = await self.exec_branch( ctr, action, 'failureBranch', None, log = log )
 				return r
 			attempt += 1
 		return CONTINUE
 	
-	async def _playback( self, sound: str, pagd: Opt[PAGD] ) -> RESULT:
+	async def _playback( self, ctr: repo.Connector, sound: str, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState._playback' )
 		if pagd is not None:
 			min_digits = pagd.min_digits
@@ -1321,7 +1319,7 @@ class CallState( State ):
 				dhms( digit_timeout ),
 			)
 			digits_: List[str] = []
-			await self.car_activity( '_playback: '
+			await self.car_activity( ctr, '_playback: '
 				f'PlayAndGetDigits(min={min_digits!r}'
 				f',max={max_digits!r}'
 				f',tries={max_attempts!r}'
@@ -1350,13 +1348,13 @@ class CallState( State ):
 				_on_event( event )
 			pagd.digits = ''.join( digits_ )
 			#log.info( 'got digits=%r', pagd.digits )
-			await self.car_activity( f'_playback: PlayAndGetDigits(file={sound!r}, ...) -> digits={pagd.digits!r}' )
+			await self.car_activity( ctr, f'_playback: PlayAndGetDigits(file={sound!r}, ...) -> digits={pagd.digits!r}' )
 			
 			pagd.valid = True
 			if pagd.digit_regex:
 				log.debug( 'call regex( %r, %r )', pagd.digits, pagd.digit_regex )
 				pagd.valid = await self.esl.regex( pagd.digits, pagd.digit_regex )
-				await self.car_activity( f'_playback: digits {pagd.digits!r} vs digit regex {pagd.digit_regex!r} -> valid={pagd.valid!r}' )
+				await self.car_activity( ctr, f'_playback: digits {pagd.digits!r} vs digit regex {pagd.digit_regex!r} -> valid={pagd.valid!r}' )
 			log.info( 'got digits=%r valid=%r', pagd.digits, pagd.valid )
 			return CONTINUE
 		else:
@@ -1364,13 +1362,13 @@ class CallState( State ):
 			await self.esl.uuid_break( self.uuid, 'all' )
 			
 			log.info( 'executing playback %r', sound )
-			await self.car_activity( f'_playback: playback( sound={sound!r} )' )
+			await self.car_activity( ctr, f'_playback: playback( sound={sound!r} )' )
 			async for event in self.esl.playback( self.uuid, sound ):
 				_on_event( event )
 			
 			return CONTINUE
 	
-	async def action_acd_call_add( self, action: ACTION_ACD_CALL_ADD, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_acd_call_add( self, ctr: repo.Connector, action: ACTION_ACD_CALL_ADD, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_acd_call_add' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -1390,11 +1388,11 @@ class CallState( State ):
 			str( queue_offset_seconds ),
 		)
 		log.debug( 'result: %r', r )
-		await self.car_activity( f'call queued to acd gates={gates!r} at priority={priority!r} and queue_offset_seconds={queue_offset_seconds!r} with result={r!r}' )
+		await self.car_activity( ctr, f'call queued to acd gates={gates!r} at priority={priority!r} and queue_offset_seconds={queue_offset_seconds!r} with result={r!r}' )
 		
 		return CONTINUE
 	
-	async def action_acd_call_gate( self, action: ACTION_ACD_CALL_GATE, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_acd_call_gate( self, ctr: repo.Connector, action: ACTION_ACD_CALL_GATE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_acd_call_gate' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -1411,11 +1409,11 @@ class CallState( State ):
 			str( priority ),
 		)
 		log.debug( 'result: %r', r )
-		await self.car_activity( f'call queued to addl acd gate={gate!r} at priority={priority!r} with result={r!r}' )
+		await self.car_activity( ctr, f'call queued to addl acd gate={gate!r} at priority={priority!r} with result={r!r}' )
 		
 		return CONTINUE
 	
-	async def action_acd_call_ungate( self, action: ACTION_ACD_CALL_UNGATE, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_acd_call_ungate( self, ctr: repo.Connector, action: ACTION_ACD_CALL_UNGATE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_acd_call_ungate' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -1430,22 +1428,22 @@ class CallState( State ):
 			gate,
 		)
 		log.debug( 'result: %r', r )
-		await self.car_activity( f'call removed from acd gate={gate!r} with result={r!r}' )
+		await self.car_activity( ctr, f'call removed from acd gate={gate!r} with result={r!r}' )
 		
 		return CONTINUE
 	
-	async def action_answer( self, action: ACTION_ANSWER, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_answer( self, ctr: repo.Connector, action: ACTION_ANSWER, pagd: Opt[PAGD] ) -> RESULT:
 		#log = logger.getChild( 'CallState.action_answer' )
 		if self.state == HUNT: return CONTINUE
 		
 		await self.set_state( AceState.ANSWER )
 		if not await util.answer( self.esl, self.uuid, 'ace_eso.CallState.action_answer' ):
 			return STOP
-		await self.car_activity( f'answer supervision sent' )
+		await self.car_activity( ctr, f'answer supervision sent' )
 		
 		return CONTINUE
 	
-	async def _bridge( self, action: ACTION_BRIDGE ) -> str:
+	async def _bridge( self, ctr: repo.Connector, action: ACTION_BRIDGE ) -> str:
 		log = logger.getChild( 'CallState._bridge' )
 		
 		timeout_seconds: int = await self.toint( action, 'timeout', default = 0 )
@@ -1460,7 +1458,7 @@ class CallState( State ):
 			await self.esl.filter( 'Unique-ID', bridge_uuid )
 		except Exception as e1:
 			log.exception( 'Unable to filter for bridge_uuid: %r' )
-			await self.car_activity( f'ERROR: could not bridge because filter failed: {e1!r}' )
+			await self.car_activity( ctr, f'ERROR: could not bridge because filter failed: {e1!r}' )
 			return '-ERR filter failed'
 		
 		originate_timeout: Opt[Union[int,float]] = (
@@ -1480,7 +1478,7 @@ class CallState( State ):
 			cid_name = str( action.get( 'cid_name' ) or '' )
 			cid_num = str( action.get( 'cid_num' ) or '' )
 			
-			await self.car_activity( f'initiating originate(dial_string={dial_string!r}, origin={origin!r}, dialplan={dialplan!r}, context={context!r}, cid_name={cid_name!r}, cid_num={cid_num!r}, timeout={timeout!r}, chanvars={chanvars!r})' )
+			await self.car_activity( ctr, f'initiating originate(dial_string={dial_string!r}, origin={origin!r}, dialplan={dialplan!r}, context={context!r}, cid_name={cid_name!r}, cid_num={cid_num!r}, timeout={timeout!r}, chanvars={chanvars!r})' )
 			try:
 				r = await self.esl.originate( dial_string,
 					origin = origin,
@@ -1495,10 +1493,10 @@ class CallState( State ):
 				)
 			except Exception as e2:
 				log.exception( 'Error trying to originate for bridge:' )
-				await self.car_activity( f'ERROR: originate(dial_string={dial_string!r}, ...) -> {e2!r}' )
+				await self.car_activity( ctr, f'ERROR: originate(dial_string={dial_string!r}, ...) -> {e2!r}' )
 				return '-ERR originate failed'
 			log.debug( 'originate -> %r', r )
-			await self.car_activity( f'originate(dial_string={dial_string!r}, ...) -> {r!r}' )
+			await self.car_activity( ctr, f'originate(dial_string={dial_string!r}, ...) -> {r!r}' )
 			
 			terminators = ( 'CHANNEL_DESTROY', 'CHANNEL_HANGUP', 'CHANNEL_UNBRIDGE' )
 			
@@ -1511,33 +1509,33 @@ class CallState( State ):
 						continue
 					if evt_name == 'CHANNEL_ANSWER':
 						log.info( 'bridge proceeding on %r', evt_name )
-						await self.car_activity( f'bridge proceeding on event {evt_name!r}' )
+						await self.car_activity( ctr, f'bridge proceeding on event {evt_name!r}' )
 						answered = True
 						break
 					elif evt_name in terminators:
-						await self.car_activity( f'ERROR: bridge failed because got event {evt_name!r} waiting for answer' )
+						await self.car_activity( ctr, f'ERROR: bridge failed because got event {evt_name!r} waiting for answer' )
 						return '-ERR NO_ANSWER'
 				if originate_timer.elapsed():
 					r = await self.esl.uuid_kill( bridge_uuid, 'ORIGINATOR_CANCEL' )
 					log.info( 'timeout before CHANNEL_ANSWER, uuid_kill -> %r', r )
-					await self.car_activity( 'ERROR: bridge failed because timeout waiting for originate to be answered' )
+					await self.car_activity( ctr, 'ERROR: bridge failed because timeout waiting for originate to be answered' )
 					return '-ERR NO_ANSWER'
 				if exists_timer.elapsed():
 					if not await self.esl.uuid_exists( self.uuid ):
 						r = await self.esl.uuid_kill( bridge_uuid, 'ORIGINATOR_CANCEL' )
 						log.info( 'aleg disappeared, uuid_kill -> %r', r )
-						await self.car_activity( 'ERROR: bridge failed because aleg disappeared' )
+						await self.car_activity( ctr, 'ERROR: bridge failed because aleg disappeared' )
 						return '-ERR aleg uuid disappeared'
 			
 			try:
 				await self.esl._uuid_bridge( self.uuid, bridge_uuid )
 			except Exception as e3:
 				log.error( 'uuid_bridge failed: %r', e3 )
-				await self.car_activity( f'ERROR: uuid_bridge failed b/c {e3!r}' )
+				await self.car_activity( ctr, f'ERROR: uuid_bridge failed b/c {e3!r}' )
 				return f'-ERR bridge failed: {e3!r}'
 			else:
 				log.info( 'uuid_bridge success' )
-				await self.car_activity( 'originate successfully bridged' )
+				await self.car_activity( ctr, 'originate successfully bridged' )
 			
 			# now we need to stay right here while the call remains bridged
 			exists_timer = ElapsedTimer( timedelta( seconds = 6 ))
@@ -1562,27 +1560,27 @@ class CallState( State ):
 		finally:
 			await self.esl.filter_delete( 'Unique-ID', bridge_uuid )
 	
-	async def action_bridge( self, action: ACTION_BRIDGE, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_bridge( self, ctr: repo.Connector, action: ACTION_BRIDGE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_bridge' )
 		if self.state == HUNT: return CONTINUE
 		
-		await self.car_activity( 'auto-answering call b/c bridge requested' )
+		await self.car_activity( ctr, 'auto-answering call b/c bridge requested' )
 		if not await util.answer( self.esl, self.uuid, 'action_bridge' ):
 			return STOP
 		
-		result = await self._bridge( action )
+		result = await self._bridge( ctr, action )
 		
 		if result[:3] == '+OK':
-			await self.car_activity( f'bridge succeeded with {result!r}' )
+			await self.car_activity( ctr, f'bridge succeeded with {result!r}' )
 			return CONTINUE
 		
 		# origination failed:
 		which = 'timeoutBranch' if 'NO_ANSWER' in result else 'failBranch'
-		await self.car_activity( f'ERROR: bridge failed with {result!r}, executing branch {which!r}' )
+		await self.car_activity( ctr, f'ERROR: bridge failed with {result!r}, executing branch {which!r}' )
 		await self.set_state( AceState.BRIDGE )
-		return await self.exec_branch( action, which, pagd, log = log )
+		return await self.exec_branch( ctr, action, which, pagd, log = log )
 	
-	async def _greeting( self, action: ACTION_GREETING, box: int, pagd: Opt[PAGD] ) -> RESULT:
+	async def _greeting( self, ctr: repo.Connector, action: ACTION_GREETING, box: int, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState._greeting' )
 		greeting: int = await self.toint( action, 'greeting', default = 1 )
 		settings = await ace_settings.aload()
@@ -1593,20 +1591,20 @@ class CallState( State ):
 				boxsettings: BOXSETTINGS = await vm.load_box_settings( box )
 			except LoadBoxError as e:
 				log.error( 'invalid box=%r (%r)', box, e )
-				await self.car_activity( f'ERROR: Could not playing greeting for vm box {box!r} b/c {e!r}' )
+				await self.car_activity( ctr, f'ERROR: Could not playing greeting for vm box {box!r} b/c {e!r}' )
 				return CONTINUE
 			greeting = await self.toint( action, 'greeting', default = 1 )
 		path = vm.box_greeting_path( box, greeting )
 		if path and Path( path ).is_file():
 			sound: str = str( path )
-			await self.car_activity( f'playing vm box {box!r} greeting at {sound!r}' )
+			await self.car_activity( ctr, f'playing vm box {box!r} greeting at {sound!r}' )
 		else:
 			log.error( 'invalid or non-existing greeting path: %r', path )
-			await self.car_activity( f'ERROR: invalid or non-existing vm box {box!r} greeting path {path!r}' )
+			await self.car_activity( ctr, f'ERROR: invalid or non-existing vm box {box!r} greeting path {path!r}' )
 			sound = await vm._error_greeting_file_missing( box, greeting )
-		return await self._playback( sound, pagd )
+		return await self._playback( ctr, sound, pagd )
 	
-	async def action_greeting( self, action: ACTION_GREETING, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_greeting( self, ctr: repo.Connector, action: ACTION_GREETING, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_greeting' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -1614,73 +1612,73 @@ class CallState( State ):
 		if not box: # "current" box
 			if not self.box:
 				log.error( 'current box requested but not currently inside the digit map of a voicemail box' )
-				await self.car_activity( 'ERROR: current vm box greeting requested but not currently inside the digit map of a voicemail box' )
+				await self.car_activity( ctr, 'ERROR: current vm box greeting requested but not currently inside the digit map of a voicemail box' )
 				return CONTINUE
 			box = self.box
 		
-		return await self._greeting( action, box, pagd )
+		return await self._greeting( ctr, action, box, pagd )
 	
-	async def action_greeting2( self, action: ACTION_GREETING, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_greeting2( self, ctr: repo.Connector, action: ACTION_GREETING, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_greeting2' )
 		if self.state == HUNT: return CONTINUE
 		
 		box: Opt[int] = await self.toint( action, 'box' )
 		if not box:
 			log.error( 'no box # specified' )
-			await self.car_activity( f'ERROR: cannot play greeting b/c box={box!r}' )
+			await self.car_activity( ctr, f'ERROR: cannot play greeting b/c box={box!r}' )
 			return CONTINUE
 		
-		return await self._greeting( action, box, pagd )
+		return await self._greeting( ctr, action, box, pagd )
 	
-	async def action_hangup( self, action: ACTION_HANGUP, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_hangup( self, ctr: repo.Connector, action: ACTION_HANGUP, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_hangup' )
 		if self.state == HUNT: return CONTINUE
 		
 		cause: util.CAUSE = cast( util.CAUSE, expect( str, action.get( 'cause' ), default = 'NORMAL_CLEARING' ))
 		if cause not in util.causes:
 			log.warning( f'unrecognized hangup cause={cause!r}' )
-			await self.car_activity( f'WARNING: unrecognized hangup cause={cause!r}' )
-		await self.car_activity( f'Hanging up call with cause={cause!r}' )
+			await self.car_activity( ctr, f'WARNING: unrecognized hangup cause={cause!r}' )
+		await self.car_activity( ctr, f'Hanging up call with cause={cause!r}' )
 		await self.set_state( AceState.HANGUP )
 		try:
 			await util.hangup( self.esl, self.uuid, cause, 'action_hangup' )
 		except Exception as e:
-			await self.car_activity( f'ERROR: hangup failed with {e!r}' )
+			await self.car_activity( ctr, f'ERROR: hangup failed with {e!r}' )
 		return STOP
 	
-	async def action_ivr( self, action: ACTION_IVR, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_ivr( self, ctr: repo.Connector, action: ACTION_IVR, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_ivr' )
 		
 		if pagd is not None:
 			log.error( 'cannot execute a PAGD in the greeting path of another PAGD/IVR' )
-			await self.car_activity( f'ERROR: cannot execute a PAGD in the greeting path of another PAGD/IVR' )
+			await self.car_activity( ctr, f'ERROR: cannot execute a PAGD in the greeting path of another PAGD/IVR' )
 			return CONTINUE
 		
 		branches: BRANCHES = expect( dict, action.get( 'branches' ))
 		
 		if self.state == HUNT:
 			for digits, branch in branches.items():
-				if STOP == await self._exec_branch( digits, branch, None, log = log ): return STOP
+				if STOP == await self._exec_branch( ctr, digits, branch, None, log = log ): return STOP
 				if self.state != HUNT: return CONTINUE
-			return await self.exec_branch( action, 'failureBranch', None, log = log )
+			return await self.exec_branch( ctr, action, 'failureBranch', None, log = log )
 		
 		async def _success( digits: str ) -> Opt[RESULT]:
 			log.info( 'got digits=%r', digits )
 			branch: BRANCH = cast( BRANCH, expect( dict, branches.get( digits ), default = {} ))
 			if branch:
-				await self.car_activity( f'IVR executing branch {branch.get("name")!r} from digits={digits!r}' )
-				return await self._exec_branch( digits, branch, None, log = log )
+				await self.car_activity( ctr, f'IVR executing branch {branch.get("name")!r} from digits={digits!r}' )
+				return await self._exec_branch( ctr, digits, branch, None, log = log )
 			else:
 				log.error( 'no branch found for digits=%r', digits )
-				await self.car_activity( f'IVR does not have a branch for digits={digits!r}' )
+				await self.car_activity( ctr, f'IVR does not have a branch for digits={digits!r}' )
 				return None
 		
 		_ = await util.answer( self.esl, self.uuid, 'CallState.action_ivr' )
 		
 		await self.set_state( AceState.IVR )
-		return await self._pagd( 'IVR', action, _success )
+		return await self._pagd( ctr, 'IVR', action, _success )
 	
-	async def _broadcast( self, action_type: str, stream: Opt[str], *, default: str, log: logging.Logger ) -> RESULT:
+	async def _broadcast( self, ctr: repo.Connector, action_type: str, stream: Opt[str], *, default: str, log: logging.Logger ) -> RESULT:
 		log2 = log.getChild( '_broadcast' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -1694,54 +1692,54 @@ class CallState( State ):
 			_on_event( event )
 		
 		log.info( 'playing %r', stream )
-		await self.car_activity( f'broadcasting stream {stream!r}' )
+		await self.car_activity( ctr, f'broadcasting stream {stream!r}' )
 		await self.esl.uuid_broadcast( self.uuid, stream, 'aleg' )
 		
 		return CONTINUE
 	
-	async def action_moh( self, action: ACTION_MOH, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_moh( self, ctr: repo.Connector, action: ACTION_MOH, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_moh' )
 		await self.set_state( AceState.MOH )
-		return await self._broadcast( 'MOH', action.get( 'stream' ), default = '$${hold_music}', log = log )
+		return await self._broadcast( ctr, 'MOH', action.get( 'stream' ), default = '$${hold_music}', log = log )
 	
-	async def action_pagd( self, action: ACTION_PAGD, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_pagd( self, ctr: repo.Connector, action: ACTION_PAGD, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_pagd' )
 		
 		if pagd is not None:
 			log.error( 'cannot execute a PAGD in the greeting path on another PAGD or an IVR' )
-			await self.car_activity( f'ERROR: cannot execute a PAGD in the greeting path of another PAGD/IVR' )
+			await self.car_activity( ctr, f'ERROR: cannot execute a PAGD in the greeting path of another PAGD/IVR' )
 			return CONTINUE
 		
 		if self.state == HUNT:
-			if STOP == await self.exec_branch( action, 'successBranch', None, log = log ): return STOP
+			if STOP == await self.exec_branch( ctr, action, 'successBranch', None, log = log ): return STOP
 			if self.state != HUNT: return CONTINUE
 			
-			return await self.exec_branch( action, 'failureBranch', None, log = log )
+			return await self.exec_branch( ctr, action, 'failureBranch', None, log = log )
 		
 		async def _success( digits: str ) -> Opt[RESULT]:
-			await self.car_activity( f'PAGD executing success branch on digits={digits!r}' )
-			return await self.exec_branch( action, 'successBranch', None, log = log )
+			await self.car_activity( ctr, f'PAGD executing success branch on digits={digits!r}' )
+			return await self.exec_branch( ctr, action, 'successBranch', None, log = log )
 		
 		_ = await util.answer( self.esl, self.uuid, 'CallState.action_pagd' )
 		
 		await self.set_state( AceState.PAGD )
-		return await self._pagd( 'PAGD', action, _success )
+		return await self._pagd( ctr, 'PAGD', action, _success )
 	
-	async def action_playback( self, action: ACTION_PLAYBACK, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_playback( self, ctr: repo.Connector, action: ACTION_PLAYBACK, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_playback' )
 		if self.state == HUNT: return CONTINUE
 		
 		try:
 			sound = expect( str, action.get( 'sound' ) )
 			log.info( 'sound=%r', sound )
-			await self.car_activity( f'playback executing with sound={sound!r}' )
+			await self.car_activity( ctr, f'playback executing with sound={sound!r}' )
 		except ValueError as e:
 			sound = 'ivr/ivr-invalid_sound_prompt.wav'
-			await self.car_activity( f'playback using default sound={sound!r} b/c {e!r}' )
+			await self.car_activity( ctr, f'playback using default sound={sound!r} b/c {e!r}' )
 		await self.set_state( AceState.PLAYBACK )
-		return await self._playback( sound, pagd )
+		return await self._playback( ctr, sound, pagd )
 	
-	async def action_playtts( self, action: ACTION_PLAYTTS, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_playtts( self, ctr: repo.Connector, action: ACTION_PLAYTTS, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_playtts' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -1751,21 +1749,21 @@ class CallState( State ):
 		if not text:
 			log.error( 'tts node has no text prompt' )
 			text = 'Error'
-			await self.car_activity( f'ERROR: TTS node defaulting to {text!r} b/c no text provided' )
+			await self.car_activity( ctr, f'ERROR: TTS node defaulting to {text!r} b/c no text provided' )
 		voice = action.get( 'voice' )
-		await self.car_activity( f'TTS initiated with voice={voice!r}, text={text!r}' )
+		await self.car_activity( ctr, f'TTS initiated with voice={voice!r}, text={text!r}' )
 		tts = settings.tts( action.get( 'voice' ))
 		tts.say( text )
 		stream = await tts.generate()
-		r = await self._playback( str( stream ), pagd )
+		r = await self._playback( ctr, str( stream ), pagd )
 		log.info( 'done playing %r using voice %r: result=%r',
 			text, tts.voice, r,
 		)
-		await self.car_activity( f'TTS result={r!r}' )
+		await self.car_activity( ctr, f'TTS result={r!r}' )
 		await self.set_state( AceState.PLAYTTS )
 		return r
 	
-	async def action_play_dtmf( self, action: ACTION_PLAY_DTMF, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_play_dtmf( self, ctr: repo.Connector, action: ACTION_PLAY_DTMF, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_play_dtmf' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -1774,45 +1772,45 @@ class CallState( State ):
 			await self.set_state( AceState.PLAYDTMF )
 			r = await self.esl.uuid_send_dtmf( self.uuid, dtmf )
 			log.info( 'uuid_send_dtmf( %r, %r ) -> %r', self.uuid, dtmf, r )
-			await self.car_activity( f'uuid_send_dtmf({dtmf!r}) -> {r!r}' )
+			await self.car_activity( ctr, f'uuid_send_dtmf({dtmf!r}) -> {r!r}' )
 		else:
 			log.error( 'no dtmf digits specified' )
-			await self.car_activity( f'ERROR: cannot send dtmf digits b/c dtmf_digits={dtmf!r}' )
+			await self.car_activity( ctr, f'ERROR: cannot send dtmf digits b/c dtmf_digits={dtmf!r}' )
 		return CONTINUE
 	
-	async def action_preannounce( self, action: ACTION_PREANNOUNCE, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_preannounce( self, ctr: repo.Connector, action: ACTION_PREANNOUNCE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_preannounce' )
 		if self.state == HUNT: return CONTINUE
 		
 		sound = ( await self.expand( '${ace-preannounce_wav}' )).strip()
 		if not sound:
 			log.warning( 'no preannounce path' )
-			await self.car_activity( f'ERROR: cannot play preannounce b/c ${{ace-preannounce_wav}}={sound!r}' )
+			await self.car_activity( ctr, f'ERROR: cannot play preannounce b/c ${{ace-preannounce_wav}}={sound!r}' )
 			return CONTINUE
 		log.info( 'sound=%r', sound )
-		await self.car_activity( f'playing ${{ace-preannounce_wav}}={sound!r}' )
+		await self.car_activity( ctr, f'playing ${{ace-preannounce_wav}}={sound!r}' )
 		await self.set_state( AceState.PREANNOUNCE )
-		return await self._playback( sound, pagd )
+		return await self._playback( ctr, sound, pagd )
 	
-	async def action_preanswer( self, action: ACTION_PREANSWER, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_preanswer( self, ctr: repo.Connector, action: ACTION_PREANSWER, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_preanswer' )
 		if self.state == HUNT: return CONTINUE
 		
 		await self.set_state( AceState.PREANSWER )
 		log.info( 'pre-answering' )
-		await self.car_activity( 'pre-answering call' )
+		await self.car_activity( ctr, 'pre-answering call' )
 		if not await util.pre_answer( self.esl, self.uuid, 'ace_eso.CallState.action_preanswer' ):
 			return STOP
 		
 		return CONTINUE
 	
-	async def action_ring( self, action: ACTION_RING, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_ring( self, ctr: repo.Connector, action: ACTION_RING, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_ring' )
 		await self.set_state( AceState.RING )
-		await self.car_activity( 'playing ringtone to caller' )
-		return await self._broadcast( 'RING', action.get( 'tone' ), default = '$${us-ring}', log = log )
+		await self.car_activity( ctr, 'playing ringtone to caller' )
+		return await self._broadcast( ctr, 'RING', action.get( 'tone' ), default = '$${us-ring}', log = log )
 	
-	async def action_route( self, action: ACTION_ROUTE, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_route( self, ctr: repo.Connector, action: ACTION_ROUTE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.route' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -1820,33 +1818,33 @@ class CallState( State ):
 		route: int = await self.toint( action, 'route' )
 		if not valid_route( route ):
 			log.warning( 'invalid route=%r', route )
-			await self.car_activity( f'ERROR: Cannot send call to another route b/c invalid route={route!r}' )
+			await self.car_activity( ctr, f'ERROR: Cannot send call to another route b/c invalid route={route!r}' )
 			return CONTINUE
 		log.info( 'loading route=%r', route )
 		try:
-			routedata = await self.load_route( route ) # TODO FIXME: this can fail...
+			routedata = await self.load_route( ctr, route ) # TODO FIXME: this can fail...
 		except repo.ResourceNotFound as e:
 			log.warning( 'unable to execute route %r: %r', route, e )
-			await self.car_activity( f'ERROR: unable to execute route {route!r}: {e!r}' )
+			await self.car_activity( ctr, f'ERROR: unable to execute route {route!r}: {e!r}' )
 			return CONTINUE
 		#old_route = self.route
 		log.info( 'executing route=%r', route )
-		await self.car_activity( f'executing route {route!r}' )
-		result = await self.exec_top_actions(
+		await self.car_activity( ctr, f'executing route {route!r}' )
+		result = await self.exec_top_actions( ctr,
 			expect( list, routedata.get( 'nodes' ), default = [] )
 		)
-		await self.car_activity( f'route {route!r} returned with result={result!r}' )
+		await self.car_activity( ctr, f'route {route!r} returned with result={result!r}' )
 		#self.route = old_route
 		return result
 	
-	async def action_rxfax( self, action: ACTION_RXFAX, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_rxfax( self, ctr: repo.Connector, action: ACTION_RXFAX, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_rxfax' )
 		if self.state == HUNT: return CONTINUE
 		
 		mailto = expect( str, action.get( 'mailto' ), default = '' ).strip()
 		if not mailto:
 			log.warning( 'cannot rxfax b/c action.mailto=%r', mailto )
-			await self.car_activity( f'ERROR: cannot rxfax b/c action.mailto={mailto!r}' )
+			await self.car_activity( ctr, f'ERROR: cannot rxfax b/c action.mailto={mailto!r}' )
 			return STOP
 		
 		await self.set_state( AceState.RXFAX )
@@ -1871,13 +1869,13 @@ class CallState( State ):
 		body = await self.expand( body )
 		await self.esl.uuid_setvar( self.uuid, 'ace_rxfax_body', body )
 		
-		await self.car_activity( 'initiating rxfax' )
+		await self.car_activity( ctr, 'initiating rxfax' )
 		result = await self.esl.uuid_transfer( self.uuid, '', 'ace_rxfax', 'xml', 'default' )
 		log.info( 'uuid_transfer result=%r', result )
 		self.hangup_on_exit = False
 		return STOP
 	
-	async def action_set( self, action: ACTION_SET, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_set( self, ctr: repo.Connector, action: ACTION_SET, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_set' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -1885,10 +1883,10 @@ class CallState( State ):
 		value: str = str( await self.expand( action.get( 'value' ) or '' ))
 		r = await self.esl.uuid_setvar( self.uuid, variable, value )
 		log.info( 'uuid_setvar( %r, %r, %r ) -> %r', self.uuid, variable, value, r )
-		await self.car_activity( f'set channel variable {variable!r}={value!r}' )
+		await self.car_activity( ctr, f'set channel variable {variable!r}={value!r}' )
 		return CONTINUE
 	
-	async def action_silence( self, action: ACTION_SILENCE, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_silence( self, ctr: repo.Connector, action: ACTION_SILENCE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_silence' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -1898,16 +1896,16 @@ class CallState( State ):
 		duration = -1 if seconds < 0 else int( seconds * 1000 )
 		stream = f'silence_stream://{duration!r},{divisor!r}'
 		log.info( '%s', stream )
-		await self.car_activity( f'playing silence {stream!r}' )
-		return await self._playback( stream, pagd )
+		await self.car_activity( ctr, f'playing silence {stream!r}' )
+		return await self._playback( ctr, stream, pagd )
 	
-	async def action_throttle( self, action: ACTION_THROTTLE, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_throttle( self, ctr: repo.Connector, action: ACTION_THROTTLE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_throttle' )
 		if self.state == HUNT:
-			if STOP == await self.exec_branch( action, 'allowedBranch', pagd, log = log ):
+			if STOP == await self.exec_branch( ctr, action, 'allowedBranch', pagd, log = log ):
 				return STOP
 			if self.state != HUNT: return CONTINUE
-			return await self.exec_branch( action, 'throttledBranch', pagd, log = log )
+			return await self.exec_branch( ctr, action, 'throttledBranch', pagd, log = log )
 		
 		await self.set_state( AceState.THROTTLE )
 		try:
@@ -1915,7 +1913,7 @@ class CallState( State ):
 		except Exception as e:
 			throttle_id = self.did
 			log.error( 'Error trying to get throttle_id (defaulting to did): %r', e )
-			await self.car_activity( f'throttle_id defaulting to {throttle_id!r} because channel variable throttle_id -> {e!r}' )
+			await self.car_activity( ctr, f'throttle_id defaulting to {throttle_id!r} because channel variable throttle_id -> {e!r}' )
 		
 		try:
 			throttle_limit = int( await self.esl.uuid_getvar( self.uuid, 'throttle_limit' ) or '?' )
@@ -1925,13 +1923,13 @@ class CallState( State ):
 			log.error( 'Error trying to get throttle_limit (defaulting to %r): %r',
 				throttle_limit, e,
 			)
-			await self.car_activity( f'throttle_limit defaulting to {throttle_limit} because channel variable throttle_limit -> {e!r}' )
+			await self.car_activity( ctr, f'throttle_limit defaulting to {throttle_limit} because channel variable throttle_limit -> {e!r}' )
 		
 		try:
 			await self.esl.uuid_setvar( self.uuid, 'limit_ignore_transfer', 'true' )
 		except Exception as e:
 			log.error( 'Error trying to set limit_ignore_transfer: %r', e )
-			await self.car_activity( f'ERROR: trying to set limit_ignore_transfer -> {e!r}' )
+			await self.car_activity( ctr, f'ERROR: trying to set limit_ignore_transfer -> {e!r}' )
 		
 		backend = 'hash'
 		realm = 'inbound'
@@ -1941,7 +1939,7 @@ class CallState( State ):
 				_on_event( event )
 		except Exception as e:
 			log.error( 'Error trying to execute limit app: %r', e )
-			await self.car_activity( f'ERROR: trying to execute limit app -> {e!r}' )
+			await self.car_activity( ctr, f'ERROR: trying to execute limit app -> {e!r}' )
 		
 		try:
 			usage = int( await self.esl.uuid_getvar( self.uuid, 'limit_usage' ) or '?' )
@@ -1950,7 +1948,7 @@ class CallState( State ):
 			log.error( 'Error trying to get limit_usage (defaulting to %r: %r',
 				usage, e,
 			)
-			await self.car_activity( f'ERROR trying to query limit_usage -> {e!r}' )
+			await self.car_activity( ctr, f'ERROR trying to query limit_usage -> {e!r}' )
 		
 		log.info( 'uuid=%r, usage=%r', self.uuid, usage )
 		which = 'allowedBranch'
@@ -1960,30 +1958,30 @@ class CallState( State ):
 			log.debug( 'uuid_limit_release( %r, %r, %r, %r ) -> %r',
 				self.uuid, backend, realm, throttle_id, r,
 			)
-			await self.car_activity( f'call throttled, uuid_limit_release -> {r!r}' )
+			await self.car_activity( ctr, f'call throttled, uuid_limit_release -> {r!r}' )
 		else:
-			await self.car_activity( f'call NOT throttled b/c usage {usage!r} < throttle_limit {throttle_limit!r}' )
+			await self.car_activity( ctr, f'call NOT throttled b/c usage {usage!r} < throttle_limit {throttle_limit!r}' )
 		
-		return await self.exec_branch( action, which, pagd, log = log )
+		return await self.exec_branch( ctr, action, which, pagd, log = log )
 	
-	async def action_tone( self, action: ACTION_TONE, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_tone( self, ctr: repo.Connector, action: ACTION_TONE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_tone' )
 		if self.state == HUNT: return CONTINUE
 		
 		tone = str( action.get( 'tone' ) or '' ).strip()
 		if not tone:
 			log.error( 'Cannot play tone b/c tone=%r', tone )
-			await self.car_activity( f'ERROR: cannot play tone b/c tone={tone!r}' )
+			await self.car_activity( ctr, f'ERROR: cannot play tone b/c tone={tone!r}' )
 			return CONTINUE
 		
 		await self.set_state( AceState.TONE )
 		loops = await self.toint( action, 'loops', default = 1 )
 		stream = f'tone_stream://{tone};loops={loops}'
 		log.info( 'stream=%r', stream )
-		await self.car_activity( f'playing tone {stream!r}' )
-		return await self._playback( stream, pagd )
+		await self.car_activity( ctr, f'playing tone {stream!r}' )
+		return await self._playback( ctr, stream, pagd )
 	
-	async def action_transfer( self, action: ACTION_TRANSFER, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_transfer( self, ctr: repo.Connector, action: ACTION_TRANSFER, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_transfer' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -1999,18 +1997,18 @@ class CallState( State ):
 		)
 		result = await self.esl.uuid_transfer( self.uuid, leg, dest, dialplan, context )
 		log.info( 'result=%r', result )
-		await self.car_activity( f'uuid_transfer( uuid={self.uuid!r}, leg={leg!r}, dest={dest!r}, dialplan={dialplan!r}, context={context!r}) -> {result!r}' )
+		await self.car_activity( ctr, f'uuid_transfer( uuid={self.uuid!r}, leg={leg!r}, dest={dest!r}, dialplan={dialplan!r}, context={context!r}) -> {result!r}' )
 		self.hangup_on_exit = False
 		return STOP
 	
-	async def _guest_greeting( self, action: ACTION_VOICEMAIL, box: int, boxsettings: BOXSETTINGS, vm: Voicemail ) -> Opt[str]:
+	async def _guest_greeting( self, ctr: repo.Connector, action: ACTION_VOICEMAIL, box: int, boxsettings: BOXSETTINGS, vm: Voicemail ) -> Opt[str]:
 		log = logger.getChild( 'CallState._guest_greeting' )
 		
 		try:
 			active_greeting = int( boxsettings.get( 'greeting' ) or '' )
 		except ValueError as e:
 			active_greeting = 1
-			await self.car_activity( f'ERROR trying to get vm box {box!r} active greeting: {e!r}' )
+			await self.car_activity( ctr, f'ERROR trying to get vm box {box!r} active greeting: {e!r}' )
 		
 		async def _make_greeting_branch( greeting: int ) -> BRANCH:
 			path = vm.box_greeting_path( box, greeting )
@@ -2029,21 +2027,21 @@ class CallState( State ):
 		greeting_branch: BRANCH
 		greeting_override = str( action.get( 'greeting_override' ) or '' )
 		if greeting_override == 'A': # play active greeting
-			await self.car_activity( f'_guest_greeting: playing active_greeting={active_greeting!r} b/c greeting_override={greeting_override!r}' )
+			await self.car_activity( ctr, f'_guest_greeting: playing active_greeting={active_greeting!r} b/c greeting_override={greeting_override!r}' )
 			greeting_branch = await _make_greeting_branch( active_greeting )
 		elif greeting_override == 'X': # play no greeting at all
-			await self.car_activity( f'_guest_greeting: not playing any greeting b/c greeting_override={greeting_override!r}' )
+			await self.car_activity( ctr, f'_guest_greeting: not playing any greeting b/c greeting_override={greeting_override!r}' )
 			return ''
 		elif greeting_override.isnumeric():
 			greeting = int( greeting_override )
-			await self.car_activity( f'_guest_greeting: playing greeting={greeting!r} b/c greeting_override={greeting_override!r}' )
+			await self.car_activity( ctr, f'_guest_greeting: playing greeting={greeting!r} b/c greeting_override={greeting_override!r}' )
 			greeting_branch = await _make_greeting_branch( greeting )
 		else:
 			if greeting_override:
 				log.warning( 'invalid greeting_override=%r', greeting_override )
-				await self.car_activity( f'_guest_greeting: ERROR: invalid greeting_override={greeting_override!r}' )
+				await self.car_activity( ctr, f'_guest_greeting: ERROR: invalid greeting_override={greeting_override!r}' )
 			which = 'greetingBranch'
-			await self.car_activity( '_guest_greeting: choosing greeting branch' )
+			await self.car_activity( ctr, '_guest_greeting: choosing greeting branch' )
 			greeting_branch = cast( BRANCH, boxsettings.get( which ) or {} )
 		
 		if not greeting_branch.get( 'nodes' ):
@@ -2051,7 +2049,7 @@ class CallState( State ):
 			# 1) greeting_override == 'A'
 			# 2) default behavior was requested but no greeting behavior was defined in the voicemail box
 			which = ''
-			await self.car_activity( f'_guest_greeting: playing active_greeting={active_greeting!r} b/c greeting branch is empty' )
+			await self.car_activity( ctr, f'_guest_greeting: playing active_greeting={active_greeting!r} b/c greeting branch is empty' )
 			greeting_branch = await _make_greeting_branch( active_greeting )
 		
 		pagd = PAGD(
@@ -2063,11 +2061,11 @@ class CallState( State ):
 			variable_name = '',
 			digit_timeout = timedelta( seconds = 0.1 ), # TODO FIXME: customizable?
 		)
-		if STOP == await self._exec_branch( which, greeting_branch, pagd, log = log ):
+		if STOP == await self._exec_branch( ctr, which, greeting_branch, pagd, log = log ):
 			return None
 		#if not pagd.digits:
 		#	silence_seconds = 0.25 # TODO FIXME: customizable
-		#	await self.car_activity( f'_guest_greeting: playing {silence_seconds!r}s of silence after greeting b/c digits={pagd.digits!r}' )
+		#	await self.car_activity( ctr, f'_guest_greeting: playing {silence_seconds!r}s of silence after greeting b/c digits={pagd.digits!r}' )
 		#	if STOP == await self.action_silence( ACTION_SILENCE(
 		#		type = 'silence',
 		#		name = '',
@@ -2076,10 +2074,10 @@ class CallState( State ):
 		#	), pagd ):
 		#		return None
 		digits = pagd.digits or ''
-		await self.car_activity( f'_guest_greeting: vm guest greeting returning with digits={digits!r}' )
+		await self.car_activity( ctr, f'_guest_greeting: vm guest greeting returning with digits={digits!r}' )
 		return digits
 	
-	async def action_voicemail( self, action: ACTION_VOICEMAIL, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_voicemail( self, ctr: repo.Connector, action: ACTION_VOICEMAIL, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'CallState.action_voicemail' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -2087,7 +2085,7 @@ class CallState( State ):
 		if box is None:
 			box_ = action.get( 'box' )
 			log.warning( 'invalid box=%r', box_ )
-			await self.car_activity( f'action_voicemail: ERROR trying to send call to voicemail: invalid box={box_!r}' )
+			await self.car_activity( ctr, f'action_voicemail: ERROR trying to send call to voicemail: invalid box={box_!r}' )
 			return CONTINUE
 		
 		settings = await ace_settings.aload()
@@ -2097,7 +2095,7 @@ class CallState( State ):
 		
 		if box == 0:
 			await self.set_state( AceState.VMCHECKIN )
-			await self.car_activity( f'action_voicemail: Executing voicemail checkin logic b/c box={box!r}' )
+			await self.car_activity( ctr, f'action_voicemail: Executing voicemail checkin logic b/c box={box!r}' )
 			if not await vm.checkin():
 				return STOP
 			return CONTINUE
@@ -2106,7 +2104,7 @@ class CallState( State ):
 		try:
 			boxsettings: BOXSETTINGS = await vm.load_box_settings( box )
 		except LoadBoxError as e:
-			await self.car_activity(
+			await self.car_activity( ctr,
 				f'action_voicemail: ERROR - box {box!r} could not be loaded: {e!r}'
 			)
 			stream = await vm._the_person_you_are_trying_to_reach_is_not_available_and_does_not_have_voicemail()
@@ -2116,7 +2114,7 @@ class CallState( State ):
 			await self.set_state( AceState.HANGUP )
 			await vm.goodbye()
 			return STOP
-		await self.car_activity(
+		await self.car_activity( ctr,
 			f'action_voicemail: Loaded settings for vm box {box!r} named {boxsettings.get("name")!r}'
 		)
 		
@@ -2127,37 +2125,37 @@ class CallState( State ):
 			digit: Opt[str] = None
 			while True: # this loop only exists to serve replay of greeting in the case of "invalid entry"
 				if not digit:
-					digit = await self._guest_greeting( action, box, boxsettings, vm )
+					digit = await self._guest_greeting( ctr, action, box, boxsettings, vm )
 				if digit is None:
 					return STOP
 				if digit == '*':
 					await self.set_state( AceState.VMLOGIN )
-					await self.car_activity( 'action_voicemail: caller pressed * during vm greeting, prompting for login' )
+					await self.car_activity( ctr, 'action_voicemail: caller pressed * during vm greeting, prompting for login' )
 					if await vm.login( box, boxsettings ):
-						await self.car_activity( f'action_voicemail: caller logged into box {box!r} successfully, transferring to admin_main_menu' )
+						await self.car_activity( ctr, f'action_voicemail: caller logged into box {box!r} successfully, transferring to admin_main_menu' )
 						await self.set_state( AceState.VMADMIN )
 						await vm.admin_main_menu( box, boxsettings )
-						await self.car_activity( f'action_voicemail: caller back from vm box {box!r} admin mode' )
+						await self.car_activity( ctr, f'action_voicemail: caller back from vm box {box!r} admin mode' )
 					else:
-						await self.car_activity( f'action_voicemail: caller failed to log into box {box!r}' )
-					await self.car_activity( 'action_voicemail: hangup and terminating script' )
+						await self.car_activity( ctr, f'action_voicemail: caller failed to log into box {box!r}' )
+					await self.car_activity( ctr, 'action_voicemail: hangup and terminating script' )
 					await self.set_state( AceState.HANGUP )
 					await util.hangup( self.esl, self.uuid, 'NORMAL_CLEARING', 'CallState.action_voicemail' )
 					return STOP
 				if digit and digit in '1234567890':
 					branch = branches.get( digit )
 					if branch:
-						await self.car_activity( f'action_voicemail: caller pressed {digit!r} during vm greeting, executing branch logic' )
-						r = await self._exec_branch( digit, branch, None, log = log )
+						await self.car_activity( ctr, f'action_voicemail: caller pressed {digit!r} during vm greeting, executing branch logic' )
+						r = await self._exec_branch( ctr, digit, branch, None, log = log )
 						return r
 					else:
-						await self.car_activity( f'action_voicemail: caller pressed {digit!r} during vm greeting, but there is no logic for that digit' )
+						await self.car_activity( ctr, f'action_voicemail: caller pressed {digit!r} during vm greeting, but there is no logic for that digit' )
 						digit = await vm.play_menu([ 'ivr/ivr-that_was_an_invalid_entry.wav' ])
 						continue
 				# no diversions selected, record message:
 				if digit and digit != '#':
 					log.warning( 'invalid digit=%r', digit )
-				await self.car_activity( f'action_voicemail: vm box {box!r} greeting finished, preparing to record new message now' )
+				await self.car_activity( ctr, f'action_voicemail: vm box {box!r} greeting finished, preparing to record new message now' )
 				await self.set_state( AceState.VMGUESTMSG )
 				if await vm.guest( self.did, self.ani, box, boxsettings, self.notify ):
 					await self.set_state( AceState.HANGUP )
@@ -2170,21 +2168,22 @@ class CallState( State ):
 	
 	async def notify( self, box: int, boxsettings: BOXSETTINGS, msg: MSG ) -> None:
 		log = logger.getChild( 'CallState.notify' )
-		try:
-			settings = await ace_settings.aload()
-			await self.car_activity( f'notify starting for box {box!r} named {boxsettings.get("name")!r}' )
-			esl = ESL()
-			await esl.connect_to( settings.esl_host, settings.esl_port, settings.esl_pass )
-			state = NotifyState( self.ctr, esl, self.uuid, box, msg, boxsettings, settings.vm_checkin )
-			delivery = boxsettings.get( 'delivery' ) or {}
-			nodes = delivery.get( 'nodes' ) or []
-			await state.exec_top_actions( nodes )
-			await self.car_activity( 'notify process complete' )
-		except Exception as e:
-			log.exception( 'Unexpected error during voicemail notify:' )
-			await self.car_activity( f'notification terminated with an error: {e!r}' )
-		finally:
-			await esl.close()
+		with repo.Connector() as ctr:
+			try:
+				settings = await ace_settings.aload()
+				await self.car_activity( ctr, f'notify starting for box {box!r} named {boxsettings.get("name")!r}' )
+				esl = ESL()
+				await esl.connect_to( settings.esl_host, settings.esl_port, settings.esl_pass )
+				state = NotifyState( esl, self.uuid, box, msg, boxsettings, settings.vm_checkin )
+				delivery = boxsettings.get( 'delivery' ) or {}
+				nodes = delivery.get( 'nodes' ) or []
+				await state.exec_top_actions( ctr, nodes )
+				await self.car_activity( ctr, 'notify process complete' )
+			except Exception as e:
+				log.exception( 'Unexpected error during voicemail notify:' )
+				await self.car_activity( ctr, f'notification terminated with an error: {e!r}' )
+			finally:
+				await esl.close()
 
 
 #endregion CallState
@@ -2193,7 +2192,6 @@ class CallState( State ):
 
 class NotifyState( State ):
 	def __init__( self,
-		ctr: repo.Connector,
 		esl: ESL,
 		uuid: str,
 		box: int,
@@ -2201,22 +2199,22 @@ class NotifyState( State ):
 		boxsettings: BOXSETTINGS,
 		checkin: str,
 	) -> None:
-		super().__init__( ctr, esl, uuid )
+		super().__init__( esl, uuid )
 		self.box = box
 		self.msg = msg
 		self.boxsettings = boxsettings
 		self.checkin = checkin
 	
-	async def can_continue( self ) -> bool:
+	async def can_continue( self, ctr: repo.Connector ) -> bool:
 		if self.msg.status != 'new':
-			await self.car_activity( f'notification terminating b/c msg.status={self.msg.status!r}' )
+			await self.car_activity( ctr, f'notification terminating b/c msg.status={self.msg.status!r}' )
 			return False
 		if not Path( self.msg.path ).is_file():
-			await self.car_activity( f'notification terminating b/c file no longer exists: {self.msg.path!r}' )
+			await self.car_activity( ctr, f'notification terminating b/c file no longer exists: {self.msg.path!r}' )
 			return False
 		return True
 	
-	async def action_email( self, action: ACTION_EMAIL, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_email( self, ctr: repo.Connector, action: ACTION_EMAIL, pagd: Opt[PAGD] ) -> RESULT:
 		# TODO FIXME: might we have a use for this in CallState too?
 		log = logger.getChild( 'NotifyState.action_email' )
 		if self.state == HUNT: return CONTINUE
@@ -2238,7 +2236,7 @@ class NotifyState( State ):
 		
 		if not ec.to:
 			log.warning( 'cannot send email - no recipient' )
-			await self.car_activity( f'ERROR: cannot send email - no recipient' )
+			await self.car_activity( ctr, f'ERROR: cannot send email - no recipient' )
 			return CONTINUE
 		
 		
@@ -2292,16 +2290,16 @@ class NotifyState( State ):
 				assert settings.smtp_username and settings.smtp_password
 				smtp.login( settings.smtp_username, settings.smtp_password )
 			
-			await self.car_activity( f'sending email to={ec.to!r}, cc={ec.cc!r}, bcc={bcc!r}' )
+			await self.car_activity( ctr, f'sending email to={ec.to!r}, cc={ec.cc!r}, bcc={bcc!r}' )
 			try:
 				resp: str
 				senderrs: Dict[str,Tuple[int,str]]
 				resp, senderrs = smtp.sendmail2( ec.from_, list( chain( ec.to, ec.cc, bcc )), ec.as_bytes() )
 			except Exception as e:
 				log.exception( 'email failure:' )
-				await self.car_activity( f'ERROR: email failure: {e!r}' )
+				await self.car_activity( ctr, f'ERROR: email failure: {e!r}' )
 			else:
-				await self.car_activity( f'email success: {resp!r}' )
+				await self.car_activity( ctr, f'email success: {resp!r}' )
 		
 		finally:
 			if mp3_file is not None:
@@ -2312,7 +2310,7 @@ class NotifyState( State ):
 		
 		return CONTINUE
 	
-	async def _voice_deliver( self, action: ACTION_VOICE_DELIVER, number: str ) -> Tuple[bool,Opt[str]]:
+	async def _voice_deliver( self, ctr: repo.Connector, action: ACTION_VOICE_DELIVER, number: str ) -> Tuple[bool,Opt[str]]:
 		log = logger.getChild( 'NotifyState._voice_deliver' )
 		
 		timeout = timedelta( seconds = await self.toint( action, 'timeout', default = 0 ))
@@ -2343,7 +2341,7 @@ class NotifyState( State ):
 			'domain': context,
 		}
 		
-		await self.car_activity( f'dialing {dest!r}' )
+		await self.car_activity( ctr, f'dialing {dest!r}' )
 		try:
 			r = await self.esl.originate(
 				dest = dest,
@@ -2357,7 +2355,7 @@ class NotifyState( State ):
 			)
 		except Exception as e:
 			log.exception( 'Error trying to originate:' )
-			await self.car_activity( f'ERROR: could not dial {dest!r}: {e!r}' )
+			await self.car_activity( ctr, f'ERROR: could not dial {dest!r}: {e!r}' )
 			return False, repr( e )
 		log.debug( 'originate -> %r', r )
 		
@@ -2367,22 +2365,22 @@ class NotifyState( State ):
 			await self.esl.filter( 'Unique-ID', origination_uuid )
 			await self.esl.event_plain_all()
 			
-			answered, reason = await self._uuid_wait_for_answer( origination_uuid, timeout )
+			answered, reason = await self._uuid_wait_for_answer( ctr, origination_uuid, timeout )
 			
 			if not answered:
-				await self.car_activity( f'ERROR: dialout never answered: {reason!r}' )
+				await self.car_activity( ctr, f'ERROR: dialout never answered: {reason!r}' )
 				return False, reason
 			
 			settings = await ace_settings.aload()
 			vm = Voicemail( self.esl, origination_uuid, settings )
-			await self.car_activity( f'executing vm box {self.box!r} voice delivery mode' )
+			await self.car_activity( ctr, f'executing vm box {self.box!r} voice delivery mode' )
 			await vm.voice_deliver( self.box, self.msg, trusted, self.boxsettings )
 			
-			await self.car_activity( f'vm box {self.box!r} voice delivery mode done' )
+			await self.car_activity( ctr, f'vm box {self.box!r} voice delivery mode done' )
 			return True, None
 		except ChannelHangup:
 			log.debug( 'caught ChannelHangup during voice delivery' )
-			await self.car_activity( f'caught channel hangup on voice delivery call leg {origination_uuid!r}' )
+			await self.car_activity( ctr, f'caught channel hangup on voice delivery call leg {origination_uuid!r}' )
 			return True, None
 		finally:
 			await self.esl.nixevent_plain_all()
@@ -2390,7 +2388,7 @@ class NotifyState( State ):
 			
 			await self.esl.uuid_kill( origination_uuid, 'ORIGINATOR_CANCEL' ) # make sure it's dead...
 	
-	async def _uuid_wait_for_answer( self,
+	async def _uuid_wait_for_answer( self, ctr: repo.Connector,
 		uuid: str,
 		timeout: timedelta,
 		*,
@@ -2409,24 +2407,24 @@ class NotifyState( State ):
 					continue
 				if evt_name == 'CHANNEL_ANSWER':
 					log.info( 'call proceeding on %r', evt_name )
-					await self.car_activity( f'call proceeding on event {evt_name!r}' )
+					await self.car_activity( ctr, f'call proceeding on event {evt_name!r}' )
 					return True, ''
 				elif evt_name in terminators:
-					await self.car_activity( f'ERROR: originate failed because got event {evt_name!r} waiting for answer' )
+					await self.car_activity( ctr, f'ERROR: originate failed because got event {evt_name!r} waiting for answer' )
 					return False, evt_name
 			if originate_timer.elapsed():
 				r = await self.esl.uuid_kill( uuid, 'ORIGINATOR_CANCEL' )
 				log.info( 'timeout before CHANNEL_ANSWER, uuid_kill -> %r', r )
-				await self.car_activity( 'ERROR: originate failed because timeout waiting for answer' )
+				await self.car_activity( ctr, 'ERROR: originate failed because timeout waiting for answer' )
 				return False, 'timeout'
 			if aleg_uuid and exists_timer.elapsed():
 				if not await self.esl.uuid_exists( aleg_uuid ):
 					r = await self.esl.uuid_kill( uuid, 'ORIGINATOR_CANCEL' )
 					log.info( 'aleg disappeared, uuid_kill -> %r', r )
-					await self.car_activity( 'ERROR: originate failed because aleg disappeared' )
+					await self.car_activity( ctr, 'ERROR: originate failed because aleg disappeared' )
 					return False, 'aleg uuid disappeared'
 	
-	async def action_voice_deliver( self, action: ACTION_VOICE_DELIVER, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_voice_deliver( self, ctr: repo.Connector, action: ACTION_VOICE_DELIVER, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'NotifyState.action_voice_deliver' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -2434,12 +2432,12 @@ class NotifyState( State ):
 		
 		if not number:
 			log.error( 'cannot voice deliver - no number' )
-			await self.car_activity( f'action_voice_deliver: ERROR - cannot proceed b/c number={number!r}' )
+			await self.car_activity( ctr, f'action_voice_deliver: ERROR - cannot proceed b/c number={number!r}' )
 			return CONTINUE
 		
 		if not Path( self.msg.path ).is_file():
 			log.warning( 'cannot voice deliver - wave file no longer exists' )
-			await self.car_activity( f'action_voice_deliver: ERROR - cannot proceed b/c no wav file: {str(self.msg.path)!r}' )
+			await self.car_activity( ctr, f'action_voice_deliver: ERROR - cannot proceed b/c no wav file: {str(self.msg.path)!r}' )
 			return CONTINUE
 		
 		settings = await ace_settings.aload()
@@ -2448,18 +2446,18 @@ class NotifyState( State ):
 		else:
 			number2 = f'{settings.originate_prefix}{number}'
 		
-		await self.car_activity( f'action_voice_deliver: executing voice delivery to number={number!r} ({number2!r})' )
+		await self.car_activity( ctr, f'action_voice_deliver: executing voice delivery to number={number!r} ({number2!r})' )
 		try:
-			ok, reason = await self._voice_deliver( action, number2 )
+			ok, reason = await self._voice_deliver( ctr, action, number2 )
 		except Exception as e:
 			log.exception( 'Unexpected error trying to execute voice delivery:' )
 			ok = False
 			reason = repr( e )
 		log.info( 'ok=%r, reason=%r', ok, reason )
 		if ok:
-			await self.car_activity( 'action_voice_deliver: voice delivery complete' )
+			await self.car_activity( ctr, 'action_voice_deliver: voice delivery complete' )
 		else:
-			await self.car_activity( f'action_voice_deliver: ERROR - voice delivery failed with {reason!r}' )
+			await self.car_activity( ctr, f'action_voice_deliver: ERROR - voice delivery failed with {reason!r}' )
 		
 		return CONTINUE
 
@@ -2507,11 +2505,11 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 			r1 = await esl.linger()
 			log.debug( 'linger reply-text=%r, body=%r', r1.reply_text, r1.reply_body )
 			
-			state = CallState( ctr, esl, uuid, did, ani )
+			state = CallState( esl, uuid, did, ani )
 			
 			if did.startswith( '*95' ): # direct to voicemail with greeting
 				box = int( did[3:].strip() )
-				await state.car_activity( f'_handler: *95 direct access to box {box!r} w/ default greeting behavior' )
+				await state.car_activity( ctr, f'_handler: *95 direct access to box {box!r} w/ default greeting behavior' )
 				routedata = {
 					#'type': 'root_route',
 					'nodes': [{
@@ -2522,7 +2520,7 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 				}
 			elif did.startswith( '*99' ): # direct to voicemail with no greeting
 				box = int( did[3:].strip() )
-				await state.car_activity( f'_handler: *99 direct access to box {box!r} w/ no greeting' )
+				await state.car_activity( ctr, f'_handler: *99 direct access to box {box!r} w/ no greeting' )
 				routedata = {
 					#'type': 'root_route',
 					'nodes': [{
@@ -2532,18 +2530,18 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 					}]
 				}
 			else:
-				ani_route = await state.try_ani()
-				route, didinfo = await state.try_did( ani_route )
+				ani_route = await state.try_ani( ctr )
+				route, didinfo = await state.try_did( ctr, ani_route )
 				if route:
-					await state.car_activity( f'_handler: setting channel variable "route"={route!r}' )
+					await state.car_activity( ctr, f'_handler: setting channel variable "route"={route!r}' )
 					await esl.uuid_setvar( uuid, 'route', str( route ))
 				if didinfo is not None:
-					await state.set_preannounce( didinfo )
+					await state.set_preannounce( ctr, didinfo )
 				
 				if not route:
 					log.error( 'no route to execute: route=%r', route )
 					cause1: Final = 'UNALLOCATED_NUMBER'
-					await state.car_activity( f'_handler: hangup call with {cause1!r} b/c no route was found' )
+					await state.car_activity( ctr, f'_handler: hangup call with {cause1!r} b/c no route was found' )
 					await util.hangup( esl, uuid, cause1, 'ace_engine._handler#1' )
 					return
 				
@@ -2555,10 +2553,10 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 					except ValueError:
 						log.error( 'Could not interpret %r as an integer vm box #', box_ )
 						cause2: Final = 'UNALLOCATED_NUMBER'
-						await state.car_activity( f'_handler: hangup call with {cause2!r} b/c {box_!r} not an integer vm box #' )
+						await state.car_activity( ctr, f'_handler: hangup call with {cause2!r} b/c {box_!r} not an integer vm box #' )
 						await util.hangup( esl, uuid, cause2, 'ace_engine._handler#2' )
 						return
-					await state.car_activity( f'_handler: routing call directly to vm box {box!r}' )
+					await state.car_activity( ctr, f'_handler: routing call directly to vm box {box!r}' )
 					routedata = {
 						#'type': 'root_route',
 						'nodes': [{
@@ -2571,14 +2569,14 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 						routedata = await state.config.repo_routes.get_by_id( ctr, route )
 					except repo.ResourceNotFound:
 						log.error( 'route does not exist: route=%r', route )
-						await state.car_activity( '_handler: hangup call because route {route!r} does not exist' )
+						await state.car_activity( ctr, '_handler: hangup call because route {route!r} does not exist' )
 						await util.hangup( esl, uuid, 'UNALLOCATED_NUMBER', 'ace_engine._handler#3' )
 						return
 			
 			nodes = cast( ACTIONS, routedata.get( 'nodes' ) or [] )
-			r = await state.exec_top_actions( nodes )
+			r = await state.exec_top_actions( ctr, nodes )
 			log.info( 'route %r exited with %r', route, r )
-			await state.car_activity( f'_handler: route {route!r} exited with {r!r}' )
+			await state.car_activity( ctr, f'_handler: route {route!r} exited with {r!r}' )
 			
 			if state.hangup_on_exit:
 				#try:
@@ -2587,13 +2585,13 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 				#	log.warning( 'timeout waiting for uuid_setvar' )
 				cause3: Final = 'NORMAL_CLEARING'
 				log.debug( 'hangup call with %r', cause3 )
-				await state.car_activity( f'hangup call with {cause3!r}' )
+				await state.car_activity( ctr, f'hangup call with {cause3!r}' )
 				try:
 					await util.hangup( esl, uuid, cause3, 'ace_engine._handler' )
 				except TimeoutError:
 					log.warning( 'timeout waiting for hangup request' )
 			else:
-				await state.car_activity( f'NOT hangup call because hangup_on_exit={state.hangup_on_exit!r}' )
+				await state.car_activity( ctr, f'NOT hangup call because hangup_on_exit={state.hangup_on_exit!r}' )
 				#cause = 'NORMAL_CLEARING'
 				#log.debug( 'hangup call with %r because route exited with %r and we have no way to signal inband lua yet', cause, r )
 				#await esl.uuid_setvar( uuid, ACE_STATE, STATE_CONTINUE )
@@ -2601,15 +2599,15 @@ async def _handler( reader: asyncio.StreamReader, writer: asyncio.StreamWriter )
 		except AcdConnected as e1:
 			log.info( f'call processing finished because {e1!r}' )
 			if state is not None:
-				await state.car_activity( f'call processing finished because {e1!r}' )
+				await state.car_activity( ctr, f'call processing finished because {e1!r}' )
 		except ChannelHangup as e2:
 			log.warning( repr( e2 ))
 			if state is not None:
-				await state.car_activity( f'call processing finished because {e2!r}' )
+				await state.car_activity( ctr, f'call processing finished because {e2!r}' )
 		except Exception as e3:
 			log.exception( 'Unexpected error:' )
 			if state is not None:
-				await state.car_activity( f'call processing aborted with {e3!r}' )
+				await state.car_activity( ctr, f'call processing aborted with {e3!r}' )
 		finally:
 			try:
 				if state is not None:
