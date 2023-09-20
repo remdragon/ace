@@ -28,8 +28,9 @@ Subject/Body support placeholders like \${ani} \${did}`
 	},{
 		key: 'mailto',
 		label: 'Email To:',
-		placeholder: '(recipient email address)',
-		tooltip: 'Enter the recipient email address here, multiple recipients not supported',
+		size: 150,
+		placeholder: '(recipient email address[es])',
+		tooltip: 'Enter the recipient email addresses here, multiple recipients separated by comma or semicolon',
 	},{
 		key: 'subject',
 		label: 'Subject:',
