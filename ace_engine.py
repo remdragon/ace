@@ -1841,8 +1841,9 @@ class CallState( State ):
 		log = logger.getChild( 'CallState.action_rxfax' )
 		if self.state == HUNT: return CONTINUE
 		
-		mailto = expect( str, action.get( 'mailto' ), default = '' ).strip()
-		if not mailto:
+		mailto = expect( str, action.get( 'mailto' ), default = '' ).strip().replace( ';', ',' )
+		mailtolist = list( filter( None, map( str.strip, mailto.split( ',' ))))
+		if not mailto or not mailtolist:
 			log.warning( 'cannot rxfax b/c action.mailto=%r', mailto )
 			await self.car_activity( ctr, f'ERROR: cannot rxfax b/c action.mailto={mailto!r}' )
 			return STOP
@@ -1855,6 +1856,7 @@ class CallState( State ):
 			path = Path( '/tmp' ) / f'fax_{self.did}_{self.ani}_{self.uuid}_{counter}.tif'
 			counter += 1
 		
+		await self.esl.uuid_setvar( self.uuid, 'ace_rxfax_uuid', self.uuid )
 		await self.esl.uuid_setvar( self.uuid, 'ace_rxfax_path', str( path ))
 		await self.esl.uuid_setvar( self.uuid, 'ace_rxfax_mailto', mailto )
 		# TODO FIXME: calculate time spent receiving fax and expression it as an injection variable
