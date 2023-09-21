@@ -895,10 +895,8 @@ def http_dids() -> Response:
 			limit = q_limit,
 			offset = q_offset,
 		):
-			data: dict[str,Any] = {}
-			did2 = int( did )
-			data['did'] = did2
-			dids.append({ **datadefs, **data })
+			did_data['did'] = int( did )
+			dids.append({ **datadefs, **did_data })
 	if return_type == 'application/json':
 		return rest_success( dids )
 	row_html = (
