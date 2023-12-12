@@ -901,6 +901,7 @@ class RepoPostgres( Repository ):
 		assert isinstance( id, ( int, str )), f'invalid id={id!r}'
 		with self._cursor( ctr ) as cur:
 			cur.execute( f'select count(*) as "qty" from "{self.tablename}" WHERE "{self.keyname}" = %s', ( id, ) )
+			assert cur.description is not None
 			hdrs: list[str] = [ desc[0] for desc in cur.description ]
 			vals: Opt[Tuple[Any,...]] = cur.fetchone()
 			row: dict[str,Any] = dict( zip( hdrs, vals )) if vals else {}
@@ -1123,7 +1124,7 @@ class RepoFs( Repository ):
 					if v not in id2:
 						return True
 				else:
-					if v.lower() not in data.get( k, '' ).lower():
+					if v.lower() not in str( data.get( k, '' )).lower():
 						return True
 			return False
 		

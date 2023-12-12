@@ -19,7 +19,7 @@ exec exim4 -t
 `sudo apt-get install exim4-daemon-light`
 `sudo dpkg-reconfigure exim4-config`
 ```
-mail sent by smarthost, recevied via SMTP or fetchmail
+mail sent by smarthost, received via SMTP or fetchmail
 localhost
 127.0.0.1
 (blank)
@@ -59,7 +59,7 @@ Press Ctrl+D
 
 Troubleshooting not receiving emails
 ```
-tail -f /varl/og/exim4/mainlog
+tail -f /var/log/exim4/mainlog
 exinext EXAMPLE.COM
 exinext USER@EXAMPLE.COM
 exinet MESSAGE_ID
