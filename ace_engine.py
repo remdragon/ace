@@ -719,7 +719,7 @@ class State( metaclass = ABCMeta ):
 		
 		return CONTINUE
 	
-	async def action_laufile( self, ctr: repo.Connector, action: ACTION_LUAFILE, pagd: Opt[PAGD] ) -> RESULT:
+	async def action_luafile( self, ctr: repo.Connector, action: ACTION_LUAFILE, pagd: Opt[PAGD] ) -> RESULT:
 		log = logger.getChild( 'State.action_luafile' )
 		if self.state == HUNT: return CONTINUE
 		
@@ -1763,8 +1763,8 @@ class CallState( State ):
 		await self.set_state( AceState.PLAYTTS )
 		return r
 	
-	async def action_play_dtmf( self, ctr: repo.Connector, action: ACTION_PLAY_DTMF, pagd: Opt[PAGD] ) -> RESULT:
-		log = logger.getChild( 'CallState.action_play_dtmf' )
+	async def action_playdtmf( self, ctr: repo.Connector, action: ACTION_PLAY_DTMF, pagd: Opt[PAGD] ) -> RESULT:
+		log = logger.getChild( 'CallState.action_playdtmf' )
 		if self.state == HUNT: return CONTINUE
 		
 		dtmf = action.get( 'dtmf' ) or ''
